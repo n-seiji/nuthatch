@@ -1,0 +1,14 @@
+{
+  "name": "nuthatch",
+  "owner": {
+    "name": "n-seiji",
+    "url": "https://github.com/n-seiji"
+  },
+  "plugins": [
+    {
+      "name": "hop",
+      "source": "./plugins/hop",
+      "description": "git worktree manager「hop」の使い方 skill (agent / 人間向け)"
+    }
+  ]
+}
