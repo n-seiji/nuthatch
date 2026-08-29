@@ -12,7 +12,8 @@
 ```
 src/                 # 実装 (TypeScript, bun)
 docs/design.md       # 設計書 (source of truth)
-plugins/hop/         # 公開 plugin (Claude Code / Codex 両対応)。hop の使い方 skill を配布
+skills/              # 公開 skill の正本 (single source of truth)
+plugins/hop/         # 公開 plugin (Claude Code / Codex 両対応)。skills へは symlink
 .claude/rules/       # 開発専用 rule (この repo の開発時のみ使う。配布しない)
 .claude-plugin/      # Claude Code marketplace index
 .agents/plugins/     # Codex marketplace index
@@ -20,7 +21,7 @@ shell/               # hop init zsh のテンプレート
 test/                # unit (domain) + integration (実 git repo)
 ```
 
-- **公開 skill** は `plugins/hop/skills/` に置く。Claude Code と Codex の両方から
+- **公開 skill の正本は `skills/`**。plugins/hop/skills/ からは相対 symlink で公開する。Claude Code と Codex の両方から
   install できる形式 (`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`) を保つ。
 - **開発専用 rule / skill** は `.claude/` 配下。配布物に含めない。
 
