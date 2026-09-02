@@ -11,18 +11,24 @@ hop() {
 
   local should_cd=1
   case "$1" in
-    ""|ls|rm|clean|init|--*) should_cd=0 ;;
+    ""|ls|rm|clean|init) should_cd=0 ;;
+    --) ;; # "hop -- <branch>" escapes a reserved word; still a jump, so cd.
+    --*) should_cd=0 ;;
   esac
 
-  local out
+  # "status" is a zsh read-only special parameter (mirrors $?); using it as a
+  # local name fails with "read-only variable: status". Use "rc" instead, and
+  # declare it before the command substitution so the exit code isn't
+  # clobbered by "local"'s own exit status.
+  local out rc
   out="$(command hop "$@")"
-  local status=$?
+  rc=$?
 
-  if [[ $status -eq 0 && $should_cd -eq 1 && -n "$out" ]]; then
+  if [[ $rc -eq 0 && $should_cd -eq 1 && -n "$out" ]]; then
     cd -- "$out" || return $?
   elif [[ -n "$out" ]]; then
     print -r -- "$out"
   fi
 
-  return $status
+  return $rc
 }
