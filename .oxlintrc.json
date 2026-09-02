@@ -1,0 +1,177 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "error"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "no-console": "error",
+    "import/no-cycle": "error",
+
+    "import/no-named-export": "off",
+    "import/prefer-default-export": "off",
+    "import/no-nodejs-modules": "off",
+    "unicorn/no-null": "off",
+    "one-var": "off",
+    "sort-vars": "off",
+    "sort-keys": "off",
+    "import/group-exports": "off",
+    "import/exports-last": "off",
+    "import/consistent-type-specifier-style": "off",
+    "no-magic-numbers": [
+      "error",
+      {
+        "ignore": [0, 1, -1, 64, 1024],
+        "ignoreArrayIndexes": true,
+        "ignoreNumericLiteralTypes": true,
+        "ignoreDefaultValues": true,
+        "ignoreClassFieldInitialValues": true
+      }
+    ],
+    "id-length": [
+      "error",
+      {
+        "checkGeneric": false,
+        "exceptions": ["a", "b", "i", "wt"]
+      }
+    ],
+    "sort-imports": "off",
+    "no-ternary": "off",
+    "max-statements": ["error", 40],
+    "max-lines-per-function": ["error", 120],
+    "max-params": ["error", 4],
+    "unicorn/number-literal-case": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/render.ts", "src/infra/term.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["src/domain/*.ts"],
+      "rules": {
+        "import/no-nodejs-modules": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "../infra/**",
+                  "../commands/**",
+                  "../ui/**",
+                  "../cli.ts",
+                  "../render.ts",
+                  "../testing/**"
+                ],
+                "message": "domain/ is the innermost onion layer: pure functions only, no infra/commands/ui/cli.ts/render.ts/testing, no node: built-ins. See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/infra/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "../commands/**",
+                  "../ui/**",
+                  "../cli.ts",
+                  "../render.ts",
+                  "../testing/**"
+                ],
+                "message": "infra/ implements domain/ ports; it may not depend on commands/ui/cli.ts/render.ts/testing. See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/commands/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "./jump.ts",
+                  "./ls.ts",
+                  "./rm.ts",
+                  "./init.ts",
+                  "../ui/**",
+                  "../cli.ts",
+                  "../render.ts",
+                  "../testing/**"
+                ],
+                "message": "commands/ may not import each other, ui/, cli.ts, render.ts, or testing/ (cli.ts + render.ts are the outermost layer, commands must stay renderer-agnostic; testing/ is test-only). See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/cli.ts", "src/render.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["./testing/**"],
+                "message": "testing/ is test-only; production code (including cli.ts/render.ts) may not import it. See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/testing/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../commands/**", "../ui/**", "../cli.ts", "../render.ts"],
+                "message": "testing/ is a test-support layer: it may use domain/infra types and node:* directly, but must not depend on the production commands/ui/cli.ts/render.ts layer. See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "max-statements": "off",
+        "max-lines-per-function": "off",
+        "init-declarations": "off",
+        "no-inline-comments": "off",
+        "no-magic-numbers": "off",
+        "no-restricted-imports": "off",
+        "import/no-nodejs-modules": "off"
+      }
+    }
+  ],
+  "env": {
+    "builtin": true
+  }
+}

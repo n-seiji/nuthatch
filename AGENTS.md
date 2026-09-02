@@ -10,7 +10,8 @@
 ## ディレクトリ構成と責務
 
 ```
-src/                 # 実装 (TypeScript, bun)
+src/                 # 実装 (TypeScript, bun)。テストは対象ファイルと同階層に置く (*.test.ts)
+src/testing/         # テスト専用の共有 helper (tmpdir 実 git repo 生成など)。テストからのみ import
 docs/design.md       # 設計書 (source of truth)
 skills/              # 公開 skill の正本 (single source of truth)
 plugins/hop/         # 公開 plugin (Claude Code / Codex 両対応)。skills へは symlink
@@ -18,8 +19,12 @@ plugins/hop/         # 公開 plugin (Claude Code / Codex 両対応)。skills �
 .claude-plugin/      # Claude Code marketplace index
 .agents/plugins/     # Codex marketplace index
 shell/               # hop init zsh のテンプレート
-test/                # unit (domain) + integration (実 git repo)
 ```
+
+- **テストは実装ファイルと同じディレクトリに置く** (colocate)。例: `src/domain/porcelain.ts` の
+  テストは `src/domain/porcelain.test.ts`。複数コマンドをまたぐ integration test は
+  `<関心事>.integration.test.ts` のように命名し、対象コマンドが属するディレクトリに置く
+  (例: `src/commands/jump-ls-rm.integration.test.ts`)。共有 helper は `src/testing/`。
 
 - **公開 skill の正本は `skills/`**。plugins/hop/skills/ からは相対 symlink で公開する。Claude Code と Codex の両方から
   install できる形式 (`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`) を保つ。
@@ -27,12 +32,24 @@ test/                # unit (domain) + integration (実 git repo)
 
 ## アーキテクチャ制約 (違反 PR は reject)
 
-- 依存方向は一方向のみ: `cli.ts → commands → domain + infra`
-- `domain/` は純関数のみ。外部依存 (subprocess / fs / TTY / clock / random) を import しない
-- `infra/` 以外で subprocess / fs を直接呼ばない。git は常に argv 配列で spawn (文字列連結禁止)
-- `commands/` は相互 import 禁止。描画せず構造化 Result を返す
-- subprocess は `node:child_process` (npm 版 Node / compile 版 Bun 両対応のため)
+依存方向はオニオン構造の一方向のみ: `cli.ts/render.ts → commands → infra → domain`
+(`commands` は `infra` と `domain` の両方に依存してよい)。domain が最内層で外部に一切依存しない
+のは、CLI の入出力やコマンド構成が変わっても判定ロジック (worktree 分類・sanitize・garbage 判定
+など) を単体でテストし続けられるようにするため。infra を subprocess/fs の唯一の窓口にしている
+のは、git や fs の呼び出し規約 (argv 配列で spawn、文字列連結禁止) を 1 箇所に閉じ込め、
+テスト時にはポート越しに差し替えられるようにするため。commands が描画しないのは、出力形式
+(plain/JSON) の変更が判定ロジックに波及しないようにするため。
+
+- `domain/` は純関数のみ。外部依存 (subprocess / fs / TTY / clock / random / node 組み込み) を
+  import しない
+- `infra/` 以外で subprocess / fs を直接呼ばない。git は常に argv 配列で spawn (文字列連結禁止)。
+  subprocess は `node:child_process` (npm 版 Node / compile 版 Bun 両対応のため)
+- `commands/` は描画せず構造化 Result を返す
 - CLI 契約 (stdout / JSON schema / exit code) は docs/design.md の定義に従い、変更は設計書の更新とセットで行う
+
+上記の依存方向・`any` 禁止・console 直書き禁止・循環 import・`commands/` 相互 import は
+`.oxlintrc.json` (層ごとの `no-restricted-imports` + `import/no-nodejs-modules`) で機械的に
+強制する。ここに書いているのは lint では表現できない「なぜそう設計したか」の意図のみ。
 
 ## 開発ワークフロー
 
@@ -43,7 +60,8 @@ test/                # unit (domain) + integration (実 git repo)
 ```bash
 bun test              # 全テスト
 bun run typecheck     # tsc --noEmit
-bun run lint          # biome
+bun run lint          # oxlint
+bun run format:check  # oxfmt --check
 ```
 
 - external worktree (agent が作ったもの) を mutation の対象にしない、が最重要の安全規則。

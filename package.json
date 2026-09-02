@@ -1,0 +1,35 @@
+{
+  "name": "@n-seiji/nuthatch",
+  "version": "0.1.0",
+  "description": "git worktree manager (hop)",
+  "bin": {
+    "hop": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "shell"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "bun build ./src/cli.ts --outfile dist/cli.js --target node --format esm",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "citty": "^0.1.6",
+    "valibot": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
