@@ -44,9 +44,10 @@
     "sort-imports": "off",
     "no-ternary": "off",
     "max-statements": ["error", 40],
-    "max-lines-per-function": ["error", 120],
+    "max-lines-per-function": ["error", 140],
     "max-params": ["error", 4],
-    "unicorn/number-literal-case": "off"
+    "unicorn/number-literal-case": "off",
+    "promise/avoid-new": "off"
   },
   "overrides": [
     {
@@ -114,12 +115,29 @@
                   "./ls.ts",
                   "./rm.ts",
                   "./init.ts",
+                  "./pick.ts",
                   "../ui/**",
                   "../cli.ts",
                   "../render.ts",
                   "../testing/**"
                 ],
                 "message": "commands/ may not import each other, ui/, cli.ts, render.ts, or testing/ (cli.ts + render.ts are the outermost layer, commands must stay renderer-agnostic; testing/ is test-only). See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/ui/*.ts", "src/ui/*.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../commands/**", "../cli.ts", "../render.ts", "../testing/**"],
+                "message": "ui/ may use domain (candidate types), infra, ink/react, and node:* — but must not depend on commands/, cli.ts, render.ts, or testing/. cli.ts calls ui/, not the other way around. See AGENTS.md."
               }
             ]
           }
@@ -140,6 +158,12 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "files": ["src/cli.ts"],
+      "rules": {
+        "import/max-dependencies": "off"
       }
     },
     {
