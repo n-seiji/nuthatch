@@ -3,8 +3,15 @@ import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } f
 import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
+import { pick, type PickCandidate } from "./commands/pick.ts";
 import { rm } from "./commands/rm.ts";
-import { type CommandResult, EXIT_GENERAL_ERROR, EXIT_USAGE_ERROR } from "./domain/result.ts";
+import {
+  type CommandResult,
+  EXIT_CANCELLED,
+  EXIT_GENERAL_ERROR,
+  EXIT_USAGE_ERROR,
+  ok,
+} from "./domain/result.ts";
 import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
@@ -125,10 +132,60 @@ const jumpArgsSchema = {
   json: { type: "boolean", description: "Output JSON" },
 } as const;
 
+/**
+ * Runs the interactive picker (TTY only). Loads ink lazily via a literal
+ * dynamic import path so non-TTY runs never touch ink/react at all; falls
+ * back to the plain readline-based picker if ink fails to load or render
+ * (e.g. a `bun build --compile` binary where ink's native pieces don't work).
+ */
+const runInteractivePick = async (json: boolean): Promise<void> => {
+  const pickResult = await pick(git, fs, { cwd: process.cwd() });
+  if (!pickResult.ok) {
+    render("pick", pickResult, json);
+    applyExitCode(pickResult);
+    return;
+  }
+  const candidates = pickResult.data?.candidates ?? [];
+
+  const selected: PickCandidate | null = await (async () => {
+    try {
+      const { runPicker } = await import("./ui/picker.tsx");
+      return await runPicker(candidates);
+    } catch {
+      const { runSimplePicker } = await import("./ui/simple-picker.ts");
+      return await runSimplePicker(candidates);
+    }
+  })();
+
+  if (selected === null) {
+    process.exitCode = EXIT_CANCELLED;
+    return;
+  }
+
+  if (selected.kind === "worktree") {
+    const result = ok({
+      path: selected.worktree.path,
+      data: { branch: selected.worktree.branch, created: false },
+    });
+    if (json) {
+      render("pick", result, true);
+    } else {
+      process.stdout.write(`${selected.worktree.path}\n`);
+    }
+    return;
+  }
+
+  await runJump(selected.branch, { create: true, json });
+};
+
 const runJumpFromArgs = async (rawArgs: readonly string[]): Promise<void> => {
   const args = parseArgs([...rawArgs], jumpArgsSchema);
   if (args.target === undefined) {
-    // No picker yet (PR2): non-interactive fallback lists worktrees.
+    if (term.isTTY()) {
+      await runInteractivePick(Boolean(args.json));
+      return;
+    }
+    // Non-TTY: no picker, just list worktrees.
     const result = await ls(git, fs, { cwd: process.cwd() });
     render("ls", result, Boolean(args.json));
     applyExitCode(result);
@@ -147,7 +204,17 @@ const runJumpFromArgs = async (rawArgs: readonly string[]): Promise<void> => {
 // Non-reserved first token must fall through to `jump` as a branch name.
 // Process.argv is [node, script, ...userArgs]; drop the first two.
 const ARGV_USER_ARGS_START = 2;
-const rawArgs = process.argv.slice(ARGV_USER_ARGS_START);
+let rawArgs = process.argv.slice(ARGV_USER_ARGS_START);
+
+// Workaround for a `bun build --compile` bug: when a compiled binary is run
+// With zero user-supplied args AND stdout is a real TTY, Bun's argv
+// Synthesis spuriously appends the binary's own invocation path as an extra
+// Arg (reproduced with plain `bun build --compile` + `script`, unrelated to
+// Anything in this codebase). Detect and drop it: this is the one case where
+// The "user arg" is byte-identical to argv0, which no real branch name would be.
+if (rawArgs.length === 1 && rawArgs[0] === process.argv0) {
+  rawArgs = [];
+}
 
 if (rawArgs[0] === "--") {
   // `hop -- <branch>` escapes reserved words (ls/rm/clean/root/init) so they
