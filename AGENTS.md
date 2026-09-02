@@ -40,6 +40,10 @@ shell/               # hop init zsh のテンプレート
 - subprocess は `node:child_process` (npm 版 Node / compile 版 Bun 両対応のため)
 - CLI 契約 (stdout / JSON schema / exit code) は docs/design.md の定義に従い、変更は設計書の更新とセットで行う
 
+機械的に検査可能な項目 (`any` 禁止、console 直書き禁止、循環 import、`commands/` 相互 import 等) は
+`.oxlintrc.json` の lint (oxlint) で強制する。ここに挙げているのは lint では表現しきれない
+「なぜそう設計したか」の意図のみ。
+
 ## 開発ワークフロー
 
 - テスト先行 (TDD)。domain は unit、commands は tmpdir 実 git repo での integration

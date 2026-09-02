@@ -8,3 +8,4 @@
 - テストは実装ファイルと同階層に colocate する (`src/domain/porcelain.ts` → `src/domain/porcelain.test.ts`)。共有 helper は `src/testing/`
 - mutation (create/rm/clean/root切替) は repo lock 内で「再検証 → 実行」
 - external worktree をデフォルトの mutation 対象にしない (最重要安全規則)
+- 機械的に検査可能な項目 (any 禁止、console 直書き禁止、循環 import、commands 相互 import 等) は oxlint (.oxlintrc.json) で強制する。ここには lint で表現できない設計意図のみ書く
