@@ -10,7 +10,8 @@
 ## ディレクトリ構成と責務
 
 ```
-src/                 # 実装 (TypeScript, bun)
+src/                 # 実装 (TypeScript, bun)。テストは対象ファイルと同階層に置く (*.test.ts)
+src/testing/         # テスト専用の共有 helper (tmpdir 実 git repo 生成など)。テストからのみ import
 docs/design.md       # 設計書 (source of truth)
 skills/              # 公開 skill の正本 (single source of truth)
 plugins/hop/         # 公開 plugin (Claude Code / Codex 両対応)。skills へは symlink
@@ -18,8 +19,12 @@ plugins/hop/         # 公開 plugin (Claude Code / Codex 両対応)。skills �
 .claude-plugin/      # Claude Code marketplace index
 .agents/plugins/     # Codex marketplace index
 shell/               # hop init zsh のテンプレート
-test/                # unit (domain) + integration (実 git repo)
 ```
+
+- **テストは実装ファイルと同じディレクトリに置く** (colocate)。例: `src/domain/porcelain.ts` の
+  テストは `src/domain/porcelain.test.ts`。複数コマンドをまたぐ integration test は
+  `<関心事>.integration.test.ts` のように命名し、対象コマンドが属するディレクトリに置く
+  (例: `src/commands/jump-ls-rm.integration.test.ts`)。共有 helper は `src/testing/`。
 
 - **公開 skill の正本は `skills/`**。plugins/hop/skills/ からは相対 symlink で公開する。Claude Code と Codex の両方から
   install できる形式 (`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`) を保つ。
@@ -30,7 +35,8 @@ test/                # unit (domain) + integration (実 git repo)
 - 依存方向は一方向のみ: `cli.ts → commands → domain + infra`
 - `domain/` は純関数のみ。外部依存 (subprocess / fs / TTY / clock / random) を import しない
 - `infra/` 以外で subprocess / fs を直接呼ばない。git は常に argv 配列で spawn (文字列連結禁止)
-- `commands/` は相互 import 禁止。描画せず構造化 Result を返す
+- `commands/` は相互 import 禁止 (本体コードのみ。複数コマンドをまたぐ integration test が
+  同ディレクトリから複数コマンドを import するのは対象外)。描画せず構造化 Result を返す
 - subprocess は `node:child_process` (npm 版 Node / compile 版 Bun 両対応のため)
 - CLI 契約 (stdout / JSON schema / exit code) は docs/design.md の定義に従い、変更は設計書の更新とセットで行う
 

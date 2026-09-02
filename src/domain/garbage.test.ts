@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type GarbageInput, classifyGarbage } from "../../src/domain/garbage.ts";
+import { type GarbageInput, classifyGarbage } from "./garbage.ts";
 
 const base: GarbageInput = {
   prunable: false,

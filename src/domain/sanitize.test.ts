@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { sanitizeBranchName } from "../../src/domain/sanitize.ts";
+import { sanitizeBranchName } from "./sanitize.ts";
 
 const noneTaken = () => false;
 

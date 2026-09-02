@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { jump } from "../../src/commands/jump.ts";
-import { ls } from "../../src/commands/ls.ts";
-import { rm } from "../../src/commands/rm.ts";
-import { createFsPort } from "../../src/infra/fs.ts";
-import { createGitPort } from "../../src/infra/git.ts";
-import { createTermPort } from "../../src/infra/term.ts";
-import { type TestRepo, createTestRepo } from "../helpers/repo.ts";
+import { createFsPort } from "../infra/fs.ts";
+import { createGitPort } from "../infra/git.ts";
+import { createTermPort } from "../infra/term.ts";
+import { type TestRepo, createTestRepo } from "../testing/repo.ts";
+import { jump } from "./jump.ts";
+import { ls } from "./ls.ts";
+import { rm } from "./rm.ts";
 
 const git = createGitPort();
 const fs = createFsPort();

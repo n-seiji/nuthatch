@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { classifyWorktreePath } from "../../src/domain/classify.ts";
+import { classifyWorktreePath } from "./classify.ts";
 
 describe("classifyWorktreePath", () => {
   const root = "/home/user/ghq/github.com/user/repo";

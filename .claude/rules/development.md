@@ -5,5 +5,6 @@
 - commands は描画しない (構造化 Result を返す)。相互 import 禁止
 - subprocess は node:child_process、常に argv 配列。infra/ 以外で外部依存を触らない
 - テスト先行。integration は tmpdir 実 repo + GIT_CONFIG_NOSYSTEM=1 / HOME 隔離 / LC_ALL=C
+- テストは実装ファイルと同階層に colocate する (`src/domain/porcelain.ts` → `src/domain/porcelain.test.ts`)。共有 helper は `src/testing/`
 - mutation (create/rm/clean/root切替) は repo lock 内で「再検証 → 実行」
 - external worktree をデフォルトの mutation 対象にしない (最重要安全規則)

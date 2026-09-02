@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { parsePorcelain } from "../../src/domain/porcelain.ts";
+import { parsePorcelain } from "./porcelain.ts";
 
 const record = (lines: readonly string[]): string => `${lines.join("\0")}\0`;
 

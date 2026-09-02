@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { renderInit } from "../../src/commands/init.ts";
+import { renderInit } from "./init.ts";
 
 const hasZsh = (): boolean => {
   try {

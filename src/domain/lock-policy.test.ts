@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { canReclaimLock } from "../../src/domain/lock-policy.ts";
+import { canReclaimLock } from "./lock-policy.ts";
 
 describe("canReclaimLock", () => {
   it("プロセスが生存している場合、TTL を超えていても回収しない", () => {
