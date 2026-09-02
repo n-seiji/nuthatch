@@ -49,7 +49,8 @@ shell/               # hop init zsh のテンプレート
 ```bash
 bun test              # 全テスト
 bun run typecheck     # tsc --noEmit
-bun run lint          # biome
+bun run lint          # oxlint
+bun run format:check  # oxfmt --check
 ```
 
 - external worktree (agent が作ったもの) を mutation の対象にしない、が最重要の安全規則。

@@ -72,7 +72,7 @@ describe("jump → ls → rm (integration)", () => {
     });
     const result = await ls(git, fs, { cwd: repo.repoPath });
     expect(result.ok).toBe(true);
-    const kinds = result.data?.map((wt) => wt.kind).sort();
+    const kinds = result.data?.map((wt) => wt.kind).toSorted();
     expect(kinds).toEqual(["managed", "root"]);
   });
 
@@ -110,7 +110,7 @@ describe("jump → ls → rm (integration)", () => {
     expect(result.ok).toBe(true);
 
     const after = await ls(git, fs, { cwd: repo.repoPath });
-    const kinds = after.data?.map((wt) => wt.kind).sort();
+    const kinds = after.data?.map((wt) => wt.kind).toSorted();
     expect(kinds).toEqual(["root"]);
   });
 
