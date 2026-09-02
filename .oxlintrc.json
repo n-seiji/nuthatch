@@ -64,8 +64,15 @@
           {
             "patterns": [
               {
-                "group": ["../infra/**", "../commands/**", "../ui/**", "../cli.ts", "../render.ts"],
-                "message": "domain/ is the innermost onion layer: pure functions only, no infra/commands/ui/cli.ts/render.ts, no node: built-ins. See AGENTS.md."
+                "group": [
+                  "../infra/**",
+                  "../commands/**",
+                  "../ui/**",
+                  "../cli.ts",
+                  "../render.ts",
+                  "../testing/**"
+                ],
+                "message": "domain/ is the innermost onion layer: pure functions only, no infra/commands/ui/cli.ts/render.ts/testing, no node: built-ins. See AGENTS.md."
               }
             ]
           }
@@ -80,8 +87,14 @@
           {
             "patterns": [
               {
-                "group": ["../commands/**", "../ui/**", "../cli.ts", "../render.ts"],
-                "message": "infra/ implements domain/ ports; it may not depend on commands/ui/cli.ts/render.ts. See AGENTS.md."
+                "group": [
+                  "../commands/**",
+                  "../ui/**",
+                  "../cli.ts",
+                  "../render.ts",
+                  "../testing/**"
+                ],
+                "message": "infra/ implements domain/ ports; it may not depend on commands/ui/cli.ts/render.ts/testing. See AGENTS.md."
               }
             ]
           }
@@ -103,9 +116,42 @@
                   "./init.ts",
                   "../ui/**",
                   "../cli.ts",
-                  "../render.ts"
+                  "../render.ts",
+                  "../testing/**"
                 ],
-                "message": "commands/ may not import each other, ui/, cli.ts, or render.ts (cli.ts + render.ts are the outermost layer; commands must stay renderer-agnostic). See AGENTS.md."
+                "message": "commands/ may not import each other, ui/, cli.ts, render.ts, or testing/ (cli.ts + render.ts are the outermost layer, commands must stay renderer-agnostic; testing/ is test-only). See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/cli.ts", "src/render.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["./testing/**"],
+                "message": "testing/ is test-only; production code (including cli.ts/render.ts) may not import it. See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/testing/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../commands/**", "../ui/**", "../cli.ts", "../render.ts"],
+                "message": "testing/ is a test-support layer: it may use domain/infra types and node:* directly, but must not depend on the production commands/ui/cli.ts/render.ts layer. See AGENTS.md."
               }
             ]
           }
