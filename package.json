@@ -1,0 +1,28 @@
+{
+  "name": "@n-seiji/nuthatch",
+  "version": "0.1.0",
+  "description": "git worktree manager (hop)",
+  "type": "module",
+  "bin": {
+    "hop": "dist/cli.js"
+  },
+  "files": ["dist", "shell"],
+  "scripts": {
+    "build": "bun build ./src/cli.ts --outfile dist/cli.js --target node --format esm",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "citty": "^0.1.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
