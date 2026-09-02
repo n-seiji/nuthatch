@@ -1,18 +1,16 @@
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import { type CommandResult, fail, ok } from "../domain/result.ts";
+import type { RmData } from "../domain/schema.ts";
 import { acquireRepoLock } from "../infra/lock.ts";
 import { loadRepoContext } from "../infra/repo.ts";
+
+export type { RmData };
 
 export interface RmOptions {
   readonly cwd: string;
   readonly branch: string;
   readonly force: boolean;
   readonly ext: boolean;
-}
-
-export interface RmData {
-  readonly branch: string;
-  readonly path: string;
 }
 
 export const rm = async (

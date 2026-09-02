@@ -1,20 +1,18 @@
 import { join } from "node:path";
 import type { FsPort, GitPort, TermPort } from "../domain/ports.ts";
 import { type CommandResult, fail, ok } from "../domain/result.ts";
+import type { JumpData } from "../domain/schema.ts";
 import { sanitizeBranchName } from "../domain/sanitize.ts";
 import { acquireRepoLock } from "../infra/lock.ts";
 import { loadRepoContext } from "../infra/repo.ts";
+
+export type { JumpData };
 
 export interface JumpOptions {
   readonly cwd: string;
   readonly target: string;
   readonly create: boolean;
   readonly track?: string;
-}
-
-export interface JumpData {
-  readonly branch: string;
-  readonly created: boolean;
 }
 
 export const jump = async (

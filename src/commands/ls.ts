@@ -1,13 +1,9 @@
-import type { Worktree } from "../domain/model.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import { type CommandResult, ok } from "../domain/result.ts";
+import type { LsEntry } from "../domain/schema.ts";
 import { loadRepoContext } from "../infra/repo.ts";
 
-export interface LsEntry extends Worktree {
-  readonly dirty: boolean;
-  readonly ahead: number | null;
-  readonly behind: number | null;
-}
+export type { LsEntry };
 
 export interface LsOptions {
   readonly cwd: string;
