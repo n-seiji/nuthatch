@@ -25,6 +25,8 @@ export interface GitPort {
   listBranches: (cwd: string) => Promise<string[]>;
   /** Lists remotes that have a branch with this name, e.g. ["origin"]. */
   remotesWithBranch: (cwd: string, branch: string) => Promise<string[]>;
+  /** Lists unique branch names across all remotes (remote prefix stripped, deduped, no HEAD symref). */
+  listRemoteBranches: (cwd: string) => Promise<string[]>;
 }
 
 export interface AddWorktreeOptions {
