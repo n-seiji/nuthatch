@@ -1,11 +1,93 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc"],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
   "categories": {
     "correctness": "error",
-    "suspicious": "error"
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "error"
   },
-  "rules": {},
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "no-console": "error",
+    "import/no-cycle": "error",
+
+    "import/no-named-export": "off",
+    "import/prefer-default-export": "off",
+    "import/no-nodejs-modules": "off",
+    "unicorn/no-null": "off",
+    "one-var": "off",
+    "sort-vars": "off",
+    "sort-keys": "off",
+    "import/group-exports": "off",
+    "import/exports-last": "off",
+    "import/consistent-type-specifier-style": "off",
+    "no-magic-numbers": [
+      "error",
+      {
+        "ignore": [0, 1, -1, 64, 1024],
+        "ignoreArrayIndexes": true,
+        "ignoreNumericLiteralTypes": true,
+        "ignoreDefaultValues": true,
+        "ignoreClassFieldInitialValues": true
+      }
+    ],
+    "id-length": [
+      "error",
+      {
+        "checkGeneric": false,
+        "exceptions": ["a", "b", "i", "wt"]
+      }
+    ],
+    "sort-imports": "off",
+    "no-ternary": "off",
+    "max-statements": ["error", 40],
+    "max-lines-per-function": ["error", 120],
+    "max-params": ["error", 4],
+    "unicorn/number-literal-case": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/render.ts", "src/infra/term.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["src/commands/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["./jump.ts", "./ls.ts", "./rm.ts", "./init.ts", "./cli.ts"],
+                "message": "commands/ files may not import each other (see AGENTS.md architecture rule). Share logic via domain/ or infra/ instead."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/commands/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "max-statements": "off",
+        "max-lines-per-function": "off",
+        "init-declarations": "off",
+        "no-inline-comments": "off",
+        "no-magic-numbers": "off"
+      }
+    }
+  ],
   "env": {
     "builtin": true
   }

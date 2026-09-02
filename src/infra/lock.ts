@@ -6,7 +6,7 @@ import { canReclaimLock } from "../domain/lock-policy.ts";
 const LOCK_DIR_NAME = "nuthatch-lock";
 const LOCK_INFO_FILE = "info.json";
 const DEFAULT_TTL_MS = 30_000;
-const HEARTBEAT_INTERVAL_MS = 5_000;
+const HEARTBEAT_INTERVAL_MS = 5000;
 
 interface LockInfo {
   pid: number;
@@ -15,8 +15,12 @@ interface LockInfo {
 }
 
 export class LockHeldError extends Error {
-  constructor(readonly info: LockInfo) {
+  readonly info: LockInfo;
+
+  constructor(info: LockInfo) {
     super(`Repository is locked by another nuthatch process (pid ${info.pid})`);
+    this.name = "LockHeldError";
+    this.info = info;
   }
 }
 
@@ -24,10 +28,15 @@ const isProcessAlive = (pid: number): boolean | "unknown" => {
   try {
     process.kill(pid, 0);
     return true;
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === "ESRCH") return false;
-    if (code === "EPERM") return true; // exists, just not signalable by us
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    if (code === "ESRCH") {
+      return false;
+    }
+    if (code === "EPERM") {
+      // Exists, just not signalable by us.
+      return true;
+    }
     return "unknown";
   }
 };
@@ -46,7 +55,7 @@ const writeLockInfo = async (lockDir: string, info: LockInfo): Promise<void> => 
 };
 
 export interface RepoLock {
-  release(): Promise<void>;
+  release: () => Promise<void>;
 }
 
 /**
@@ -61,13 +70,20 @@ export const acquireRepoLock = async (
 ): Promise<RepoLock> => {
   const lockDir = join(commonDir, LOCK_DIR_NAME);
 
+  // Each retry below depends on the previous attempt's outcome (mkdir fails ->
+  // Inspect -> maybe reclaim -> retry mkdir); there is nothing to parallelize,
+  // So the no-await-in-loop warnings on this loop's awaits are not applicable.
   for (;;) {
     try {
+      // oxlint-disable-next-line no-await-in-loop
       await mkdir(lockDir);
       break;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
 
+      // oxlint-disable-next-line no-await-in-loop
       const existing = await readLockInfo(lockDir);
       if (existing === null) {
         // Lock dir exists but info is unreadable/missing: cannot verify safely.
@@ -81,8 +97,11 @@ export const acquireRepoLock = async (
         ttlMs,
       });
 
-      if (!reclaimable) throw new LockHeldError(existing);
+      if (!reclaimable) {
+        throw new LockHeldError(existing);
+      }
 
+      // oxlint-disable-next-line no-await-in-loop
       await rm(lockDir, { recursive: true, force: true });
       // Loop back and retry the mkdir.
     }

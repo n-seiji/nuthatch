@@ -11,7 +11,7 @@ export const createFsPort = (): FsPort => ({
     }
   },
 
-  async realpath(path) {
+  realpath(path) {
     return realpathFs(path);
   },
 
@@ -22,7 +22,7 @@ export const createFsPort = (): FsPort => ({
   async listDirNames(path) {
     try {
       const entries = await readdir(path, { withFileTypes: true });
-      return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+      return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
     } catch {
       return [];
     }

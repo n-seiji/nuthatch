@@ -1,12 +1,19 @@
 import { join } from "node:path";
 import type { FsPort, GitPort, TermPort } from "../domain/ports.ts";
-import { type CommandResult, fail, ok } from "../domain/result.ts";
+import {
+  type CommandResult,
+  EXIT_GENERAL_ERROR,
+  EXIT_SAFE_REJECTION,
+  EXIT_USAGE_ERROR,
+  fail,
+  ok,
+} from "../domain/result.ts";
 import type { JumpData } from "../domain/schema.ts";
 import { sanitizeBranchName } from "../domain/sanitize.ts";
 import { acquireRepoLock } from "../infra/lock.ts";
 import { loadRepoContext } from "../infra/repo.ts";
 
-export type { JumpData };
+export type { JumpData } from "../domain/schema.ts";
 
 export interface JumpOptions {
   readonly cwd: string;
@@ -24,7 +31,7 @@ export const jump = async (
   if (options.target === "-") {
     const previous = process.env.OLDPWD;
     if (previous === undefined || previous.length === 0) {
-      return fail(1, "No previous worktree recorded (OLDPWD is unset).");
+      return fail(EXIT_GENERAL_ERROR, "No previous worktree recorded (OLDPWD is unset).");
     }
     return ok({
       path: previous,
@@ -52,12 +59,12 @@ export const jump = async (
   if (!options.create) {
     if (!term.isTTY()) {
       return fail(
-        3,
+        EXIT_SAFE_REJECTION,
         `No worktree for branch "${options.target}". Re-run with --create to create it.`,
       );
     }
     return fail(
-      3,
+      EXIT_SAFE_REJECTION,
       `No worktree for branch "${options.target}". Re-run with --create to create it.`,
     );
   }
@@ -74,15 +81,14 @@ export const jump = async (
       track = `${remotes[0]}/${options.target}`;
     } else if (remotes.length > 1) {
       return fail(
-        2,
+        EXIT_USAGE_ERROR,
         `Branch "${options.target}" exists on multiple remotes (${remotes.join(", ")}). Use --track to disambiguate.`,
       );
     }
   }
 
-  const existingDirNames = new Set(
-    (await fs.listDirNames(context.managedRoot)).map((n) => n.toLowerCase()),
-  );
+  const managedDirNames = await fs.listDirNames(context.managedRoot);
+  const existingDirNames = new Set(managedDirNames.map((name) => name.toLowerCase()));
   const dirName = sanitizeBranchName(options.target, (candidate) =>
     existingDirNames.has(candidate.toLowerCase()),
   );
@@ -103,10 +109,10 @@ export const jump = async (
     await fs.mkdir(context.managedRoot);
     await git.addWorktree(context.rootPath, targetPath, options.target, {
       createBranch: !branchExistsLocally,
-      ...(track !== undefined ? { track } : {}),
+      ...(track === undefined ? {} : { track }),
     });
-  } catch (err) {
-    return fail(3, `Failed to create worktree: ${(err as Error).message}`);
+  } catch (error) {
+    return fail(EXIT_SAFE_REJECTION, `Failed to create worktree: ${(error as Error).message}`);
   } finally {
     await lock.release();
   }

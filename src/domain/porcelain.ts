@@ -1,4 +1,4 @@
-import type { Worktree, WorktreeKind } from "./model.ts";
+import type { Worktree } from "./model.ts";
 
 const REFS_HEADS_PREFIX = "refs/heads/";
 
@@ -19,43 +19,52 @@ const parseRecord = (lines: readonly string[]): ParsedWorktree | null => {
   let prunable = false;
   let prunableReason: string | null = null;
 
-  for (const line of lines) {
-    if (line.length === 0) continue;
+  for (const line of lines.filter((candidate) => candidate.length > 0)) {
     const spaceIndex = line.indexOf(" ");
     const key = spaceIndex === -1 ? line : line.slice(0, spaceIndex);
     const value = spaceIndex === -1 ? "" : line.slice(spaceIndex + 1);
 
     switch (key) {
-      case "worktree":
+      case "worktree": {
         path = value;
         break;
-      case "HEAD":
+      }
+      case "HEAD": {
         head = value;
         break;
-      case "branch":
+      }
+      case "branch": {
         branch = branchNameFromRef(value);
         break;
-      case "detached":
+      }
+      case "detached": {
         detached = true;
         break;
-      case "bare":
+      }
+      case "bare": {
         bare = true;
         break;
-      case "locked":
+      }
+      case "locked": {
         locked = true;
         lockReason = value.length > 0 ? value : null;
         break;
-      case "prunable":
+      }
+      case "prunable": {
         prunable = true;
         prunableReason = value.length > 0 ? value : null;
         break;
-      default:
+      }
+      default: {
         // Unknown field: ignore for forward compatibility.
         break;
+      }
     }
   }
 
-  if (path === null) return null;
+  if (path === null) {
+    return null;
+  }
 
   return {
     path,
@@ -76,19 +85,22 @@ const parseRecord = (lines: readonly string[]): ParsedWorktree | null => {
  * Malformed records without a `worktree` path are dropped.
  */
 export const parsePorcelain = (output: string): ParsedWorktree[] => {
-  if (output.length === 0) return [];
+  if (output.length === 0) {
+    return [];
+  }
 
   const trimmed = output.endsWith("\0") ? output.slice(0, -1) : output;
   const records = trimmed.split("\0\0");
 
   const result: ParsedWorktree[] = [];
-  for (const record of records) {
-    if (record.length === 0) continue;
+  for (const record of records.filter((candidate) => candidate.length > 0)) {
     const lines = record.split("\0");
     const parsed = parseRecord(lines);
-    if (parsed !== null) result.push(parsed);
+    if (parsed !== null) {
+      result.push(parsed);
+    }
   }
   return result;
 };
 
-export type { WorktreeKind };
+export type { WorktreeKind } from "./model.ts";

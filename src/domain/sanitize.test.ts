@@ -20,7 +20,7 @@ describe("sanitizeBranchName", () => {
 
   it("候補が既に使われている場合、short hash を付与する", () => {
     const taken = new Set(["feat__foo"]);
-    const result = sanitizeBranchName("feat/foo", (c) => taken.has(c));
+    const result = sanitizeBranchName("feat/foo", (candidate) => taken.has(candidate));
     expect(result).not.toBe("feat__foo");
     expect(result.startsWith("feat__foo-")).toBe(true);
   });
@@ -38,8 +38,8 @@ describe("sanitizeBranchName", () => {
 
   it("同じ branch 名は常に同じ hash 候補を生成する (決定的)", () => {
     const taken = new Set(["feat__foo"]);
-    const a = sanitizeBranchName("feat/foo", (c) => taken.has(c));
-    const b = sanitizeBranchName("feat/foo", (c) => taken.has(c));
+    const a = sanitizeBranchName("feat/foo", (candidate) => taken.has(candidate));
+    const b = sanitizeBranchName("feat/foo", (candidate) => taken.has(candidate));
     expect(a).toBe(b);
   });
 

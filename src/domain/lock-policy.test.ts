@@ -8,7 +8,7 @@ describe("canReclaimLock", () => {
         processAlive: true,
         startedAtMs: 0,
         nowMs: 100_000,
-        ttlMs: 1_000,
+        ttlMs: 1000,
       }),
     ).toBe(false);
   });
@@ -19,7 +19,7 @@ describe("canReclaimLock", () => {
         processAlive: false,
         startedAtMs: 0,
         nowMs: 100_000,
-        ttlMs: 1_000,
+        ttlMs: 1000,
       }),
     ).toBe(true);
   });
@@ -30,7 +30,7 @@ describe("canReclaimLock", () => {
         processAlive: false,
         startedAtMs: 0,
         nowMs: 500,
-        ttlMs: 1_000,
+        ttlMs: 1000,
       }),
     ).toBe(false);
   });
@@ -41,7 +41,7 @@ describe("canReclaimLock", () => {
         processAlive: "unknown",
         startedAtMs: 0,
         nowMs: 100_000,
-        ttlMs: 1_000,
+        ttlMs: 1000,
       }),
     ).toBe(false);
   });

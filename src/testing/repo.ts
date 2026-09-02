@@ -24,9 +24,9 @@ export interface TestRepo {
   readonly homeDir: string;
   readonly repoPath: string;
   readonly env: NodeJS.ProcessEnv;
-  git(args: readonly string[], cwd?: string): Promise<string>;
-  writeFile(relativePath: string, content: string): Promise<void>;
-  cleanup(): Promise<void>;
+  git: (args: readonly string[], cwd?: string) => Promise<string>;
+  writeFile: (relativePath: string, content: string) => Promise<void>;
+  cleanup: () => Promise<void>;
 }
 
 /** Creates a real git repo (default branch `main`, one initial commit) in a tmpdir. */

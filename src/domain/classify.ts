@@ -7,7 +7,9 @@ import type { WorktreeKind } from "./model.ts";
  * Both paths must already be resolved (e.g. via realpath) by the caller.
  */
 const isWithin = (parent: string, child: string): boolean => {
-  if (parent === child) return false;
+  if (parent === child) {
+    return false;
+  }
   const rel = relative(parent, child);
   return rel !== "" && !rel.startsWith("..");
 };
@@ -21,7 +23,11 @@ export const classifyWorktreePath = (
   rootPath: string,
   managedRoot: string,
 ): WorktreeKind => {
-  if (path === rootPath) return "root";
-  if (path === managedRoot || isWithin(managedRoot, path)) return "managed";
+  if (path === rootPath) {
+    return "root";
+  }
+  if (path === managedRoot || isWithin(managedRoot, path)) {
+    return "managed";
+  }
   return "external";
 };

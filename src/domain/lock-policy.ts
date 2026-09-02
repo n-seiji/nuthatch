@@ -12,6 +12,8 @@ export interface LockReclaimInput {
  * safe default is to refuse reclaiming (per docs/design.md: "確認不能なら拒否").
  */
 export const canReclaimLock = (input: LockReclaimInput): boolean => {
-  if (input.processAlive !== false) return false;
+  if (input.processAlive !== false) {
+    return false;
+  }
   return input.nowMs - input.startedAtMs > input.ttlMs;
 };

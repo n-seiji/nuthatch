@@ -38,9 +38,11 @@ export interface InitOptions {
 /** Returns the shell function template for `hop init <shell>`. Pure and static for now. */
 export const renderInit = (options: InitOptions): string => {
   switch (options.shell) {
-    case "zsh":
+    case "zsh": {
       return ZSH_TEMPLATE;
-    default:
+    }
+    default: {
       return ZSH_TEMPLATE;
+    }
   }
 };

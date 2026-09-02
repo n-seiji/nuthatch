@@ -4,17 +4,19 @@ import type { AddWorktreeOptions, GitPort } from "../domain/ports.ts";
 
 const execFile = promisify(execFileCb);
 
+const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+
 /** Thin wrapper around the git CLI. Always spawns with an argv array — never string concatenation. */
 const run = async (cwd: string, args: readonly string[]): Promise<string> => {
   const { stdout } = await execFile("git", [...args], {
     cwd,
-    maxBuffer: 64 * 1024 * 1024,
+    maxBuffer: MAX_BUFFER_BYTES,
   });
   return stdout;
 };
 
 export const createGitPort = (): GitPort => ({
-  async listWorktreesPorcelain(cwd) {
+  listWorktreesPorcelain(cwd) {
     return run(cwd, ["worktree", "list", "--porcelain", "-z"]);
   },
 
@@ -31,18 +33,25 @@ export const createGitPort = (): GitPort => ({
   async addWorktree(cwd, path, branch, options: AddWorktreeOptions) {
     const args = ["worktree", "add"];
     if (options.createBranch) {
-      if (options.track !== undefined) args.push("--track");
+      if (options.track !== undefined) {
+        args.push("--track");
+      }
       args.push("-b", branch);
     }
     args.push(path);
-    if (options.track !== undefined) args.push(options.track);
-    else if (!options.createBranch) args.push(branch);
+    if (options.track !== undefined) {
+      args.push(options.track);
+    } else if (!options.createBranch) {
+      args.push(branch);
+    }
     await run(cwd, args);
   },
 
   async removeWorktree(cwd, path, force) {
     const args = ["worktree", "remove"];
-    if (force) args.push("--force");
+    if (force) {
+      args.push("--force");
+    }
     args.push(path);
     await run(cwd, args);
   },
@@ -55,8 +64,10 @@ export const createGitPort = (): GitPort => ({
         "--count",
         `${branch}...${branch}@{upstream}`,
       ]);
-      const [ahead, behind] = out.trim().split(/\s+/).map(Number);
-      if (ahead === undefined || behind === undefined) return null;
+      const [ahead, behind] = out.trim().split(/\s+/u).map(Number);
+      if (ahead === undefined || behind === undefined) {
+        return null;
+      }
       return { ahead, behind };
     } catch {
       return null;
@@ -75,8 +86,10 @@ export const createGitPort = (): GitPort => ({
     const out = await run(cwd, ["for-each-ref", "--format=%(refname)", "refs/remotes/"]);
     const remotes = new Set<string>();
     for (const line of out.split("\n")) {
-      const match = /^refs\/remotes\/([^/]+)\/(.+)$/.exec(line.trim());
-      if (match && match[2] === branch && match[1] !== undefined) remotes.add(match[1]);
+      const match = /^refs\/remotes\/(?<remote>[^/]+)\/(?<branchName>.+)$/u.exec(line.trim());
+      if (match?.groups?.remote !== undefined && match.groups.branchName === branch) {
+        remotes.add(match.groups.remote);
+      }
     }
     return [...remotes];
   },

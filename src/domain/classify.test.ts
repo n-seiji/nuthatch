@@ -21,7 +21,7 @@ describe("classifyWorktreePath", () => {
 
   it("文字列 prefix が一致するだけの兄弟ディレクトリは external と分類する", () => {
     // "/…/_worktree/repo-other" starts with the managedRoot string as a prefix,
-    // but is not actually inside it — must not be misclassified as managed.
+    // But is not actually inside it — must not be misclassified as managed.
     const sibling = `${managedRoot}-other/branch`;
     expect(classifyWorktreePath(sibling, root, managedRoot)).toBe("external");
   });

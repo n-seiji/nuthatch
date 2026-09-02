@@ -30,7 +30,7 @@ describeIfZsh("hop init zsh (real zsh)", () => {
     await mkdir(targetDir, { recursive: true });
 
     // Stub out the real `hop` binary: always "succeeds" by printing a path,
-    // so we can drive the shell wrapper without a real git repo.
+    // So we can drive the shell wrapper without a real git repo.
     const fakeHopPath = join(fakeBinDir, "hop");
     await writeFile(fakeHopPath, `#!/bin/sh\necho "${targetDir}"\nexit 0\n`);
     await chmod(fakeHopPath, 0o755);
@@ -48,12 +48,12 @@ describeIfZsh("hop init zsh (real zsh)", () => {
         encoding: "utf8",
       });
       return { stdout, stderr: "", status: 0 };
-    } catch (err) {
-      const e = err as { stdout?: string; stderr?: string; status?: number };
+    } catch (error) {
+      const err = error as { stdout?: string; stderr?: string; status?: number };
       return {
-        stdout: e.stdout ?? "",
-        stderr: e.stderr ?? "",
-        status: e.status ?? 1,
+        stdout: err.stdout ?? "",
+        stderr: err.stderr ?? "",
+        status: err.status ?? 1,
       };
     }
   };

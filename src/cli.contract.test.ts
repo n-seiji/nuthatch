@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import * as v from "valibot";
+import { parse } from "valibot";
 import { JumpEnvelopeSchema, LsEnvelopeSchema, RmEnvelopeSchema } from "./domain/schema.ts";
-import { createTestRepo, type TestRepo } from "./testing/repo.ts";
+import { type TestRepo, createTestRepo } from "./testing/repo.ts";
 
-const CLI_ENTRY = new URL("./cli.ts", import.meta.url).pathname;
+const CLI_ENTRY = new URL("cli.ts", import.meta.url).pathname;
 
 let repo: TestRepo;
 
@@ -33,15 +33,15 @@ const runHop = (args: readonly string[]): unknown => {
 describe("hop --json contract", () => {
   it("ls --json は LsEnvelopeSchema を満たす", () => {
     const output = runHop(["ls", "--json"]);
-    expect(() => v.parse(LsEnvelopeSchema, output)).not.toThrow();
-    const parsed = v.parse(LsEnvelopeSchema, output);
+    expect(() => parse(LsEnvelopeSchema, output)).not.toThrow();
+    const parsed = parse(LsEnvelopeSchema, output);
     expect(parsed.command).toBe("ls");
     expect(parsed.data?.some((wt) => wt.kind === "root")).toBe(true);
   });
 
   it("jump (create) --json は JumpEnvelopeSchema を満たす", () => {
     const output = runHop(["feat/contract", "--create", "--json"]);
-    const parsed = v.parse(JumpEnvelopeSchema, output);
+    const parsed = parse(JumpEnvelopeSchema, output);
     expect(parsed.command).toBe("jump");
     expect(parsed.data).toEqual({ branch: "feat/contract", created: true });
   });
@@ -49,7 +49,7 @@ describe("hop --json contract", () => {
   it("rm --json は RmEnvelopeSchema を満たす", () => {
     runHop(["feat/to-remove", "--create", "--json"]);
     const output = runHop(["rm", "feat/to-remove", "--json"]);
-    const parsed = v.parse(RmEnvelopeSchema, output);
+    const parsed = parse(RmEnvelopeSchema, output);
     expect(parsed.command).toBe("rm");
     expect(parsed.data?.branch).toBe("feat/to-remove");
   });

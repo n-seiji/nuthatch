@@ -116,8 +116,8 @@ describe("jump → ls → rm (integration)", () => {
 
   it("予約語と同名の branch も -- でエスケープして扱える", async () => {
     // The domain layer itself has no notion of reserved words — that's a
-    // cli.ts concern — so this exercises the command directly with "ls" as
-    // a literal branch name to prove commands never special-case it.
+    // Cli.ts concern — so this exercises the command directly with "ls" as
+    // A literal branch name to prove commands never special-case it.
     const created = await jump(git, fs, term, {
       cwd: repo.repoPath,
       target: "ls",

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { defineCommand, parseArgs, runCommand } from "citty";
+import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } from "citty";
 import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
 import { rm } from "./commands/rm.ts";
-import type { CommandResult } from "./domain/result.ts";
+import { type CommandResult, EXIT_GENERAL_ERROR, EXIT_USAGE_ERROR } from "./domain/result.ts";
 import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
@@ -60,9 +60,9 @@ const rmCommand = defineCommand({
 const notImplemented = (name: string) =>
   defineCommand({
     meta: { name, description: `hop ${name} (not implemented yet)` },
-    async run() {
+    run() {
       process.stderr.write(`hop ${name}: not implemented yet\n`);
-      process.exitCode = 1;
+      process.exitCode = EXIT_GENERAL_ERROR;
     },
   });
 
@@ -75,11 +75,11 @@ const initCommand = defineCommand({
       description: "Shell name (zsh)",
     },
   },
-  async run({ args }) {
+  run({ args }) {
     const shell = String(args.shell);
     if (shell !== "zsh") {
       process.stderr.write(`Unsupported shell: ${shell}\n`);
-      process.exitCode = 2;
+      process.exitCode = EXIT_USAGE_ERROR;
       return;
     }
     process.stdout.write(renderInit({ shell: "zsh" }));
@@ -94,7 +94,7 @@ const runJump = async (
     cwd: process.cwd(),
     target,
     create: options.create,
-    ...(options.track !== undefined ? { track: options.track } : {}),
+    ...(options.track === undefined ? {} : { track: options.track }),
   });
   render("jump", result, options.json);
   applyExitCode(result);
@@ -137,25 +137,30 @@ const runJumpFromArgs = async (rawArgs: readonly string[]): Promise<void> => {
   await runJump(String(args.target), {
     create: Boolean(args.create),
     json: Boolean(args.json),
-    ...(args.track !== undefined ? { track: String(args.track) } : {}),
+    ...(args.track === undefined ? {} : { track: String(args.track) }),
   });
 };
 
 // Dispatch is manual (not citty's `subCommands`) because citty's runCommand
-// always invokes a parent's `run` even after dispatching a subcommand, and
-// throws on any unrecognized first token — both wrong for us, since any
-// non-reserved first token must fall through to `jump` as a branch name.
-const rawArgs = process.argv.slice(2);
+// Always invokes a parent's `run` even after dispatching a subcommand, and
+// Throws on any unrecognized first token — both wrong for us, since any
+// Non-reserved first token must fall through to `jump` as a branch name.
+// Process.argv is [node, script, ...userArgs]; drop the first two.
+const ARGV_USER_ARGS_START = 2;
+const rawArgs = process.argv.slice(ARGV_USER_ARGS_START);
 
 if (rawArgs[0] === "--") {
   // `hop -- <branch>` escapes reserved words (ls/rm/clean/root/init) so they
-  // can be used as branch names.
+  // Can be used as branch names.
   await runJumpFromArgs(rawArgs.slice(1));
 } else if (rawArgs[0] !== undefined && rawArgs[0] in RESERVED_COMMANDS) {
   const [name, ...rest] = rawArgs;
   const command = RESERVED_COMMANDS[name as keyof typeof RESERVED_COMMANDS];
-  // biome-ignore lint/suspicious/noExplicitAny: runCommand's generic can't unify this heterogeneous command union.
-  await runCommand(command as any, { rawArgs: rest });
+  // The command union's arg schemas differ per command, so this cast collapses
+  // Them to the common CommandDef<ArgsDef> shape runCommand expects.
+  await runCommand(command as unknown as CommandDef<ArgsDef>, {
+    rawArgs: rest,
+  });
 } else {
   await runJumpFromArgs(rawArgs);
 }

@@ -22,9 +22,17 @@ export interface GarbageInput {
  * facts are unknown, per the "lose nothing" safety rule in docs/design.md.
  */
 export const classifyGarbage = (input: GarbageInput): GarbageReason | null => {
-  if (input.prunable) return "prunable";
-  if (!input.clean) return null;
-  if (input.mergedIntoDefault === true) return "merged";
-  if (input.upstreamGone && input.allCommitsReachableFromDefault === true) return "gone";
+  if (input.prunable) {
+    return "prunable";
+  }
+  if (!input.clean) {
+    return null;
+  }
+  if (input.mergedIntoDefault === true) {
+    return "merged";
+  }
+  if (input.upstreamGone && input.allCommitsReachableFromDefault === true) {
+    return "gone";
+  }
   return null;
 };

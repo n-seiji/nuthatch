@@ -1,14 +1,23 @@
 const MAX_DIR_NAME_LENGTH = 200;
 const HASH_LENGTH = 8;
+const HEX_RADIX = 16;
+const FULL_HASH_HEX_LENGTH = 8;
+const FNV_OFFSET_BASIS = 0x81_1c_9d_c5;
+const FNV_PRIME = 0x01_00_01_93;
 
 /** FNV-1a 32-bit hash, hex-encoded. Pure and deterministic — no crypto import needed. */
 const shortHash = (input: string): string => {
-  let hash = 0x811c9dc5;
+  let hash = FNV_OFFSET_BASIS;
   for (let i = 0; i < input.length; i++) {
+    // Using charCodeAt (not codePointAt) is intentional: this loop advances one
+    // UTF-16 code unit at a time, which is what a byte/unit-level hash needs.
+    // CodePointAt would return `undefined` when `i` lands on the low half of
+    // A surrogate pair, corrupting the hash — it's not a drop-in replacement here.
+    // oxlint-disable-next-line unicorn/prefer-code-point
     hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
+    hash = Math.imul(hash, FNV_PRIME);
   }
-  return (hash >>> 0).toString(16).padStart(8, "0").slice(0, HASH_LENGTH);
+  return (hash >>> 0).toString(HEX_RADIX).padStart(FULL_HASH_HEX_LENGTH, "0").slice(0, HASH_LENGTH);
 };
 
 const baseName = (branch: string): string => branch.replaceAll("/", "__");
@@ -30,7 +39,9 @@ export const sanitizeBranchName = (
 ): string => {
   const base = truncate(baseName(branch), MAX_DIR_NAME_LENGTH);
 
-  if (!isTaken(base)) return base;
+  if (!isTaken(base)) {
+    return base;
+  }
 
   const hash = shortHash(branch);
   let candidate = `${truncate(base, MAX_DIR_NAME_LENGTH - hash.length - 1)}-${hash}`;

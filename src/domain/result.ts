@@ -1,5 +1,16 @@
 /** Exit codes fixed by docs/design.md's CLI contract. */
-export type ExitCode = 0 | 1 | 2 | 3 | 130;
+export const EXIT_SUCCESS = 0;
+export const EXIT_GENERAL_ERROR = 1;
+export const EXIT_USAGE_ERROR = 2;
+export const EXIT_SAFE_REJECTION = 3;
+export const EXIT_CANCELLED = 130;
+
+export type ExitCode =
+  | typeof EXIT_SUCCESS
+  | typeof EXIT_GENERAL_ERROR
+  | typeof EXIT_USAGE_ERROR
+  | typeof EXIT_SAFE_REJECTION
+  | typeof EXIT_CANCELLED;
 
 /**
  * Structured outcome returned by every command. Commands never render —
@@ -19,12 +30,12 @@ export const ok = <T>(
   fields: Omit<CommandResult<T>, "ok" | "exitCode"> = {},
 ): CommandResult<T> => ({
   ok: true,
-  exitCode: 0,
+  exitCode: EXIT_SUCCESS,
   ...fields,
 });
 
 export const fail = <T>(
-  exitCode: Exclude<ExitCode, 0>,
+  exitCode: Exclude<ExitCode, typeof EXIT_SUCCESS>,
   errorMessage: string,
 ): CommandResult<T> => ({
   ok: false,

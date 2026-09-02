@@ -27,7 +27,7 @@ export const loadRepoContext = async (
   ]);
 
   const parsed = parsePorcelain(porcelainOut);
-  const firstEntry = parsed[0];
+  const [firstEntry] = parsed;
   if (firstEntry === undefined) {
     throw new Error("git worktree list returned no entries");
   }
@@ -35,7 +35,11 @@ export const loadRepoContext = async (
   const rootPath = await realpathOrRaw(fs, firstEntry.path);
   const managedRoot = join(dirname(rootPath), "_worktree", basename(rootPath));
 
+  // This map runs once per worktree per repo load. Not a hot path. Spreading
+  // Keeps each entry in sync with ParsedWorktree's fields automatically,
+  // Instead of enumerating them by hand.
   const worktrees: Worktree[] = await Promise.all(
+    // oxlint-disable-next-line oxc/no-map-spread
     parsed.map(async (entry) => {
       const resolvedPath = await realpathOrRaw(fs, entry.path);
       return {

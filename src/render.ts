@@ -1,5 +1,7 @@
 import type { CommandResult } from "./domain/result.ts";
 
+const PLAIN_JSON_INDENT = 2;
+
 export interface JsonEnvelope<T> {
   readonly schemaVersion: 1;
   readonly command: string;
@@ -26,7 +28,7 @@ export const render = <T>(command: string, result: CommandResult<T>, json: boole
   if (result.path !== undefined) {
     process.stdout.write(`${result.path}\n`);
   } else if (result.ok && result.data !== undefined) {
-    process.stdout.write(`${JSON.stringify(result.data, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(result.data, null, PLAIN_JSON_INDENT)}\n`);
   }
 
   for (const warning of result.warnings ?? []) {
