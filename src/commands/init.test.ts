@@ -49,7 +49,11 @@ describeIfZsh("hop init zsh (real zsh)", () => {
       });
       return { stdout, stderr: "", status: 0 };
     } catch (error) {
-      const err = error as { stdout?: string; stderr?: string; status?: number };
+      const err = error as {
+        stdout?: string;
+        stderr?: string;
+        status?: number;
+      };
       return {
         stdout: err.stdout ?? "",
         stderr: err.stderr ?? "",
@@ -73,6 +77,16 @@ describeIfZsh("hop init zsh (real zsh)", () => {
   it("`hop ls` (予約語そのもの) は cd されない", () => {
     const before = workDir;
     const result = runInZsh(`cd ${before} && hop ls > /dev/null; pwd`);
+    expect(result.stdout.trim()).toBe(before);
+  });
+
+  it("非 TTY (fd 2/0 が tty でない) では bare `hop` は cd しない", () => {
+    // ExecFileSync always pipes stdin/stderr, so `[[ -t 2 && -t 0 ]]` is
+    // False here — this exercises the wrapper's non-interactive branch
+    // (Ls fallback territory), not the real interactive picker path, which
+    // Needs a real pty and is verified manually instead (see PR description).
+    const before = workDir;
+    const result = runInZsh(`cd ${before} && hop > /dev/null; pwd`);
     expect(result.stdout.trim()).toBe(before);
   });
 });
