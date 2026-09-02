@@ -35,8 +35,7 @@ shell/               # hop init zsh のテンプレート
 - 依存方向は一方向のみ: `cli.ts → commands → domain + infra`
 - `domain/` は純関数のみ。外部依存 (subprocess / fs / TTY / clock / random) を import しない
 - `infra/` 以外で subprocess / fs を直接呼ばない。git は常に argv 配列で spawn (文字列連結禁止)
-- `commands/` は相互 import 禁止 (本体コードのみ。複数コマンドをまたぐ integration test が
-  同ディレクトリから複数コマンドを import するのは対象外)。描画せず構造化 Result を返す
+- `commands/` は描画せず構造化 Result を返す
 - subprocess は `node:child_process` (npm 版 Node / compile 版 Bun 両対応のため)
 - CLI 契約 (stdout / JSON schema / exit code) は docs/design.md の定義に従い、変更は設計書の更新とセットで行う
 
