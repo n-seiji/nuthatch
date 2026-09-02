@@ -56,15 +56,16 @@
       }
     },
     {
-      "files": ["src/commands/*.ts"],
+      "files": ["src/domain/*.ts"],
       "rules": {
+        "import/no-nodejs-modules": "error",
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
               {
-                "group": ["./jump.ts", "./ls.ts", "./rm.ts", "./init.ts", "./cli.ts"],
-                "message": "commands/ files may not import each other (see AGENTS.md architecture rule). Share logic via domain/ or infra/ instead."
+                "group": ["../infra/**", "../commands/**", "../ui/**", "../cli.ts", "../render.ts"],
+                "message": "domain/ is the innermost onion layer: pure functions only, no infra/commands/ui/cli.ts/render.ts, no node: built-ins. See AGENTS.md."
               }
             ]
           }
@@ -72,9 +73,43 @@
       }
     },
     {
-      "files": ["src/commands/*.test.ts"],
+      "files": ["src/infra/*.ts"],
       "rules": {
-        "no-restricted-imports": "off"
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["../commands/**", "../ui/**", "../cli.ts", "../render.ts"],
+                "message": "infra/ implements domain/ ports; it may not depend on commands/ui/cli.ts/render.ts. See AGENTS.md."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/commands/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "./jump.ts",
+                  "./ls.ts",
+                  "./rm.ts",
+                  "./init.ts",
+                  "../ui/**",
+                  "../cli.ts",
+                  "../render.ts"
+                ],
+                "message": "commands/ may not import each other, ui/, cli.ts, or render.ts (cli.ts + render.ts are the outermost layer; commands must stay renderer-agnostic). See AGENTS.md."
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -84,7 +119,9 @@
         "max-lines-per-function": "off",
         "init-declarations": "off",
         "no-inline-comments": "off",
-        "no-magic-numbers": "off"
+        "no-magic-numbers": "off",
+        "no-restricted-imports": "off",
+        "import/no-nodejs-modules": "off"
       }
     }
   ],
