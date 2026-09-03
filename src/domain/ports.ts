@@ -33,6 +33,13 @@ export interface GitPort {
   resolveDefaultBranchRef: (cwd: string) => Promise<string | null>;
   /** Whether every commit on `branch` is also reachable from `ref` ("unknown" if undeterminable). */
   isAncestor: (cwd: string, branch: string, ref: string) => Promise<boolean | "unknown">;
+  /**
+   * Whether every commit on `branch` is either an ancestor of `ref` or has an
+   * equivalent patch already applied on `ref` ("unknown" if undeterminable).
+   * Unlike `isAncestor`, this also recognizes squash-merged branches, whose
+   * commits are never literal ancestors of the branch they were merged into.
+   */
+  hasEquivalentCommits: (cwd: string, branch: string, ref: string) => Promise<boolean | "unknown">;
   /** True if `branch`'s upstream is marked `[gone]` (its remote-tracking branch was deleted). */
   isUpstreamGone: (cwd: string, branch: string) => Promise<boolean>;
   /** Deletes a local branch. Callers must have already established it is safe to delete. */

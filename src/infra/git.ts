@@ -189,6 +189,18 @@ const createGarbagePolicyMethods = () => ({
     }
   },
 
+  async hasEquivalentCommits(cwd: string, branch: string, ref: string) {
+    try {
+      const out = await run(cwd, ["cherry", ref, branch]);
+      // Each line is "+ <sha>" (no equivalent patch on ref, i.e. genuinely
+      // Unmerged) or "- <sha>" (an equivalent patch already exists on ref,
+      // E.g. from a squash or rebase merge). Any "+" line means unsafe.
+      return !out.split("\n").some((line) => line.startsWith("+"));
+    } catch {
+      return "unknown";
+    }
+  },
+
   async isUpstreamGone(cwd: string, branch: string) {
     try {
       const out = await run(cwd, [

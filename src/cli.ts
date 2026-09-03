@@ -1,17 +1,13 @@
 #!/usr/bin/env node
 import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } from "citty";
+import { clean } from "./commands/clean.ts";
 import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
 import { pick, type PickCandidate } from "./commands/pick.ts";
 import { rm } from "./commands/rm.ts";
-import {
-  type CommandResult,
-  EXIT_CANCELLED,
-  EXIT_GENERAL_ERROR,
-  EXIT_USAGE_ERROR,
-  ok,
-} from "./domain/result.ts";
+import { root } from "./commands/root.ts";
+import { type CommandResult, EXIT_CANCELLED, EXIT_USAGE_ERROR, ok } from "./domain/result.ts";
 import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
@@ -64,14 +60,58 @@ const rmCommand = defineCommand({
   },
 });
 
-const notImplemented = (name: string) =>
-  defineCommand({
-    meta: { name, description: `hop ${name} (not implemented yet)` },
-    run() {
-      process.stderr.write(`hop ${name}: not implemented yet\n`);
-      process.exitCode = EXIT_GENERAL_ERROR;
+const rootCommand = defineCommand({
+  meta: {
+    name: "root",
+    description: "cd to the root clone, or temporarily switch its branch",
+  },
+  args: {
+    branch: {
+      type: "positional",
+      required: false,
+      description: 'Branch to switch root to ("-" to switch back)',
     },
-  });
+    track: {
+      type: "string",
+      description: "Remote branch to track when creating",
+    },
+    json: { type: "boolean", description: "Output JSON" },
+  },
+  async run({ args }) {
+    const result = await root(git, fs, {
+      cwd: process.cwd(),
+      ...(args.branch === undefined ? {} : { target: String(args.branch) }),
+      ...(args.track === undefined ? {} : { track: String(args.track) }),
+    });
+    render("root", result, Boolean(args.json));
+    applyExitCode(result);
+  },
+});
+
+const cleanCommand = defineCommand({
+  meta: {
+    name: "clean",
+    description: "Remove worktrees that are safe to garbage-collect",
+  },
+  args: {
+    ext: { type: "boolean", description: "Also consider external worktrees" },
+    withBranch: { type: "boolean", description: "Also delete the branch" },
+    dryRun: { type: "boolean", description: "Only report candidates" },
+    yes: { type: "boolean", description: "Skip confirmation and execute" },
+    json: { type: "boolean", description: "Output JSON" },
+  },
+  async run({ args }) {
+    const result = await clean(git, fs, term, {
+      cwd: process.cwd(),
+      ext: Boolean(args.ext),
+      withBranch: Boolean(args.withBranch),
+      dryRun: Boolean(args.dryRun),
+      yes: Boolean(args.yes),
+    });
+    render("clean", result, Boolean(args.json));
+    applyExitCode(result);
+  },
+});
 
 const initCommand = defineCommand({
   meta: { name: "init", description: "Print shell integration" },
@@ -110,8 +150,8 @@ const runJump = async (
 const RESERVED_COMMANDS = {
   ls: lsCommand,
   rm: rmCommand,
-  clean: notImplemented("clean"),
-  root: notImplemented("root"),
+  clean: cleanCommand,
+  root: rootCommand,
   init: initCommand,
 } as const;
 
