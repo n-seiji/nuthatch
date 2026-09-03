@@ -153,8 +153,14 @@ test/                    # domain は unit、commands は実 git repo で integr
 
 ## リリース手順 (順序固定)
 
-build → `npm pack` → npm 版 + 全 OS バイナリの smoke test → npm publish
-(--access public, provenance) → Releases 添付。**publish は最後** (壊れた版の公開防止)。
+build (tag `vX.Y.Z` と `package.json` version の一致を検証) → `npm pack` → npm 版、
+linux-x64、darwin-arm64 の smoke test → darwin-x64 は compile 確認のみ → 各バイナリの
+SHA-256 生成 → npm publish (--access public, provenance。既存の同 version は skip) →
+Releases 添付。**publish は最後** (壊れた版の公開防止)。
+
+GitHub Actions の macOS runner では darwin-arm64 を実行 smoke test する。darwin-x64 は
+実行対象 runner を用意していないため compile の成功確認のみとし、install.sh は Release
+添付の `.sha256` と照合してから binary を配置する。
 
 ## インストール (公開後)
 

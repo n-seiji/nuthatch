@@ -17,15 +17,30 @@ jobs:
         with:
           bun-version: "1.2.21"
 
+      - id: version
+        name: Verify release tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must match vX.Y.Z: $RELEASE_TAG"
+            exit 1
+          fi
+          package_version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+          tag_version="${RELEASE_TAG#v}"
+          if [ "$tag_version" != "$package_version" ]; then
+            echo "::error::Tag $RELEASE_TAG does not match package.json version $package_version"
+            exit 1
+          fi
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run format:check
       - run: bun test
       - run: bun run build
-
-      - id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: npm pack
         run: |
@@ -94,6 +109,11 @@ jobs:
             --outfile out/hop-${{ matrix.target }}
           chmod +x out/hop-${{ matrix.target }}
 
+      - name: Generate SHA-256 checksum
+        run: |
+          set -euo pipefail
+          sha256sum "out/hop-${{ matrix.target }}" > "out/hop-${{ matrix.target }}.sha256"
+
       - name: Smoke test (native arch only)
         if: matrix.target == 'linux-x64'
         run: |
@@ -108,14 +128,37 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.target }}
-          path: out/hop-${{ matrix.target }}
+          path: out/hop-${{ matrix.target }}*
           retention-days: 1
+
+  smoke-test-darwin-arm64:
+    needs: build-binaries
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: binary-darwin-arm64
+          path: /tmp/binary
+
+      - name: Smoke-test darwin-arm64 binary
+        run: |
+          set -euo pipefail
+          bin="/tmp/binary/hop-darwin-arm64"
+          chmod +x "$bin"
+          "$bin" --help || true
+          smoke_repo="$(mktemp -d)"
+          trap 'rm -rf "$smoke_repo"' EXIT
+          git init --initial-branch=main "$smoke_repo"
+          cd "$smoke_repo"
+          git -c user.email=ci@example.com -c user.name=ci commit --allow-empty -m init
+          "$bin" ls --json
+          "$bin" root --json
 
   publish:
     # Publish only after every build/test/smoke-test job above is green, and
     # Always last, so a broken build or failed smoke test never reaches npm
     # Or GitHub Releases.
-    needs: [build, smoke-test-tarball, build-binaries]
+    needs: [build, smoke-test-tarball, build-binaries, smoke-test-darwin-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -138,9 +181,19 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish to npm
-        run: npm publish /tmp/pack/*.tgz --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_NAME: "@n-seiji/nuthatch"
+          PACKAGE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          if published_version="$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version 2>/dev/null)"; then
+            if [ "$published_version" = "$PACKAGE_VERSION" ]; then
+              echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists; skipping npm publish."
+              exit 0
+            fi
+          fi
+          npm publish /tmp/pack/*.tgz --access public --provenance
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

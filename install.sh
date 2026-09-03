@@ -15,6 +15,38 @@ fail() {
   exit 1
 }
 
+download() {
+  url=$1
+  output=$2
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$output"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q "$url" -O "$output"
+  else
+    fail "Neither curl nor wget is available."
+  fi
+}
+
+sha256_digest() {
+  path=$1
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$path" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$path" | awk '{print $1}'
+  else
+    fail "Neither sha256sum nor shasum is available."
+  fi
+}
+
+cleanup() {
+  if [ -n "${tmp:-}" ]; then
+    rm -f "$tmp"
+  fi
+  if [ -n "${checksum_tmp:-}" ]; then
+    rm -f "$checksum_tmp"
+  fi
+}
+
 detect_os() {
   case "$(uname -s)" in
     Darwin) echo "darwin" ;;
@@ -47,22 +79,29 @@ main() {
   else
     url="https://github.com/${REPO}/releases/download/${version}/${asset}"
   fi
+  checksum_url="${url}.sha256"
 
   mkdir -p "$INSTALL_DIR"
   dest="${INSTALL_DIR}/hop"
   tmp="${dest}.tmp.$$"
+  checksum_tmp="${tmp}.sha256"
+  trap cleanup EXIT
+  trap 'exit 1' HUP INT TERM
 
   log "Downloading ${asset} (${version}) from ${url}"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$url" -o "$tmp"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -q "$url" -O "$tmp"
-  else
-    fail "Neither curl nor wget is available."
+  download "$url" "$tmp"
+  download "$checksum_url" "$checksum_tmp"
+
+  expected_checksum=$(awk 'NF { print $1; exit }' "$checksum_tmp")
+  actual_checksum=$(sha256_digest "$tmp")
+  if [ -z "$expected_checksum" ] || [ "$expected_checksum" != "$actual_checksum" ]; then
+    fail "Checksum verification failed for ${asset}."
   fi
 
   chmod +x "$tmp"
   mv "$tmp" "$dest"
+  tmp=""
+  checksum_tmp=""
   log "Installed hop to ${dest}"
 
   case ":$PATH:" in
