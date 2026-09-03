@@ -1,16 +1,14 @@
-import { buildPickCandidates, type PickCandidate } from "../domain/candidates.ts";
+import { buildPickCandidates } from "../domain/candidates.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import { type CommandResult, ok } from "../domain/result.ts";
+import type { PickData } from "../domain/schema.ts";
 import { loadRepoContext } from "../infra/repo.ts";
 
 export type { PickCandidate } from "../domain/candidates.ts";
+export type { PickData } from "../domain/schema.ts";
 
 export interface PickOptions {
   readonly cwd: string;
-}
-
-export interface PickData {
-  readonly candidates: readonly PickCandidate[];
 }
 
 /**
@@ -29,9 +27,9 @@ export const pick = async (
     git.listBranches(context.rootPath),
     git.listRemoteBranches(context.rootPath),
     Promise.all(
-      context.worktrees.map(async (worktree): Promise<readonly [string, boolean]> => [
+      context.worktrees.map(async (worktree): Promise<readonly [string, boolean | null]> => [
         worktree.path,
-        worktree.bare ? false : await git.isDirty(worktree.path),
+        worktree.bare ? null : await git.isDirty(worktree.path),
       ]),
     ),
   ]);

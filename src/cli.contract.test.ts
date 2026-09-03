@@ -2,12 +2,22 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { parse } from "valibot";
-import { JumpEnvelopeSchema, LsEnvelopeSchema, RmEnvelopeSchema } from "./domain/schema.ts";
+import { createFsPort } from "./infra/fs.ts";
+import { createGitPort } from "./infra/git.ts";
+import {
+  JumpEnvelopeSchema,
+  LsEnvelopeSchema,
+  PickEnvelopeSchema,
+  RmEnvelopeSchema,
+} from "./domain/schema.ts";
+import { pick } from "./commands/pick.ts";
 import { type TestRepo, createTestRepo } from "./testing/repo.ts";
 
 const CLI_ENTRY = new URL("cli.ts", import.meta.url).pathname;
 
 let repo: TestRepo;
+const git = createGitPort();
+const fs = createFsPort();
 
 beforeEach(async () => {
   repo = await createTestRepo();
@@ -53,6 +63,19 @@ describe("hop --json contract", () => {
     const parsed = parse(RmEnvelopeSchema, output);
     expect(parsed.command).toBe("rm");
     expect(parsed.data?.branch).toBe("feat/to-remove");
+  });
+
+  it("pick の候補データは PickEnvelopeSchema を満たす", async () => {
+    const result = await pick(git, fs, { cwd: repo.repoPath });
+    const output = {
+      schemaVersion: 1,
+      command: "pick",
+      data: result.data,
+      warnings: result.warnings ?? [],
+    };
+    const parsed = parse(PickEnvelopeSchema, output);
+    expect(parsed.command).toBe("pick");
+    expect(parsed.data?.candidates.some((candidate) => candidate.kind === "worktree")).toBe(true);
   });
 });
 
