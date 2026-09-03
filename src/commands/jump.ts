@@ -41,12 +41,9 @@ export const jump = async (
 
   const context = await loadRepoContext(git, fs, options.cwd);
 
-  if (options.target === "root") {
-    return ok({
-      path: context.rootPath,
-      data: { branch: "root", created: false },
-    });
-  }
+  // "Root" is never reached here in practice — it's a reserved word cli.ts
+  // Dispatches to commands/root.ts before jump ever sees it. Kept out of
+  // This function entirely now that root.ts owns that behavior.
 
   const existing = context.worktrees.find((wt) => wt.branch === options.target);
   if (existing !== undefined) {

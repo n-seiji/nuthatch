@@ -79,3 +79,35 @@ export type JumpEnvelope = InferOutput<typeof JumpEnvelopeSchema>;
 
 export const RmEnvelopeSchema = jsonEnvelopeSchema(RmDataSchema);
 export type RmEnvelope = InferOutput<typeof RmEnvelopeSchema>;
+
+/** `hop root [<branch>|-]` data shape. */
+export const RootDataSchema = object({
+  branch: nullable(string()),
+  switched: boolean(),
+});
+export type RootData = InferOutput<typeof RootDataSchema>;
+
+export const RootEnvelopeSchema = jsonEnvelopeSchema(RootDataSchema);
+export type RootEnvelope = InferOutput<typeof RootEnvelopeSchema>;
+
+export const GarbageReasonSchema = picklist(["prunable", "merged", "gone"]);
+
+/** A single `hop clean` candidate: a managed (or, with --ext, external) worktree safe to remove. */
+export const CleanCandidateSchema = object({
+  branch: string(),
+  path: string(),
+  reason: GarbageReasonSchema,
+});
+export type CleanCandidate = InferOutput<typeof CleanCandidateSchema>;
+
+const RemovedBranchesSchema = array(string());
+
+/** `hop clean` data shape. `removed` is omitted for --dry-run (candidates only, nothing executed). */
+export const CleanDataSchema = object({
+  candidates: array(CleanCandidateSchema),
+  removed: optional(RemovedBranchesSchema),
+});
+export type CleanData = InferOutput<typeof CleanDataSchema>;
+
+export const CleanEnvelopeSchema = jsonEnvelopeSchema(CleanDataSchema);
+export type CleanEnvelope = InferOutput<typeof CleanEnvelopeSchema>;

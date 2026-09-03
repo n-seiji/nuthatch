@@ -27,10 +27,25 @@ export interface GitPort {
   remotesWithBranch: (cwd: string, branch: string) => Promise<string[]>;
   /** Lists unique branch names across all remotes (remote prefix stripped, deduped, no HEAD symref). */
   listRemoteBranches: (cwd: string) => Promise<string[]>;
+  /** Switches the worktree at `cwd` to `ref` (a branch name or "-" for the previous branch). */
+  switchBranch: (cwd: string, ref: string, options?: SwitchBranchOptions) => Promise<void>;
+  /** The repo's default branch ref: origin/HEAD if set, else local main/master. Null if none found. */
+  resolveDefaultBranchRef: (cwd: string) => Promise<string | null>;
+  /** Whether every commit on `branch` is also reachable from `ref` ("unknown" if undeterminable). */
+  isAncestor: (cwd: string, branch: string, ref: string) => Promise<boolean | "unknown">;
+  /** True if `branch`'s upstream is marked `[gone]` (its remote-tracking branch was deleted). */
+  isUpstreamGone: (cwd: string, branch: string) => Promise<boolean>;
+  /** Deletes a local branch. Callers must have already established it is safe to delete. */
+  deleteBranch: (cwd: string, branch: string) => Promise<void>;
 }
 
 export interface AddWorktreeOptions {
   readonly createBranch: boolean;
+  readonly track?: string;
+}
+
+export interface SwitchBranchOptions {
+  readonly createBranch?: boolean;
   readonly track?: string;
 }
 
@@ -44,6 +59,8 @@ export interface FsPort {
 export interface TermPort {
   isTTY: () => boolean;
   logStderr: (message: string) => void;
+  /** Prompts on stderr/stdin and resolves to whether the user confirmed. Only call when isTTY(). */
+  confirm: (message: string) => Promise<boolean>;
 }
 
 export interface WorktreeQuery {

@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline";
 import type { TermPort } from "../domain/ports.ts";
 
 export const createTermPort = (): TermPort => ({
@@ -14,5 +15,22 @@ export const createTermPort = (): TermPort => ({
 
   logStderr(message) {
     process.stderr.write(`${message}\n`);
+  },
+
+  confirm(message) {
+    return new Promise((resolve) => {
+      const rl = createInterface({
+        input: process.stdin,
+        output: process.stderr,
+        terminal: false,
+      });
+      rl.question(`${message} [y/N] `, (answer) => {
+        rl.close();
+        resolve(answer.trim().toLowerCase() === "y");
+      });
+      rl.once("close", () => {
+        resolve(false);
+      });
+    });
   },
 });
