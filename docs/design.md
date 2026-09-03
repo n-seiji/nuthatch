@@ -69,14 +69,16 @@ git worktree manager。コマンド名は `hop` (パッケージ名は nuthatch)
 
 | 判定 | 条件 |
 |---|---|
-| prunable | git が prunable と報告 (無条件で候補) |
+| prunable | git が prunable と報告 (worktree の候補化は無条件。branch の安全性は別途判定) |
 | merged | branch が origin/HEAD (なければ main/master) に merge 済み、かつ clean |
 | gone | upstream が `[gone]`、かつ origin/HEAD から到達不能な commit がない、かつ clean。判定不能なら削除拒否 |
 
 - 対象は managed のみ。external は `--ext` 明示時のみ。
 - TTY: 候補一覧 (branch / 理由 / path) を提示して一括確認。
   非 TTY: `--dry-run` が JSON で候補を返し、`--yes` で実行。
-- `--with-branch` で branch ごと削除 (merged/gone 判定済みなので安全)。
+- `--with-branch` で branch ごと削除 (merged/gone 判定済みの場合のみ)。
+  prunable は worktree が消えているため、branch の merged/gone 判定が別途成立しなければ
+  worktree だけ削除して branch は残し、理由を warning として stderr に出す。
 
 ## hop root — 動作確認セッション
 

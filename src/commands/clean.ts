@@ -59,14 +59,17 @@ export const clean = async (
     }
   }
 
-  const removed = await executeClean({
+  const execution = await executeClean({
     git,
     fs,
     context,
     candidates,
     cleanOptions: options,
   });
-  return ok({ data: { candidates, removed } });
+  return ok({
+    data: { candidates, removed: execution.removed },
+    ...(execution.warnings.length === 0 ? {} : { warnings: execution.warnings }),
+  });
 };
 
 const buildCleanCandidates = async (
@@ -151,11 +154,11 @@ const removeCandidate = async (
   git: GitPort,
   rootPath: string,
   candidate: CleanCandidate,
-  withBranch: boolean,
+  deleteBranch: boolean,
 ): Promise<boolean> => {
   try {
     await git.removeWorktree(rootPath, candidate.path, false);
-    if (withBranch && candidate.branch.length > 0) {
+    if (deleteBranch && candidate.branch.length > 0) {
       await git.deleteBranch(rootPath, candidate.branch);
     }
     return true;
@@ -167,36 +170,83 @@ const removeCandidate = async (
   }
 };
 
+const canDeletePrunableBranch = async (
+  git: GitPort,
+  rootPath: string,
+  candidate: CleanCandidate,
+  defaultRef: string | null,
+): Promise<boolean> => {
+  if (candidate.reason !== "prunable") {
+    return true;
+  }
+  if (candidate.branch.length === 0 || defaultRef === null) {
+    return false;
+  }
+
+  try {
+    const mergedIntoDefault = await git.isAncestor(rootPath, candidate.branch, defaultRef);
+    if (mergedIntoDefault === true) {
+      return true;
+    }
+    if (await git.isUpstreamGone(rootPath, candidate.branch)) {
+      return (await git.hasEquivalentCommits(rootPath, candidate.branch, defaultRef)) === true;
+    }
+  } catch {
+    // An indeterminate safety check must keep the branch.
+  }
+  return false;
+};
+
+interface CleanExecution {
+  readonly removed: string[];
+  readonly warnings: string[];
+}
+
 const executeClean = async ({
   git,
   fs,
   context,
   candidates,
   cleanOptions,
-}: ExecuteCleanOptions): Promise<string[]> => {
+}: ExecuteCleanOptions): Promise<CleanExecution> => {
   const lock = await acquireRepoLock(context.commonDir);
   try {
     // Re-validate under lock: a candidate may have gone dirty, or lost its
     // Garbage status, since it was computed above.
     const fresh = await loadRepoContext(git, fs, context.rootPath);
     const freshCandidates = await buildCleanCandidates(git, fresh, cleanOptions.ext);
-    const freshPaths = new Set(freshCandidates.map((candidate) => candidate.path));
-    const stillValid = candidates.filter((candidate) => freshPaths.has(candidate.path));
+    const freshByPath = new Map(freshCandidates.map((candidate) => [candidate.path, candidate]));
+    const stillValid = candidates.flatMap((candidate) => {
+      const freshCandidate = freshByPath.get(candidate.path);
+      return freshCandidate === undefined ? [] : [freshCandidate];
+    });
+    const defaultRef = await git.resolveDefaultBranchRef(fresh.rootPath);
 
     const removed: string[] = [];
+    const warnings: string[] = [];
     for (const candidate of stillValid) {
+      // A prunable worktree has no directory to inspect, so prunable alone
+      // Does not establish that its branch is safe to delete.
       // oxlint-disable-next-line no-await-in-loop
-      const success = await removeCandidate(
-        git,
-        fresh.rootPath,
-        candidate,
-        cleanOptions.withBranch,
-      );
+      const branchSafe = await canDeletePrunableBranch(git, fresh.rootPath, candidate, defaultRef);
+      const deleteBranch = cleanOptions.withBranch && branchSafe;
+      if (
+        cleanOptions.withBranch &&
+        candidate.reason === "prunable" &&
+        candidate.branch.length > 0 &&
+        !branchSafe
+      ) {
+        warnings.push(
+          `Keeping branch "${candidate.branch}": prunable worktree is not confirmed merged or gone.`,
+        );
+      }
+      // oxlint-disable-next-line no-await-in-loop
+      const success = await removeCandidate(git, fresh.rootPath, candidate, deleteBranch);
       if (success) {
         removed.push(candidate.branch);
       }
     }
-    return removed;
+    return { removed, warnings };
   } catch (error) {
     throw new Error(`Failed to clean worktrees: ${(error as Error).message}`, {
       cause: error,
