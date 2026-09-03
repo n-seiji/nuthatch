@@ -1,0 +1,149 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.21"
+
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run format:check
+      - run: bun test
+      - run: bun run build
+
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: npm pack
+        run: |
+          mkdir -p /tmp/pack
+          npm pack --pack-destination /tmp/pack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball
+          path: /tmp/pack/*.tgz
+          retention-days: 1
+
+  smoke-test-tarball:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["20", "22"]
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-tarball
+          path: /tmp/pack
+
+      - name: Install tarball and smoke-test the bin
+        run: |
+          set -euo pipefail
+          npm install -g /tmp/pack/*.tgz
+          hop --help || true
+          git init --initial-branch=main /tmp/smoke-repo
+          cd /tmp/smoke-repo
+          git -c user.email=ci@example.com -c user.name=ci commit --allow-empty -m init
+          hop ls --json
+          hop root --json
+
+  build-binaries:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: darwin-arm64
+            bun-target: bun-darwin-arm64
+          - target: darwin-x64
+            bun-target: bun-darwin-x64
+          - target: linux-x64
+            bun-target: bun-linux-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.21"
+
+      - run: bun install --frozen-lockfile
+
+      - name: Compile binary
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          bun build ./src/cli.ts --compile --target=${{ matrix.bun-target }} \
+            --outfile out/hop-${{ matrix.target }}
+          chmod +x out/hop-${{ matrix.target }}
+
+      - name: Smoke test (native arch only)
+        if: matrix.target == 'linux-x64'
+        run: |
+          set -euo pipefail
+          bin="$(pwd)/out/hop-${{ matrix.target }}"
+          "$bin" --help || true
+          git init --initial-branch=main /tmp/smoke-repo
+          cd /tmp/smoke-repo
+          git -c user.email=ci@example.com -c user.name=ci commit --allow-empty -m init
+          "$bin" ls --json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: out/hop-${{ matrix.target }}
+          retention-days: 1
+
+  publish:
+    # Publish only after every build/test/smoke-test job above is green, and
+    # Always last, so a broken build or failed smoke test never reaches npm
+    # Or GitHub Releases.
+    needs: [build, smoke-test-tarball, build-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-tarball
+          path: /tmp/pack
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: /tmp/binaries
+          merge-multiple: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish to npm
+        run: npm publish /tmp/pack/*.tgz --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/binaries/hop-*
+          generate_release_notes: true

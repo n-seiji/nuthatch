@@ -42,13 +42,21 @@ eval "$(hop init zsh)"
 
 ## Install
 
-> Not released yet. Planned:
+> Not released yet — no version has been published or tagged. Once the first
+> `v*` tag ships, the options below will work as described.
 
 ```sh
 npm i -g @n-seiji/nuthatch        # or: bunx @n-seiji/nuthatch
 mise use -g npm:@n-seiji/nuthatch # mise
-curl -fsSL https://raw.githubusercontent.com/n-seiji/nuthatch/main/install.sh | sh  # binary
+
+# Prebuilt binary (macOS arm64/x64, Linux x64) — no Node.js required:
+curl -fsSL https://raw.githubusercontent.com/n-seiji/nuthatch/main/install.sh | sh
 ```
+
+The install script places `hop` in `~/.local/bin` (override with
+`HOP_INSTALL_DIR`) and always fetches the latest GitHub Release; pin a
+specific version with `HOP_VERSION=vX.Y.Z`. Linux arm64 has no prebuilt
+binary yet — use the npm install instead.
 
 ## Docs
 
