@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { join } from "node:path";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
 import { createTermPort } from "../infra/term.ts";
@@ -73,5 +74,17 @@ describe("pick (integration)", () => {
         candidate.kind === "worktree" && candidate.worktree.branch === "feat/dirty-pick",
     );
     expect(dirtyEntry).toMatchObject({ dirty: true });
+  });
+
+  it("bare worktree は dirty: null になる", async () => {
+    const barePath = join(repo.rootDir, "bare.git");
+    await repo.git(["clone", "--bare", repo.repoPath, barePath]);
+
+    const result = await pick(git, fs, { cwd: barePath });
+
+    const bareEntry = result.data?.candidates.find(
+      (candidate) => candidate.kind === "worktree" && candidate.worktree.bare,
+    );
+    expect(bareEntry).toMatchObject({ kind: "worktree", dirty: null });
   });
 });

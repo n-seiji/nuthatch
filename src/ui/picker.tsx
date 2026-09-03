@@ -23,6 +23,9 @@ const pathTag = (candidate: PickCandidate): string =>
 const matchesQuery = (candidate: PickCandidate, query: string): boolean =>
   query.length === 0 || candidateBranchLabel(candidate).toLowerCase().includes(query.toLowerCase());
 
+export const candidateRowKey = (candidate: PickCandidate, index: number): string =>
+  `${index}:${candidateBranchLabel(candidate)}`;
+
 interface PickerProps {
   readonly candidates: readonly PickCandidate[];
   readonly onSelect: (candidate: PickCandidate) => void;
@@ -83,7 +86,7 @@ const Picker = ({ candidates, onSelect, onCancel }: PickerProps) => {
         const selected = rowIndex === clampedIndex;
         const label = candidateBranchLabel(candidate);
         return (
-          <Text key={label} inverse={selected}>
+          <Text key={candidateRowKey(candidate, rowIndex)} inverse={selected}>
             {`${selected ? "> " : "  "}[${kindTag(candidate)}${dirtyTag(candidate)}] ${label} ${pathTag(candidate)}`}
           </Text>
         );

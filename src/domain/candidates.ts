@@ -1,36 +1,17 @@
 import type { Worktree } from "./model.ts";
+import type { PickCandidate } from "./schema.ts";
 
-/**
- * A single row for the interactive picker: either an existing worktree
- * (any of the 3 classifications), or a branch that has no worktree yet and
- * would need to be created (jump's --create path) if selected.
- */
-export type PickCandidate =
-  | {
-      readonly kind: "worktree";
-      readonly worktree: Worktree;
-      /** Null when dirtiness couldn't be determined (e.g. a bare worktree). */
-      readonly dirty: boolean | null;
-    }
-  | {
-      readonly kind: "creatable";
-      readonly branch: string;
-      readonly source: "local" | "remote";
-    };
+export type { PickCandidate } from "./schema.ts";
 
 /**
  * Builds the full picker candidate list: every existing worktree, plus every
  * local/remote branch that doesn't already have one. Local branches take
  * priority over remote branches with the same name (a branch that exists
  * both locally and on a remote is listed once, as local).
- *
- * `dirtyByPath` is injected (keyed by worktree path) so this stays a pure
- * function — actually checking dirtiness requires a git call, which is the
- * caller's (infra-backed) responsibility.
  */
 export const buildPickCandidates = (
   worktrees: readonly Worktree[],
-  dirtyByPath: ReadonlyMap<string, boolean>,
+  dirtyByPath: ReadonlyMap<string, boolean | null>,
   localBranches: readonly string[],
   remoteBranches: readonly string[],
 ): PickCandidate[] => {
