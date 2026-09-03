@@ -4,6 +4,7 @@ import {
   CleanEnvelopeSchema,
   JumpEnvelopeSchema,
   LsEnvelopeSchema,
+  PickEnvelopeSchema,
   RmEnvelopeSchema,
   RootEnvelopeSchema,
 } from "./schema.ts";
@@ -70,5 +71,35 @@ describe("JSON envelope schemas", () => {
       warnings: [],
     });
     expect(result.success).toBe(false);
+  });
+
+  it("PickEnvelopeSchema は worktree と creatable の候補を受け付ける", () => {
+    const result = safeParse(PickEnvelopeSchema, {
+      schemaVersion: 1,
+      command: "pick",
+      data: {
+        candidates: [
+          {
+            kind: "worktree",
+            worktree: {
+              path: "/repo",
+              head: "abc123",
+              branch: "main",
+              detached: false,
+              bare: false,
+              locked: false,
+              lockReason: null,
+              prunable: false,
+              prunableReason: null,
+              kind: "root",
+            },
+            dirty: null,
+          },
+          { kind: "creatable", branch: "feat/new", source: "remote" },
+        ],
+      },
+      warnings: [],
+    });
+    expect(result.success).toBe(true);
   });
 });

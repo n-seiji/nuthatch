@@ -192,9 +192,11 @@ const createGarbagePolicyMethods = () => ({
   async hasEquivalentCommits(cwd: string, branch: string, ref: string) {
     try {
       const out = await run(cwd, ["cherry", ref, branch]);
-      // Each line is "+ <sha>" (no equivalent patch on ref, i.e. genuinely
-      // Unmerged) or "- <sha>" (an equivalent patch already exists on ref,
-      // E.g. from a squash or rebase merge). Any "+" line means unsafe.
+      // Each line is "+ <sha>" when no equivalent patch exists on ref, or
+      // "- <sha>" when an equivalent patch is already represented there.
+      // This can match one-to-one cherry-picks and simple squash merges, but
+      // A multi-commit squash may not match each original patch. Any "+" line
+      // Is therefore treated as unsafe.
       return !out.split("\n").some((line) => line.startsWith("+"));
     } catch {
       return "unknown";

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } from "citty";
 import { clean } from "./commands/clean.ts";
+import { dispatchCliArgs, normalizeCliArgs } from "./cli-dispatch.ts";
 import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
@@ -244,30 +245,20 @@ const runJumpFromArgs = async (rawArgs: readonly string[]): Promise<void> => {
 // Non-reserved first token must fall through to `jump` as a branch name.
 // Process.argv is [node, script, ...userArgs]; drop the first two.
 const ARGV_USER_ARGS_START = 2;
-let rawArgs = process.argv.slice(ARGV_USER_ARGS_START);
+const rawArgs = normalizeCliArgs(
+  process.argv.slice(ARGV_USER_ARGS_START),
+  process.argv0,
+  process.stdout.isTTY === true,
+);
 
-// Workaround for a `bun build --compile` bug: when a compiled binary is run
-// With zero user-supplied args AND stdout is a real TTY, Bun's argv
-// Synthesis spuriously appends the binary's own invocation path as an extra
-// Arg (reproduced with plain `bun build --compile` + `script`, unrelated to
-// Anything in this codebase). Detect and drop it: this is the one case where
-// The "user arg" is byte-identical to argv0, which no real branch name would be.
-if (rawArgs.length === 1 && rawArgs[0] === process.argv0) {
-  rawArgs = [];
-}
-
-if (rawArgs[0] === "--") {
-  // `hop -- <branch>` escapes reserved words (ls/rm/clean/root/init) so they
-  // Can be used as branch names.
-  await runJumpFromArgs(rawArgs.slice(1));
-} else if (rawArgs[0] !== undefined && rawArgs[0] in RESERVED_COMMANDS) {
-  const [name, ...rest] = rawArgs;
-  const command = RESERVED_COMMANDS[name as keyof typeof RESERVED_COMMANDS];
+const dispatch = dispatchCliArgs(rawArgs, Object.keys(RESERVED_COMMANDS));
+if (dispatch.kind === "reserved") {
+  const command = RESERVED_COMMANDS[dispatch.name as keyof typeof RESERVED_COMMANDS];
   // The command union's arg schemas differ per command, so this cast collapses
   // Them to the common CommandDef<ArgsDef> shape runCommand expects.
   await runCommand(command as unknown as CommandDef<ArgsDef>, {
-    rawArgs: rest,
+    rawArgs: [...dispatch.args],
   });
 } else {
-  await runJumpFromArgs(rawArgs);
+  await runJumpFromArgs(dispatch.args);
 }
