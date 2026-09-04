@@ -27,8 +27,8 @@ hop rm feat/my-task                 # 自分が作った worktree のみ片付�
 | `hop <branch> --create` | worktree があれば path を返す。なければ default branch から作成して path を返す。`--create` なしで未存在なら安全拒否 (exit 3) |
 | `hop root` | root clone の path |
 | `hop ls --json` | 全 worktree の JSON 一覧 (`{schemaVersion, command, data, warnings}`)。kind (root/managed/external)・dirty・ahead/behind を含む |
-| `hop rm <branch>` | worktree 削除 (branch は残る)。dirty なら拒否 (`--force` で強制) |
-| `hop clean --dry-run` | ゴミ worktree 候補を JSON で返す。`--yes` で削除実行 |
+| `hop rm <branch>` | worktree 削除 (branch は残る)。dirty なら拒否 (`--force` で強制)。external は `--ext --force` の両方が必要 |
+| `hop clean --dry-run` | ゴミ worktree 候補 (prunable / merged / gone) を JSON で返す。`--yes` で削除実行。`--with-branch` は merged/gone が確認できた branch のみ削除 (未確認の branch は残る) |
 | `hop root <branch>` / `hop root -` | root clone を一時的に切替 / 復帰 (動作確認用) |
 | `hop -- <branch>` | branch 名が予約語 (ls/rm/clean/root/init) と被るときのエスケープ |
 
