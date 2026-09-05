@@ -1,9 +1,9 @@
 ---
-name: nuthatch
+name: using-hop
 description: git worktree manager「hop」(nuthatch) を coding agent から扱う。branch ごとの worktree への移動・作成・削除・一覧を非対話で行い、root clone を保護する運用を支える。
 ---
 
-# nuthatch — coding agent 向け hop の使い方
+# using-hop — coding agent 向け hop の使い方
 
 `hop` は git worktree manager。**1 branch = 1 worktree** で、
 `<root clone の親>/_worktree/<repo>/<branch>` に worktree を置く。
