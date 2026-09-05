@@ -61,12 +61,20 @@ const CREATABLE_SOURCE_ORDER: Record<"local" | "remote", number> = {
 const compareByBranchLabel = (a: PickCandidate, b: PickCandidate): number =>
   candidateBranchLabel(a).localeCompare(candidateBranchLabel(b));
 
+/** 0 for a normal branch, 1 for detached HEAD — sorts detached worktrees to the end of their kind group. */
+const detachedRank = (candidate: Extract<PickCandidate, { kind: "worktree" }>): number =>
+  candidate.worktree.branch === null ? 1 : 0;
+
 const compareWorktreeCandidates = (
   a: Extract<PickCandidate, { kind: "worktree" }>,
   b: Extract<PickCandidate, { kind: "worktree" }>,
 ): number => {
   const kindDiff = WORKTREE_KIND_ORDER[a.worktree.kind] - WORKTREE_KIND_ORDER[b.worktree.kind];
-  return kindDiff === 0 ? compareByBranchLabel(a, b) : kindDiff;
+  if (kindDiff !== 0) {
+    return kindDiff;
+  }
+  const detachedDiff = detachedRank(a) - detachedRank(b);
+  return detachedDiff === 0 ? compareByBranchLabel(a, b) : detachedDiff;
 };
 
 const compareCreatableCandidates = (
@@ -80,10 +88,12 @@ const compareCreatableCandidates = (
 /**
  * Orders candidates the way the picker displays them: within WORKTREES,
  * root first, then managed, then external (branch name ascending within
- * each group); within BRANCHES, local before remote (branch name ascending
- * within each group). Worktree candidates always sort before creatable
- * ones — buildDisplayRows relies on that to group them into sections.
- * Applied after search filtering, so the order holds under narrowing too.
+ * each group, detached-HEAD worktrees last within their group since they
+ * have no branch name to sort by); within BRANCHES, local before remote
+ * (branch name ascending within each group). Worktree candidates always
+ * sort before creatable ones — buildDisplayRows relies on that to group
+ * them into sections. Applied after search filtering, so the order holds
+ * under narrowing too.
  */
 export const sortCandidatesForDisplay = (candidates: readonly PickCandidate[]): PickCandidate[] => [
   ...candidates

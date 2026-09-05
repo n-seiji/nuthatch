@@ -43,6 +43,36 @@ describe("sortCandidatesForDisplay", () => {
     ]);
   });
 
+  it("detached HEAD の worktree は branch 名で並べられないので、各 kind グループの末尾に置く", () => {
+    const candidates: PickCandidate[] = [
+      worktreeCandidate({
+        kind: "managed",
+        branch: null,
+        detached: true,
+        path: "/repo/detached-1",
+      }),
+      worktreeCandidate({ kind: "managed", branch: "feat/z" }),
+      worktreeCandidate({ kind: "managed", branch: "feat/a" }),
+      worktreeCandidate({ kind: "root", branch: "main" }),
+      worktreeCandidate({
+        kind: "external",
+        branch: null,
+        detached: true,
+        path: "/repo/detached-2",
+      }),
+      worktreeCandidate({ kind: "external", branch: "codex/fix" }),
+    ];
+    const sorted = sortCandidatesForDisplay(candidates);
+    expect(branchLabelsOf(sorted)).toEqual([
+      "main",
+      "feat/a",
+      "feat/z",
+      "(detached)",
+      "codex/fix",
+      "(detached)",
+    ]);
+  });
+
   it("WORKTREES セクション全体が BRANCHES セクションより前に来る (グループ順は kind で固定)", () => {
     const candidates: PickCandidate[] = [
       creatableCandidate("feat/idea", "local"),
@@ -98,5 +128,25 @@ describe("sortCandidatesForDisplay", () => {
       "feat/idea",
       "origin/hotfix",
     ]);
+  });
+
+  it("row.index はソート後の配列上の位置を指す (カーソルとズレないよう、表示だけでなく候補配列自体をソート済みで使う前提)", () => {
+    // Deliberately unsorted input (external before managed, remote before local): if a caller only reordered the *display* (e.g. sorted a copy just for rendering) while the picker's actual candidate/cursor array stayed in this original order, row.index values here would point at the wrong entries — e.g. index 0 would still be the external worktree, not root.
+    const candidates: PickCandidate[] = [
+      worktreeCandidate({ kind: "external", branch: "codex/fix-x" }),
+      worktreeCandidate({ kind: "root", branch: "main" }),
+      creatableCandidate("origin/hotfix", "remote"),
+      creatableCandidate("feat/idea", "local"),
+    ];
+    const sorted = sortCandidatesForDisplay(candidates);
+    // Expected display order: main (root), codex/fix-x (external), feat/idea (local), origin/hotfix (remote).
+    const rows = buildDisplayRows(sorted, "/repo");
+    const candidateRows = rows.filter((row) => row.kind === "candidate");
+
+    // Each row's index must resolve back to the matching candidate in `sorted` — the same array the picker uses for its cursor — not the pre-sort `candidates`.
+    candidateRows.forEach((row, position) => {
+      expect(sorted[row.index]).toBe(sorted[position]);
+    });
+    expect(candidateRows.map((row) => row.index)).toEqual([0, 1, 2, 3]);
   });
 });
