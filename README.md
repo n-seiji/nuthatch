@@ -60,6 +60,14 @@ shortened paths:
 A section (header included) disappears entirely when it has no candidates —
 including when a search query filters it down to zero.
 
+Ordering within each section is fixed, not insertion order: WORKTREES puts
+root first, then managed worktrees, then external ones (branch name
+ascending within each group); BRANCHES puts local branches before remote
+ones (branch name ascending within each group). This holds under search
+filtering too — narrowing the list never reshuffles what's left. BRANCHES
+rows render dim so "already a worktree" vs. "not created yet" reads at a
+glance, on top of the ○/●/+ markers.
+
 ### Interactive picker keys
 
 | Key | Action |

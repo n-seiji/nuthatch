@@ -39,6 +39,61 @@ export const candidateKindLabel = (candidate: PickCandidate): string =>
     ? WORKTREE_KIND_LABELS[candidate.worktree.kind]
     : CREATABLE_SOURCE_LABELS[candidate.source];
 
+const isWorktreeCandidate = (
+  candidate: PickCandidate,
+): candidate is Extract<PickCandidate, { kind: "worktree" }> => candidate.kind === "worktree";
+
+const isCreatableCandidate = (
+  candidate: PickCandidate,
+): candidate is Extract<PickCandidate, { kind: "creatable" }> => candidate.kind === "creatable";
+
+const WORKTREE_KIND_ORDER: Record<"root" | "managed" | "external", number> = {
+  root: 0,
+  managed: 1,
+  external: 2,
+};
+
+const CREATABLE_SOURCE_ORDER: Record<"local" | "remote", number> = {
+  local: 0,
+  remote: 1,
+};
+
+const compareByBranchLabel = (a: PickCandidate, b: PickCandidate): number =>
+  candidateBranchLabel(a).localeCompare(candidateBranchLabel(b));
+
+const compareWorktreeCandidates = (
+  a: Extract<PickCandidate, { kind: "worktree" }>,
+  b: Extract<PickCandidate, { kind: "worktree" }>,
+): number => {
+  const kindDiff = WORKTREE_KIND_ORDER[a.worktree.kind] - WORKTREE_KIND_ORDER[b.worktree.kind];
+  return kindDiff === 0 ? compareByBranchLabel(a, b) : kindDiff;
+};
+
+const compareCreatableCandidates = (
+  a: Extract<PickCandidate, { kind: "creatable" }>,
+  b: Extract<PickCandidate, { kind: "creatable" }>,
+): number => {
+  const sourceDiff = CREATABLE_SOURCE_ORDER[a.source] - CREATABLE_SOURCE_ORDER[b.source];
+  return sourceDiff === 0 ? compareByBranchLabel(a, b) : sourceDiff;
+};
+
+/**
+ * Orders candidates the way the picker displays them: within WORKTREES,
+ * root first, then managed, then external (branch name ascending within
+ * each group); within BRANCHES, local before remote (branch name ascending
+ * within each group). Worktree candidates always sort before creatable
+ * ones — buildDisplayRows relies on that to group them into sections.
+ * Applied after search filtering, so the order holds under narrowing too.
+ */
+export const sortCandidatesForDisplay = (candidates: readonly PickCandidate[]): PickCandidate[] => [
+  ...candidates
+    .filter((candidate) => isWorktreeCandidate(candidate))
+    .toSorted((a, b) => compareWorktreeCandidates(a, b)),
+  ...candidates
+    .filter((candidate) => isCreatableCandidate(candidate))
+    .toSorted((a, b) => compareCreatableCandidates(a, b)),
+];
+
 /** Fixed column width for kindLabel — the longest label ("managed"/"remote") is 7 chars. */
 export const KIND_COLUMN_WIDTH = Math.max(
   ...Object.values(WORKTREE_KIND_LABELS).map((label) => label.length),
@@ -86,6 +141,8 @@ export interface CandidateRow {
   readonly kind: "candidate";
   /** Index into the candidate list this row was built from — used to match the picker's cursor position. */
   readonly index: number;
+  /** Which section this row belongs to — lets the renderer dim BRANCHES rows so worktree vs. not-yet-created reads at a glance. */
+  readonly section: "worktree" | "branch";
   readonly statusMarker: string;
   readonly branchLabel: string;
   readonly kindLabel: string;
@@ -104,25 +161,34 @@ export type DisplayRow = HeaderRow | CandidateRow;
 export const displayRowKey = (row: DisplayRow): string =>
   row.kind === "header" ? `header:${row.label}` : `candidate:${row.index}`;
 
+interface ToCandidateRowOptions {
+  readonly index: number;
+  readonly section: "worktree" | "branch";
+  readonly branchWidth: number;
+  readonly homeDir: string;
+}
+
 const toCandidateRow = (
   candidate: PickCandidate,
-  index: number,
-  branchWidth: number,
-  homeDir: string,
+  options: ToCandidateRowOptions,
 ): CandidateRow => ({
   kind: "candidate",
-  index,
+  index: options.index,
+  section: options.section,
   statusMarker: statusMarker(candidate),
-  branchLabel: padBranchLabel(candidateBranchLabel(candidate), branchWidth),
+  branchLabel: padBranchLabel(candidateBranchLabel(candidate), options.branchWidth),
   kindLabel: candidateKindLabel(candidate).padEnd(KIND_COLUMN_WIDTH, " "),
-  pathLabel: candidatePathLabel(candidate, homeDir),
+  pathLabel: candidatePathLabel(candidate, options.homeDir),
 });
 
 /**
- * Builds the rows the picker renders: a WORKTREES section (existing
- * worktrees, root first — `git worktree list`'s own order) followed by a
- * BRANCHES section (not-yet-created branches). A section with no members
- * is omitted entirely, header included — this naturally handles both "no
+ * Builds the rows the picker renders: a WORKTREES section followed by a
+ * BRANCHES section (not-yet-created branches). Groups by kind only —
+ * ordering *within* each section (root first, local before remote, etc.)
+ * is sortCandidatesForDisplay's job; callers should sort before calling
+ * this (picker-controller.ts does, right after search filtering, so
+ * narrowing never disturbs the order). A section with no members is
+ * omitted entirely, header included — this naturally handles both "no
  * creatable branches at all" and "search query filtered a section empty".
  * `index` on each candidate row is its position in `candidates`, which the
  * picker uses unchanged as its cursor position (headers aren't selectable
@@ -134,20 +200,34 @@ export const buildDisplayRows = (
 ): readonly DisplayRow[] => {
   const branchWidth = branchColumnWidth(candidates);
   const indexed = candidates.map((candidate, index) => ({ candidate, index }));
-  const worktreeEntries = indexed.filter((entry) => entry.candidate.kind === "worktree");
-  const branchEntries = indexed.filter((entry) => entry.candidate.kind === "creatable");
+  const worktreeEntries = indexed.filter((entry) => isWorktreeCandidate(entry.candidate));
+  const branchEntries = indexed.filter((entry) => isCreatableCandidate(entry.candidate));
 
   const rows: DisplayRow[] = [];
   if (worktreeEntries.length > 0) {
     rows.push({ kind: "header", label: "WORKTREES" });
     for (const entry of worktreeEntries) {
-      rows.push(toCandidateRow(entry.candidate, entry.index, branchWidth, homeDir));
+      rows.push(
+        toCandidateRow(entry.candidate, {
+          index: entry.index,
+          section: "worktree",
+          branchWidth,
+          homeDir,
+        }),
+      );
     }
   }
   if (branchEntries.length > 0) {
     rows.push({ kind: "header", label: "BRANCHES — Enter で worktree 作成" });
     for (const entry of branchEntries) {
-      rows.push(toCandidateRow(entry.candidate, entry.index, branchWidth, homeDir));
+      rows.push(
+        toCandidateRow(entry.candidate, {
+          index: entry.index,
+          section: "branch",
+          branchWidth,
+          homeDir,
+        }),
+      );
     }
   }
   return rows;

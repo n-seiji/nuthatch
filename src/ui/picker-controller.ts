@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PickerActionKind } from "../domain/actions.ts";
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
+import { sortCandidatesForDisplay } from "./picker-layout.ts";
 import { handleConfirmDeleteInput, handleListInput, handlePanelInput } from "./picker-input.ts";
 import type { PickerKeyModifiers } from "./picker-keys.ts";
 import type { PickerCallbacks, PickerMode, PickerOutcome } from "./picker-types.ts";
@@ -57,7 +58,8 @@ export const usePickerController = (
   const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(
-    () => candidates.filter((candidate) => matchesQuery(candidate, query)),
+    () =>
+      sortCandidatesForDisplay(candidates.filter((candidate) => matchesQuery(candidate, query))),
     [candidates, query],
   );
   const clampedIndex = Math.min(index, Math.max(filtered.length - 1, 0));

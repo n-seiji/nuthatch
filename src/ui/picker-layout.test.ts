@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { PickCandidate } from "../domain/candidates.ts";
-import type { Worktree } from "../domain/model.ts";
+import { creatableCandidate, worktreeCandidate } from "./picker-layout.fixtures.ts";
 import {
   branchColumnWidth,
   buildDisplayRows,
@@ -10,35 +10,6 @@ import {
   shortenPath,
   statusMarker,
 } from "./picker-layout.ts";
-
-const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
-  path: "/repo",
-  head: "abc",
-  branch: "main",
-  detached: false,
-  bare: false,
-  locked: false,
-  lockReason: null,
-  prunable: false,
-  prunableReason: null,
-  kind: "root",
-  ...overrides,
-});
-
-const worktreeCandidate = (
-  overrides: Partial<Worktree> = {},
-  dirty: boolean | null = null,
-): PickCandidate => ({
-  kind: "worktree",
-  worktree: worktree(overrides),
-  dirty,
-});
-
-const creatableCandidate = (branch: string, source: "local" | "remote"): PickCandidate => ({
-  kind: "creatable",
-  branch,
-  source,
-});
 
 describe("statusMarker", () => {
   it("dirty な worktree は ●", () => {
@@ -190,5 +161,15 @@ describe("buildDisplayRows", () => {
     const rows = buildDisplayRows(candidates, "/repo");
     const candidateRows = rows.filter((row) => row.kind === "candidate");
     expect(candidateRows.map((row) => row.index)).toEqual([0, 1]);
+  });
+
+  it("candidate row の section は WORKTREES=worktree / BRANCHES=branch になる (dim 表示の出し分けに使う)", () => {
+    const candidates: PickCandidate[] = [
+      worktreeCandidate({ kind: "root" }),
+      creatableCandidate("feat/idea", "local"),
+    ];
+    const rows = buildDisplayRows(candidates, "/repo");
+    const candidateRows = rows.filter((row) => row.kind === "candidate");
+    expect(candidateRows.map((row) => row.section)).toEqual(["worktree", "branch"]);
   });
 });

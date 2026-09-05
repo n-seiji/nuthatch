@@ -44,7 +44,11 @@ const Picker = ({ candidates, callbacks, onExit, onCancel }: PickerProps) => {
         }
         const selected = row.index === clampedIndex;
         return (
-          <Text key={displayRowKey(row)} inverse={selected}>
+          <Text
+            key={displayRowKey(row)}
+            inverse={selected}
+            dimColor={!selected && row.section === "branch"}
+          >
             {`${selected ? "❯ " : "  "}${row.statusMarker} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`}
           </Text>
         );
