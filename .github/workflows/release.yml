@@ -196,7 +196,8 @@ jobs:
               exit 0
             fi
           fi
-          npm publish /tmp/pack/*.tgz --access public --provenance
+          # Staged-only trusted publisher: stage here, then a human promotes on npmjs.com.
+          npm stage publish /tmp/pack/*.tgz --access public --provenance
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
