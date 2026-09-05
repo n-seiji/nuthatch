@@ -1,6 +1,7 @@
 import { Box, render, Text, useInput } from "ink";
 import { useMemo, useState } from "react";
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
+import { resolvePickerKeyAction } from "./picker-keys.ts";
 
 const MAX_VISIBLE_ROWS = 15;
 
@@ -43,33 +44,45 @@ const Picker = ({ candidates, onSelect, onCancel }: PickerProps) => {
   const clampedIndex = Math.min(index, Math.max(filtered.length - 1, 0));
 
   useInput((input, key) => {
-    if (key.escape || (key.ctrl && input === "c")) {
-      onCancel();
-      return;
-    }
-    if (key.return) {
-      const selected = filtered[clampedIndex];
-      if (selected !== undefined) {
-        onSelect(selected);
+    const action = resolvePickerKeyAction(input, key);
+    switch (action.type) {
+      case "cancel": {
+        onCancel();
+        break;
       }
-      return;
-    }
-    if (key.upArrow) {
-      setIndex((current) => Math.max(0, current - 1));
-      return;
-    }
-    if (key.downArrow) {
-      setIndex((current) => Math.min(filtered.length - 1, current + 1));
-      return;
-    }
-    if (key.backspace || key.delete) {
-      setQuery((current) => current.slice(0, -1));
-      setIndex(0);
-      return;
-    }
-    if (input.length > 0 && !key.ctrl && !key.meta) {
-      setQuery((current) => current + input);
-      setIndex(0);
+      case "select": {
+        const selected = filtered[clampedIndex];
+        if (selected !== undefined) {
+          onSelect(selected);
+        }
+        break;
+      }
+      case "up": {
+        setIndex((current) => Math.max(0, current - 1));
+        break;
+      }
+      case "down": {
+        setIndex((current) => Math.min(filtered.length - 1, current + 1));
+        break;
+      }
+      case "clear": {
+        setQuery("");
+        setIndex(0);
+        break;
+      }
+      case "backspace": {
+        setQuery((current) => current.slice(0, -1));
+        setIndex(0);
+        break;
+      }
+      case "char": {
+        setQuery((current) => current + action.char);
+        setIndex(0);
+        break;
+      }
+      case "ignore": {
+        break;
+      }
     }
   });
 
