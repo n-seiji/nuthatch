@@ -58,6 +58,22 @@ The install script places `hop` in `~/.local/bin` (override with
 specific version with `HOP_VERSION=vX.Y.Z`. Linux arm64 has no prebuilt
 binary yet — use the npm install instead.
 
+## Agent skill (Claude Code / Codex plugin)
+
+This repo doubles as a plugin marketplace that ships the
+[`using-hop`](skills/using-hop/SKILL.md) skill — it teaches coding agents how
+to drive `hop` non-interactively and safely.
+
+```sh
+# Claude Code
+/plugin marketplace add n-seiji/nuthatch
+/plugin install hop@nuthatch
+
+# Codex
+codex plugin marketplace add n-seiji/nuthatch
+codex plugin install hop
+```
+
 ## Docs
 
 - [docs/design.md](docs/design.md) — full design document (Japanese)
