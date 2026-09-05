@@ -6,8 +6,13 @@
  * the search query as literal characters.
  *
  * Three modes, three resolvers: list (resolvePickerKeyAction), the action
- * panel opened with Tab (resolvePanelKeyAction), and the y/N confirmation
- * overlay shown by the Ctrl+X delete shortcut (resolveConfirmKeyAction).
+ * panel opened with Tab/→/Ctrl+L (resolvePanelKeyAction), and the y/N
+ * confirmation overlay shown by the Ctrl+X delete shortcut
+ * (resolveConfirmKeyAction). The panel renders as a side column next to the
+ * list (see picker-layout.ts's isNarrowTerminal for the width below which it
+ * falls back to stacking below the list instead), so ←/Ctrl+H close it back
+ * to the list rather than doubling as movement — Tab also toggles it, for
+ * terminals (e.g. Ghostty) that remap a chord like Cmd+K to Tab.
  */
 
 /** Esc cancels quietly (exit 0, empty stdout); Ctrl+C cancels like a real interrupt (exit 130, same as SIGINT). */
@@ -34,6 +39,8 @@ export interface PickerKeyModifiers {
   readonly tab: boolean;
   readonly upArrow: boolean;
   readonly downArrow: boolean;
+  readonly leftArrow: boolean;
+  readonly rightArrow: boolean;
   readonly backspace: boolean;
   readonly delete: boolean;
 }
@@ -48,7 +55,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
   if (key.return) {
     return { type: "select" };
   }
-  if (key.tab) {
+  if (key.tab || key.rightArrow || (key.ctrl && input === "l")) {
     return { type: "openPanel" };
   }
   if (key.ctrl && input === "x") {
@@ -88,14 +95,16 @@ export type PanelKeyAction =
   | { readonly type: "ignore" };
 
 /**
- * Key handling for the action panel overlay. Enter always runs the
- * currently-highlighted action ("全アクション Enter で完結できる" in the
- * design); c/d/r are shortcuts that run that action immediately regardless
- * of highlight. Esc and Tab both close the panel back to the list (Tab
- * toggles the panel open/closed, mirroring how it opens it from the list).
+ * Key handling for the action panel (now a side column, not an overlay).
+ * Enter always runs the currently-highlighted action ("全アクション Enter
+ * で完結できる" in the design); c/d/r are shortcuts that run that action
+ * immediately regardless of highlight. Esc, Tab, ←, and Ctrl+H all close
+ * the panel back to the list — ← and Ctrl+H mirror the → and Ctrl+L that
+ * open it, so left/right never double as movement inside the panel (only
+ * up/down do).
  */
 export const resolvePanelKeyAction = (input: string, key: PickerKeyModifiers): PanelKeyAction => {
-  if (key.escape || key.tab) {
+  if (key.escape || key.tab || key.leftArrow || (key.ctrl && input === "h")) {
     return { type: "close" };
   }
   if (key.return) {

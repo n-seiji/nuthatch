@@ -1,6 +1,6 @@
 import { type PickerActionKind, availableActions } from "../domain/actions.ts";
 import type { PickCandidate } from "../domain/candidates.ts";
-import { ACTION_LETTERS } from "./action-panel.tsx";
+import { ACTION_LETTERS } from "./side-panel.tsx";
 import {
   type PickerCancelReason,
   type PickerKeyModifiers,

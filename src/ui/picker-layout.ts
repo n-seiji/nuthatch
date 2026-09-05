@@ -12,6 +12,12 @@ const MAX_BRANCH_COLUMN_WIDTH = 24;
 
 export const LEGEND_TEXT = "●=dirty ○=clean +=未作成";
 
+/** Below this terminal width, the side-by-side action panel doesn't fit alongside the list; picker.tsx falls back to stacking the panel below the list instead. */
+export const NARROW_TERMINAL_WIDTH_THRESHOLD = 60;
+
+export const isNarrowTerminal = (columns: number): boolean =>
+  columns < NARROW_TERMINAL_WIDTH_THRESHOLD;
+
 const WORKTREE_KIND_LABELS: Record<"root" | "managed" | "external", string> = {
   root: "root",
   managed: "managed",

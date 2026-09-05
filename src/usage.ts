@@ -16,14 +16,15 @@ export const USAGE = `Usage: hop [command] [options]
 
 Interactive picker keys:
   Enter                  cd into the selected candidate
-  Tab                    Open the action panel (cd / delete / switch root here)
+  Tab, →, Ctrl+L         Open the action panel, as a column beside the list
+                         (stacks below it instead on narrow terminals)
   Ctrl+X                 Delete the selected worktree (y/N confirmation)
   Ctrl+R                 Switch the root clone to the selected branch, immediately
   ↑/↓, Ctrl+P/N, Ctrl+K/J Move the selection (arrow, emacs, and vim keys all work)
   Esc                    Cancel (exit 0, no output)
   Ctrl+C                 Cancel like an interrupt (exit 130, same as SIGINT)
-  In the action panel: same movement keys, Enter to run the highlighted action,
-  c/d/r to run cd/delete/switchRoot directly, Esc/Tab to close
+  In the action panel: same up/down movement keys, Enter to run the highlighted
+  action, c/d/r to run cd/delete/switchRoot directly, Esc/Tab/←/Ctrl+H to close
 
 Options:
   --create               Create the worktree when jumping to a branch without one (required outside a TTY)

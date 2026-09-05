@@ -5,11 +5,25 @@ import {
   branchColumnWidth,
   buildDisplayRows,
   candidateKindLabel,
+  isNarrowTerminal,
   KIND_COLUMN_WIDTH,
+  NARROW_TERMINAL_WIDTH_THRESHOLD,
   padBranchLabel,
   shortenPath,
   statusMarker,
 } from "./picker-layout.ts";
+
+describe("isNarrowTerminal", () => {
+  it("しきい値 (60) 未満は狭いと判定する", () => {
+    expect(isNarrowTerminal(NARROW_TERMINAL_WIDTH_THRESHOLD - 1)).toBe(true);
+    expect(isNarrowTerminal(1)).toBe(true);
+  });
+
+  it("しきい値 (60) 以上は狭くないと判定する (side panel が一覧の隣に収まる)", () => {
+    expect(isNarrowTerminal(NARROW_TERMINAL_WIDTH_THRESHOLD)).toBe(false);
+    expect(isNarrowTerminal(120)).toBe(false);
+  });
+});
 
 describe("statusMarker", () => {
   it("dirty な worktree は ●", () => {

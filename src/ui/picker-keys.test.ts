@@ -14,6 +14,8 @@ const NO_MODIFIERS: PickerKeyModifiers = {
   tab: false,
   upArrow: false,
   downArrow: false,
+  leftArrow: false,
+  rightArrow: false,
   backspace: false,
   delete: false,
 };
@@ -44,8 +46,14 @@ describe("resolvePickerKeyAction", () => {
     });
   });
 
-  it("Tab は action panel を開く (openPanel)", () => {
+  it("Tab / → / Ctrl+L は action panel を開く (openPanel)", () => {
     expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, tab: true })).toEqual({
+      type: "openPanel",
+    });
+    expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, rightArrow: true })).toEqual({
+      type: "openPanel",
+    });
+    expect(resolvePickerKeyAction(...withCtrl("l"))).toEqual({
       type: "openPanel",
     });
   });
@@ -106,11 +114,17 @@ describe("resolvePickerKeyAction", () => {
 });
 
 describe("resolvePanelKeyAction", () => {
-  it("Escape / Tab は close (Tab は開閉のトグル)", () => {
+  it("Escape / Tab / ← / Ctrl+H は close (Tab は開閉のトグル、←/Ctrl+H は開くキーの逆)", () => {
     expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, escape: true })).toEqual({
       type: "close",
     });
     expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, tab: true })).toEqual({
+      type: "close",
+    });
+    expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, leftArrow: true })).toEqual({
+      type: "close",
+    });
+    expect(resolvePanelKeyAction(...withCtrl("h"))).toEqual({
       type: "close",
     });
   });
