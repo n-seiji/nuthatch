@@ -1,6 +1,8 @@
-# nuthatch 🐦
+<p align="center">
+  <img src="docs/assets/logo.png" alt="nuthatch — hop between git worktrees" width="560">
+</p>
 
-> Hop between git worktrees like a nuthatch hops between trees.
+<p align="center"><em>Hop between git worktrees like a nuthatch hops between trees.</em></p>
 
 `nuthatch` is a zero-setup git worktree manager. Its single command, **`hop`**,
 jumps you to the worktree of any branch — creating it on the fly when it
