@@ -1,6 +1,6 @@
 {
   "name": "@n-seiji/nuthatch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "git worktree manager (hop)",
   "homepage": "https://github.com/n-seiji/nuthatch#readme",
   "bugs": {
