@@ -25,6 +25,17 @@ const withCtrl = (input: string): [string, PickerKeyModifiers] => [
   { ...NO_MODIFIERS, ctrl: true },
 ];
 
+/**
+ * The real key shapes a plain (non-kitty) terminal sends for Ctrl+J and
+ * Ctrl+H, captured with a pty running ink's own parser (not the synthetic
+ * `withCtrl(...)` shape the other tests use) — see picker-keys.ts's module
+ * comment. Ctrl+J: input "\n", every flag false. Ctrl+H: key.backspace
+ * true, ctrl false, input "" (ink gives it the exact same shape as the
+ * Backspace key).
+ */
+const REAL_CTRL_J: [string, PickerKeyModifiers] = ["\n", NO_MODIFIERS];
+const REAL_CTRL_H: [string, PickerKeyModifiers] = ["", { ...NO_MODIFIERS, backspace: true }];
+
 describe("resolvePickerKeyAction", () => {
   it("Escape は cancel (reason: esc)", () => {
     expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, escape: true })).toEqual({
@@ -69,6 +80,17 @@ describe("resolvePickerKeyAction", () => {
     });
     expect(resolvePickerKeyAction(...withCtrl("n"))).toEqual({ type: "down" });
     expect(resolvePickerKeyAction(...withCtrl("j"))).toEqual({ type: "down" });
+  });
+
+  it("実端末が Ctrl+J に送る生バイト (input が LF、ctrl フラグなし) も down になる (pty 実測、synthetic な withCtrl('j') とは別経路)", () => {
+    expect(resolvePickerKeyAction(...REAL_CTRL_J)).toEqual({ type: "down" });
+  });
+
+  it("生の LF はクエリへの文字入力 (char) にはならない (down 判定が char 判定より先)", () => {
+    expect(resolvePickerKeyAction(...REAL_CTRL_J)).not.toEqual({
+      type: "char",
+      char: "\n",
+    });
   });
 
   it("Ctrl+U は検索クエリのクリア", () => {
@@ -129,6 +151,10 @@ describe("resolvePanelKeyAction", () => {
     });
   });
 
+  it("実端末が Ctrl+H に送る生バイト (key.backspace のみ、ctrl フラグなし) も close になる (物理 Backspace と同じ形なので、panel にテキスト欄が無いことを前提に close に倒す)", () => {
+    expect(resolvePanelKeyAction(...REAL_CTRL_H)).toEqual({ type: "close" });
+  });
+
   it("Enter は confirm (ハイライト中のアクションを実行)", () => {
     expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, return: true })).toEqual({
       type: "confirm",
@@ -146,6 +172,10 @@ describe("resolvePanelKeyAction", () => {
     });
     expect(resolvePanelKeyAction(...withCtrl("n"))).toEqual({ type: "down" });
     expect(resolvePanelKeyAction(...withCtrl("j"))).toEqual({ type: "down" });
+  });
+
+  it("実端末が Ctrl+J に送る生バイトも down になる", () => {
+    expect(resolvePanelKeyAction(...REAL_CTRL_J)).toEqual({ type: "down" });
   });
 
   it("c / d / r は letter ショートカット", () => {

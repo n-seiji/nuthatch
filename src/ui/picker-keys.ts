@@ -13,6 +13,24 @@
  * falls back to stacking below the list instead), so ←/Ctrl+H close it back
  * to the list rather than doubling as movement — Tab also toggles it, for
  * terminals (e.g. Ghostty) that remap a chord like Cmd+K to Tab.
+ *
+ * Terminal-protocol caveat (confirmed with a real pty, not just synthetic
+ * key objects — see picker-keys.test.ts and the investigation report):
+ * Ctrl+J and Ctrl+H are ASCII control bytes 0x0A (LF) and 0x08 (BS), the
+ * same bytes a plain Enter-as-newline or Backspace key can send. ink's
+ * parser special-cases those bytes to `key.name` "enter"/"backspace"
+ * *before* its generic Ctrl+letter range check, so they never come through
+ * as `key.ctrl && input === "j"/"h"` the way Ctrl+K, Ctrl+L, Ctrl+N, etc.
+ * do (those bytes — 0x0B, 0x0C, 0x0E — aren't special-cased, so the ctrl
+ * flag IS set correctly for them). Two different byte-level signals are
+ * used instead:
+ *   - Ctrl+J arrives as `input === "\n"` with every flag false (not
+ *     `key.return` — that's `\r`/CR only). A literal "\n" can't otherwise
+ *     reach a single keypress event, so treating it as "down" is safe.
+ *   - Ctrl+H arrives as `key.backspace: true` (ctrl not set) — ink gives
+ *     0x08 the exact same shape as the Backspace key (0x7F). The panel has
+ *     no text field, so treating physical Backspace as "close" there too
+ *     is harmless and covers both.
  */
 
 /** Esc cancels quietly (exit 0, empty stdout); Ctrl+C cancels like a real interrupt (exit 130, same as SIGINT). */
@@ -45,6 +63,9 @@ export interface PickerKeyModifiers {
   readonly delete: boolean;
 }
 
+/** Raw LF (0x0A) — how a real terminal sends Ctrl+J; see the module comment. */
+const isCtrlJByte = (input: string): boolean => input === "\n";
+
 export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): PickerKeyAction => {
   if (key.escape) {
     return { type: "cancel", reason: "esc" };
@@ -67,7 +88,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
   if (key.upArrow || (key.ctrl && (input === "p" || input === "k"))) {
     return { type: "up" };
   }
-  if (key.downArrow || (key.ctrl && (input === "n" || input === "j"))) {
+  if (key.downArrow || (key.ctrl && (input === "n" || input === "j")) || isCtrlJByte(input)) {
     return { type: "down" };
   }
   if (key.ctrl && input === "u") {
@@ -98,13 +119,14 @@ export type PanelKeyAction =
  * Key handling for the action panel (now a side column, not an overlay).
  * Enter always runs the currently-highlighted action ("全アクション Enter
  * で完結できる" in the design); c/d/r are shortcuts that run that action
- * immediately regardless of highlight. Esc, Tab, ←, and Ctrl+H all close
- * the panel back to the list — ← and Ctrl+H mirror the → and Ctrl+L that
- * open it, so left/right never double as movement inside the panel (only
- * up/down do).
+ * immediately regardless of highlight. Esc, Tab, ←, Ctrl+H, and physical
+ * Backspace (see the module comment — ink can't tell it apart from Ctrl+H)
+ * all close the panel back to the list — ← and Ctrl+H mirror the → and
+ * Ctrl+L that open it, so left/right never double as movement inside the
+ * panel (only up/down do).
  */
 export const resolvePanelKeyAction = (input: string, key: PickerKeyModifiers): PanelKeyAction => {
-  if (key.escape || key.tab || key.leftArrow || (key.ctrl && input === "h")) {
+  if (key.escape || key.tab || key.leftArrow || key.backspace || (key.ctrl && input === "h")) {
     return { type: "close" };
   }
   if (key.return) {
@@ -113,7 +135,7 @@ export const resolvePanelKeyAction = (input: string, key: PickerKeyModifiers): P
   if (key.upArrow || (key.ctrl && (input === "p" || input === "k"))) {
     return { type: "up" };
   }
-  if (key.downArrow || (key.ctrl && (input === "n" || input === "j"))) {
+  if (key.downArrow || (key.ctrl && (input === "n" || input === "j")) || isCtrlJByte(input)) {
     return { type: "down" };
   }
   if (!key.ctrl && !key.meta && isPanelLetterShortcut(input)) {
