@@ -8,6 +8,25 @@ import type { PickerCallbacks, PickerMode, PickerOutcome } from "./picker-types.
 const matchesQuery = (candidate: PickCandidate, query: string): boolean =>
   query.length === 0 || candidateBranchLabel(candidate).toLowerCase().includes(query.toLowerCase());
 
+/**
+ * The panel-with-error transition after a failed mutation (dirty rejection,
+ * etc.). Always resets panelIndex to 0 — a previous version of this hook set
+ * `mode` back to "panel" here without resetting panelIndex, so a stale
+ * highlight from a larger action list (e.g. panelIndex 2 from a managed
+ * worktree's panel) could survive onto a candidate with fewer actions (e.g.
+ * external, cd + switchRoot only). The highlight then showed nothing
+ * selected, but Enter still ran the index-clamped last action — a mismatch
+ * between what's displayed and what runs. Exported (and pure) so this stays
+ * covered without rendering the hook — see picker-controller.test.ts.
+ */
+export const panelErrorTransition = (
+  candidate: PickCandidate,
+  error: string,
+): { readonly mode: PickerMode; readonly panelIndex: number } => ({
+  mode: { kind: "panel", candidate, error },
+  panelIndex: 0,
+});
+
 export interface PickerController {
   readonly query: string;
   readonly filtered: readonly PickCandidate[];
@@ -51,11 +70,12 @@ export const usePickerController = (
     if (action === "switchRoot") {
       const result = await callbacks.switchRootHere(candidate);
       if (!result.ok || result.path === undefined) {
-        setMode({
-          kind: "panel",
+        const transition = panelErrorTransition(
           candidate,
-          error: result.message ?? "Failed to switch root.",
-        });
+          result.message ?? "Failed to switch root.",
+        );
+        setPanelIndex(transition.panelIndex);
+        setMode(transition.mode);
         return;
       }
       onExit({ type: "path", path: result.path });
@@ -63,11 +83,12 @@ export const usePickerController = (
     }
     const result = await callbacks.deleteWorktree(candidate);
     if (!result.ok) {
-      setMode({
-        kind: "panel",
+      const transition = panelErrorTransition(
         candidate,
-        error: result.message ?? "Failed to delete worktree.",
-      });
+        result.message ?? "Failed to delete worktree.",
+      );
+      setPanelIndex(transition.panelIndex);
+      setMode(transition.mode);
       return;
     }
     const fresh = await callbacks.reloadCandidates();
