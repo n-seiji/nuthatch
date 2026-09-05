@@ -33,7 +33,8 @@ hop rm feat/my-task                 # 自分が作った worktree のみ片付�
 | `hop -- <branch>` | branch 名が予約語 (ls/rm/clean/root/init) と被るときのエスケープ |
 
 - stdout: path または JSON のみ。ログは stderr。
-- exit code: 0=成功 / 1=一般エラー / 2=使い方誤り / 3=安全拒否 (dirty 等) / 130=中断
+- exit code: 0=成功 (picker の ESC キャンセル含む) / 1=一般エラー / 2=使い方誤り / 3=安全拒否 (dirty 等) / 130=SIGINT 中断
+- `hop --help` で全コマンド・フラグの usage を stderr に表示 (exit 0)
 
 ## 運用ルール
 
