@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { dispatchCliArgs, normalizeCliArgs } from "./cli-dispatch.ts";
+import { dispatchCliArgs, isHelpRequest, normalizeCliArgs } from "./cli-dispatch.ts";
 
 const reservedNames = ["ls", "rm", "clean", "root", "init"];
 
@@ -28,5 +28,18 @@ describe("cli dispatch", () => {
       kind: "jump",
       args: ["hop"],
     });
+  });
+
+  it("--help / -h / help を先頭 token で検出する", () => {
+    expect(isHelpRequest(["--help"])).toBe(true);
+    expect(isHelpRequest(["-h"])).toBe(true);
+    expect(isHelpRequest(["help"])).toBe(true);
+    expect(isHelpRequest(["help", "--json"])).toBe(true);
+  });
+
+  it("hop -- help はエスケープされた branch jump なので help 扱いしない", () => {
+    expect(isHelpRequest(["--", "help"])).toBe(false);
+    expect(isHelpRequest(["ls"])).toBe(false);
+    expect(isHelpRequest([])).toBe(false);
   });
 });

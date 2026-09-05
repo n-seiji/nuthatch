@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } from "citty";
 import { clean } from "./commands/clean.ts";
-import { dispatchCliArgs, normalizeCliArgs } from "./cli-dispatch.ts";
+import { dispatchCliArgs, isHelpRequest, normalizeCliArgs } from "./cli-dispatch.ts";
 import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
@@ -13,6 +13,7 @@ import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
 import { render } from "./render.ts";
+import { USAGE } from "./usage.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
@@ -251,14 +252,19 @@ const rawArgs = normalizeCliArgs(
   process.stdout.isTTY === true,
 );
 
-const dispatch = dispatchCliArgs(rawArgs, Object.keys(RESERVED_COMMANDS));
-if (dispatch.kind === "reserved") {
-  const command = RESERVED_COMMANDS[dispatch.name as keyof typeof RESERVED_COMMANDS];
-  // The command union's arg schemas differ per command, so this cast collapses
-  // Them to the common CommandDef<ArgsDef> shape runCommand expects.
-  await runCommand(command as unknown as CommandDef<ArgsDef>, {
-    rawArgs: [...dispatch.args],
-  });
+if (isHelpRequest(rawArgs)) {
+  process.stderr.write(USAGE);
+  process.exitCode = 0;
 } else {
-  await runJumpFromArgs(dispatch.args);
+  const dispatch = dispatchCliArgs(rawArgs, Object.keys(RESERVED_COMMANDS));
+  if (dispatch.kind === "reserved") {
+    const command = RESERVED_COMMANDS[dispatch.name as keyof typeof RESERVED_COMMANDS];
+    // The command union's arg schemas differ per command, so this cast collapses
+    // Them to the common CommandDef<ArgsDef> shape runCommand expects.
+    await runCommand(command as unknown as CommandDef<ArgsDef>, {
+      rawArgs: [...dispatch.args],
+    });
+  } else {
+    await runJumpFromArgs(dispatch.args);
+  }
 }

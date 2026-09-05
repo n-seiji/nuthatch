@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { parse } from "valibot";
@@ -98,5 +98,42 @@ describe("bare `hop` (no target)", () => {
     const source = await readFile(new URL("cli.ts", import.meta.url), "utf8");
     expect(source).toContain('await import("./ui/picker.tsx")');
     expect(source).not.toMatch(/^import .* from ["']\.\/ui\/picker\.tsx["'];?$/mu);
+  });
+});
+
+describe("hop --help / -h / help", () => {
+  const runHelp = (args: readonly string[]) =>
+    spawnSync("bun", ["run", CLI_ENTRY, ...args], {
+      cwd: repo.repoPath,
+      env: repo.env,
+      encoding: "utf8",
+    });
+
+  it("--help は stderr に usage を出し、stdout は空、exit code は 0", () => {
+    const result = runHelp(["--help"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("Usage: hop");
+    expect(result.stderr).toContain("hop ls [--json]");
+  });
+
+  it("-h と 予約語 help も usage を出して exit 0 になる", () => {
+    const short = runHelp(["-h"]);
+    expect(short.status).toBe(0);
+    expect(short.stderr).toContain("Usage: hop");
+
+    const word = runHelp(["help"]);
+    expect(word.status).toBe(0);
+    expect(word.stderr).toContain("Usage: hop");
+  });
+
+  it("hop -- help は help を予約せず branch help への jump として扱う", () => {
+    // `bun run <file> -- ...` treats its own first "--" as the separator
+    // Between bun's flags and the script's argv, so a second "--" is needed
+    // Here for hop's own `--` to actually reach process.argv.
+    const output = runHop(["--", "--", "help", "--create", "--json"]);
+    const parsed = parse(JumpEnvelopeSchema, output);
+    expect(parsed.command).toBe("jump");
+    expect(parsed.data).toEqual({ branch: "help", created: true });
   });
 });

@@ -33,6 +33,9 @@ hop rm <branch>    # remove a worktree (branch is kept)
 hop clean          # auto-detect and remove garbage worktrees
 hop root <branch>  # temporarily switch the root clone (for verification)
 hop root -         # switch the root clone back
+
+hop -- <branch>    # escape a branch name that collides with a reserved command
+hop --help         # print usage (also -h / hop help)
 ```
 
 Shell integration (auto-`cd`):
