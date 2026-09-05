@@ -21,3 +21,6 @@ jobs:
       - run: bun run format:check
       - run: bun test
       - run: bun run build
+
+      - name: Shellcheck install.sh
+        run: shellcheck install.sh
