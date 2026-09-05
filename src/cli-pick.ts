@@ -5,7 +5,7 @@ import { candidateBranchName } from "./domain/candidates.ts";
 import type { FsPort, GitPort } from "./domain/ports.ts";
 import { ok } from "./domain/result.ts";
 import { render } from "./render.ts";
-import type { ActionOutcome, PickerCallbacks, PickerOutcome } from "./ui/picker.tsx";
+import type { ActionOutcome, PickerCallbacks, PickerResult } from "./ui/picker.tsx";
 
 /**
  * Loads the fresh candidate list for the picker (used both for the initial
@@ -89,18 +89,27 @@ export const createPickerCallbacks = (
   reloadCandidates: async () => (await loadPickCandidates(git, fs, json)) ?? [],
 });
 
-/** Runs the picker (ink, falling back to the plain readline picker) and normalizes both to PickerOutcome. */
+/**
+ * Runs the picker (ink, falling back to the plain readline picker) and
+ * normalizes both to PickerResult. The readline fallback can't distinguish
+ * Esc from Ctrl+C (no raw-mode key events), so its cancellation always
+ * reports "esc" — the quieter of the two exit codes (see runInteractivePick
+ * in cli.ts). A genuine Ctrl+C there hits Node's default SIGINT handling
+ * instead, which already exits 130 on its own.
+ */
 export const runInteractivePicker = async (
   candidates: readonly PickCandidate[],
   callbacks: PickerCallbacks,
-): Promise<PickerOutcome | null> => {
+): Promise<PickerResult> => {
   try {
     const { runPicker } = await import("./ui/picker.tsx");
     return await runPicker(candidates, callbacks);
   } catch {
     const { runSimplePicker } = await import("./ui/simple-picker.ts");
     const selected = await runSimplePicker(candidates);
-    return selected === null ? null : { type: "cd", candidate: selected };
+    return selected === null
+      ? { type: "cancelled", reason: "esc" }
+      : { type: "cd", candidate: selected };
   }
 };
 

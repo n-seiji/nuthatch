@@ -8,8 +8,12 @@ import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.t
  * cli.ts's dynamic import of ui/picker.tsx for the primary picker.
  *
  * Only supports cd (no action panel — readline has no keybindings to hang
- * one off); cli.ts wraps its result as `{ type: "cd", candidate }` to match
- * ui/picker.tsx's PickerOutcome contract.
+ * one off, and no raw-mode key events to distinguish Esc from Ctrl+C);
+ * cli-pick.ts wraps its result to match ui/picker.tsx's PickerResult
+ * contract — a selection becomes `{ type: "cd", candidate }`, empty input
+ * becomes `{ type: "cancelled", reason: "esc" }`. A genuine Ctrl+C here
+ * hits Node's default SIGINT handling (this runs in cooked mode) and exits
+ * 130 on its own, without going through this return value at all.
  *
  * Never writes to stdout — same contract as the ink picker.
  */

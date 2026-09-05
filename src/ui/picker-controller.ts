@@ -3,7 +3,7 @@ import type { PickerActionKind } from "../domain/actions.ts";
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
 import { sortCandidatesForDisplay } from "./picker-layout.ts";
 import { handleConfirmDeleteInput, handleListInput, handlePanelInput } from "./picker-input.ts";
-import type { PickerKeyModifiers } from "./picker-keys.ts";
+import type { PickerCancelReason, PickerKeyModifiers } from "./picker-keys.ts";
 import type { PickerCallbacks, PickerMode, PickerOutcome } from "./picker-types.ts";
 
 const matchesQuery = (candidate: PickCandidate, query: string): boolean =>
@@ -48,7 +48,7 @@ export const usePickerController = (
   initialCandidates: readonly PickCandidate[],
   callbacks: PickerCallbacks,
   onExit: (outcome: PickerOutcome) => void,
-  onCancel: () => void,
+  onCancel: (reason: PickerCancelReason) => void,
 ): PickerController => {
   const [candidates, setCandidates] = useState(initialCandidates);
   const [query, setQuery] = useState("");

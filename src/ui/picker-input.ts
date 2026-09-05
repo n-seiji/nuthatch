@@ -2,6 +2,7 @@ import { type PickerActionKind, availableActions } from "../domain/actions.ts";
 import type { PickCandidate } from "../domain/candidates.ts";
 import { ACTION_LETTERS } from "./action-panel.tsx";
 import {
+  type PickerCancelReason,
   type PickerKeyModifiers,
   resolveConfirmKeyAction,
   resolvePanelKeyAction,
@@ -84,7 +85,7 @@ interface ListInputContext {
   readonly selectedCandidate: PickCandidate | undefined;
   readonly filteredLength: number;
   readonly runAction: RunAction;
-  readonly onCancel: () => void;
+  readonly onCancel: (reason: PickerCancelReason) => void;
   readonly setIndex: (updater: (current: number) => number) => void;
   readonly setQuery: (updater: (current: string) => string) => void;
   readonly setPanelIndex: (index: number) => void;
@@ -100,7 +101,7 @@ export const handleListInput = (
   const action = resolvePickerKeyAction(input, key);
   switch (action.type) {
     case "cancel": {
-      ctx.onCancel();
+      ctx.onCancel(action.reason);
       break;
     }
     case "select": {

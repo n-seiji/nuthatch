@@ -95,8 +95,9 @@ docker 等で root clone でしか動作確認できないケース向け。
   一覧は表 or JSON。ログ・警告・ピッカーは常に stderr。
 - **JSON**: 全コマンド `{schemaVersion, command, data, warnings}`。
   schema は snapshot テストで後方互換を固定。
-- **exit code**: 0=成功 / 1=一般エラー / 2=使い方誤り / 3=安全拒否 (dirty 等) /
-  130=picker キャンセル・SIGINT。shell wrapper は exit code を保持し成功時のみ cd。
+- **exit code**: 0=成功 (picker の Esc キャンセルも含む。stdout は空) / 1=一般エラー /
+  2=使い方誤り / 3=安全拒否 (dirty 等) / 130=SIGINT (picker の Ctrl+C キャンセルも
+  同じ扱い)。shell wrapper は exit code を保持し、rc=0 かつ stdout 非空のときのみ cd。
 - **mutation の排他**: 全 mutation (create / rm / clean / root 切替) は repo 単位の
   プロセス間 lock 内で「再検証 → 実行」する。lock は git common dir 配下に mkdir で
   作成し、PID・開始時刻・token を記録、保持中は heartbeat で更新。回収は

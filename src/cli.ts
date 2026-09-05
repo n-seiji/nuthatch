@@ -13,7 +13,13 @@ import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
 import { rm } from "./commands/rm.ts";
 import { root } from "./commands/root.ts";
-import { type CommandResult, EXIT_CANCELLED, EXIT_USAGE_ERROR, ok } from "./domain/result.ts";
+import {
+  type CommandResult,
+  EXIT_CANCELLED,
+  EXIT_SUCCESS,
+  EXIT_USAGE_ERROR,
+  ok,
+} from "./domain/result.ts";
 import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
@@ -199,8 +205,11 @@ const runInteractivePick = async (json: boolean): Promise<void> => {
   });
 
   const outcome = await runInteractivePicker(candidates, callbacks);
-  if (outcome === null) {
-    process.exitCode = EXIT_CANCELLED;
+  if (outcome.type === "cancelled") {
+    // Esc: a quiet "never mind" — exit 0, stdout stays empty so the shell
+    // Wrapper just doesn't cd. Ctrl+C: reads as a real interrupt, same exit
+    // Code (130) as an actual SIGINT.
+    process.exitCode = outcome.reason === "esc" ? EXIT_SUCCESS : EXIT_CANCELLED;
     return;
   }
 

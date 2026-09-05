@@ -79,18 +79,20 @@ screen on exit, however it exits (selection, Esc/Ctrl-C, or an interrupt).
 | Key | Action |
 |---|---|
 | `Enter` | cd into the selected candidate |
-| `Ctrl+K` | Open the action panel for the selected candidate (cd / delete / switch root here) |
+| `Tab` | Open the action panel for the selected candidate (cd / delete / switch root here) |
 | `Ctrl+X` | Delete the selected worktree (asks y/N first) |
 | `Ctrl+R` | Switch the root clone to the selected branch, immediately |
-| `Esc` / `Ctrl+C` | Cancel |
+| `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K`/`Ctrl+J` | Move the selection (arrow, emacs, and vim keys all work side by side) |
+| `Esc` | Cancel quietly — exit 0, stdout stays empty (the shell wrapper just doesn't cd) |
+| `Ctrl+C` | Cancel like an interrupt — exit 130, same as a real SIGINT |
 
-Inside the action panel: `↑`/`↓` or `Ctrl+P`/`Ctrl+N` to move, `Enter` to run the
-highlighted action, `c`/`d`/`r` to run cd/delete/switch-root directly, `Esc` or
-`Ctrl+K` to close. `delete` only appears for a worktree nuthatch manages
-(`managed`); `switch root here` doesn't appear on the root worktree itself.
-Deleting reloads the candidate list so you can keep deleting without leaving
-the picker; cd and switch-root exit and print the resulting path, per hop's
-stdout contract.
+Inside the action panel: the same movement keys, `Enter` to run the
+highlighted action, `c`/`d`/`r` to run cd/delete/switch-root directly, `Esc`
+or `Tab` to close (`Tab` toggles the panel open/closed). `delete` only
+appears for a worktree nuthatch manages (`managed`); `switch root here`
+doesn't appear on the root worktree itself. Deleting reloads the candidate
+list so you can keep deleting without leaving the picker; cd and
+switch-root exit and print the resulting path, per hop's stdout contract.
 
 Shell integration (auto-`cd`):
 

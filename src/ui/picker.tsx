@@ -5,18 +5,25 @@ import { EXIT_CANCELLED } from "../domain/result.ts";
 import { type AltScreenTarget, enterAltScreen, leaveAltScreen } from "./alt-screen.ts";
 import { ActionPanel } from "./action-panel.tsx";
 import { usePickerController } from "./picker-controller.ts";
+import type { PickerCancelReason } from "./picker-keys.ts";
 import { buildDisplayRows, displayRowKey, LEGEND_TEXT } from "./picker-layout.ts";
-import type { PickerCallbacks, PickerOutcome } from "./picker-types.ts";
+import type { PickerCallbacks, PickerResult } from "./picker-types.ts";
 
-export type { ActionOutcome, PickerCallbacks, PickerOutcome } from "./picker-types.ts";
+export type {
+  ActionOutcome,
+  PickerCallbacks,
+  PickerCancellation,
+  PickerOutcome,
+  PickerResult,
+} from "./picker-types.ts";
 
 const MAX_VISIBLE_ROWS = 15;
 
 interface PickerProps {
   readonly candidates: readonly PickCandidate[];
   readonly callbacks: PickerCallbacks;
-  readonly onExit: (outcome: PickerOutcome) => void;
-  readonly onCancel: () => void;
+  readonly onExit: (outcome: Exclude<PickerResult, { type: "cancelled" }>) => void;
+  readonly onCancel: (reason: PickerCancelReason) => void;
 }
 
 const Picker = ({ candidates, callbacks, onExit, onCancel }: PickerProps) => {
@@ -60,7 +67,8 @@ const Picker = ({ candidates, callbacks, onExit, onCancel }: PickerProps) => {
       )}
       <Text dimColor>({LEGEND_TEXT})</Text>
       <Text dimColor>
-        Ctrl+K actions · Ctrl+X delete · Ctrl+R switch root · Enter cd · Esc cancel
+        Tab actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K,J move · Enter cd · Esc
+        cancel
       </Text>
       {mode.kind === "panel" && (
         <ActionPanel
@@ -92,7 +100,9 @@ const createAltScreenTarget = (): AltScreenTarget => ({
 /**
  * Renders the picker to stderr (never stdout — stdout is reserved for the
  * final selected path, per the CLI's cd contract) and resolves with the
- * chosen outcome, or null on ESC/Ctrl-C.
+ * outcome: a selection/completed action, or a cancellation carrying which
+ * key caused it (Esc vs. Ctrl+C — see PickerCancellation and cli-pick.ts,
+ * which map these to different exit codes).
  *
  * Runs the picker inside the terminal's alternate screen buffer (fzf/vim
  * style) so it never gets pushed into scrollback history. `leaveOnce` is
@@ -107,7 +117,7 @@ const createAltScreenTarget = (): AltScreenTarget => ({
 export const runPicker = (
   candidates: readonly PickCandidate[],
   callbacks: PickerCallbacks,
-): Promise<PickerOutcome | null> =>
+): Promise<PickerResult> =>
   new Promise((resolve) => {
     const altScreen = createAltScreenTarget();
     let hasLeftAltScreen = false;
@@ -123,6 +133,7 @@ export const runPicker = (
     const instanceRef: { current: ReturnType<typeof render> | null } = {
       current: null,
     };
+    // OS-level SIGINT is a last-resort net, not the normal Ctrl+C path: ink puts stdin in raw mode, so a real terminal delivers Ctrl+C as a keypress (handled by onCancel below, reason "ctrlC"), not this signal. This only fires if something bypasses raw mode (e.g. a `bun build --compile` binary where it doesn't behave as expected) — same exit code (130) as the in-app Ctrl+C path either way.
     const handleSigint = (): void => {
       leaveOnce();
       instanceRef.current?.unmount();
@@ -131,11 +142,11 @@ export const runPicker = (
     };
     process.once("SIGINT", handleSigint);
 
-    const finish = (outcome: PickerOutcome | null): void => {
+    const finish = (result: PickerResult): void => {
       leaveOnce();
       process.removeListener("SIGINT", handleSigint);
       instanceRef.current?.unmount();
-      resolve(outcome);
+      resolve(result);
     };
 
     enterAltScreen(altScreen);
@@ -145,7 +156,7 @@ export const runPicker = (
           candidates={candidates}
           callbacks={callbacks}
           onExit={(outcome) => finish(outcome)}
-          onCancel={() => finish(null)}
+          onCancel={(reason) => finish({ type: "cancelled", reason })}
         />,
         { stdout: process.stderr },
       );

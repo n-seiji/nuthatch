@@ -1,4 +1,5 @@
 import type { PickCandidate } from "../domain/candidates.ts";
+import type { PickerCancelReason } from "./picker-keys.ts";
 
 /** Result of an in-picker mutation attempt (delete / switchRoot). */
 export interface ActionOutcome {
@@ -26,6 +27,19 @@ export type PickerOutcome =
   | { readonly type: "cd"; readonly candidate: PickCandidate }
   // Already applied (switchRoot ran via the callback) — cli.ts just prints the path and exits.
   | { readonly type: "path"; readonly path: string };
+
+/**
+ * Esc and Ctrl+C both back out of the picker without a selection, but with
+ * different exit codes (see cli-pick.ts): Esc is a quiet "never mind" (exit
+ * 0, empty stdout — the shell wrapper just doesn't cd), Ctrl+C reads as a
+ * real interrupt (exit 130, matching a genuine SIGINT).
+ */
+export interface PickerCancellation {
+  readonly type: "cancelled";
+  readonly reason: PickerCancelReason;
+}
+
+export type PickerResult = PickerOutcome | PickerCancellation;
 
 export type PickerMode =
   | { readonly kind: "list" }

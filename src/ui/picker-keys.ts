@@ -1,16 +1,20 @@
 /**
  * Pure key-handling logic for the picker, extracted from picker.tsx so it can
- * be unit tested without rendering ink. Ctrl+N/Ctrl+P mirror the arrow keys
- * (emacs/macOS convention); Ctrl+U clears the search query. Modifier keys
- * (ctrl/meta) never leak into the search query as literal characters.
+ * be unit tested without rendering ink. Ctrl+N/Ctrl+P and Ctrl+J/Ctrl+K mirror
+ * the arrow keys (emacs and vim conventions, respectively — both coexist);
+ * Ctrl+U clears the search query. Modifier keys (ctrl/meta) never leak into
+ * the search query as literal characters.
  *
  * Three modes, three resolvers: list (resolvePickerKeyAction), the action
- * panel opened with Ctrl+K (resolvePanelKeyAction), and the y/N confirmation
+ * panel opened with Tab (resolvePanelKeyAction), and the y/N confirmation
  * overlay shown by the Ctrl+X delete shortcut (resolveConfirmKeyAction).
  */
 
+/** Esc cancels quietly (exit 0, empty stdout); Ctrl+C cancels like a real interrupt (exit 130, same as SIGINT). */
+export type PickerCancelReason = "esc" | "ctrlC";
+
 export type PickerKeyAction =
-  | { readonly type: "cancel" }
+  | { readonly type: "cancel"; readonly reason: PickerCancelReason }
   | { readonly type: "select" }
   | { readonly type: "up" }
   | { readonly type: "down" }
@@ -27,6 +31,7 @@ export interface PickerKeyModifiers {
   readonly meta: boolean;
   readonly escape: boolean;
   readonly return: boolean;
+  readonly tab: boolean;
   readonly upArrow: boolean;
   readonly downArrow: boolean;
   readonly backspace: boolean;
@@ -34,13 +39,16 @@ export interface PickerKeyModifiers {
 }
 
 export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): PickerKeyAction => {
-  if (key.escape || (key.ctrl && input === "c")) {
-    return { type: "cancel" };
+  if (key.escape) {
+    return { type: "cancel", reason: "esc" };
+  }
+  if (key.ctrl && input === "c") {
+    return { type: "cancel", reason: "ctrlC" };
   }
   if (key.return) {
     return { type: "select" };
   }
-  if (key.ctrl && input === "k") {
+  if (key.tab) {
     return { type: "openPanel" };
   }
   if (key.ctrl && input === "x") {
@@ -49,10 +57,10 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
   if (key.ctrl && input === "r") {
     return { type: "rootSwitchShortcut" };
   }
-  if (key.upArrow || (key.ctrl && input === "p")) {
+  if (key.upArrow || (key.ctrl && (input === "p" || input === "k"))) {
     return { type: "up" };
   }
-  if (key.downArrow || (key.ctrl && input === "n")) {
+  if (key.downArrow || (key.ctrl && (input === "n" || input === "j"))) {
     return { type: "down" };
   }
   if (key.ctrl && input === "u") {
@@ -83,19 +91,20 @@ export type PanelKeyAction =
  * Key handling for the action panel overlay. Enter always runs the
  * currently-highlighted action ("全アクション Enter で完結できる" in the
  * design); c/d/r are shortcuts that run that action immediately regardless
- * of highlight. Esc and Ctrl+K both close the panel back to the list.
+ * of highlight. Esc and Tab both close the panel back to the list (Tab
+ * toggles the panel open/closed, mirroring how it opens it from the list).
  */
 export const resolvePanelKeyAction = (input: string, key: PickerKeyModifiers): PanelKeyAction => {
-  if (key.escape || (key.ctrl && input === "k")) {
+  if (key.escape || key.tab) {
     return { type: "close" };
   }
   if (key.return) {
     return { type: "confirm" };
   }
-  if (key.upArrow || (key.ctrl && input === "p")) {
+  if (key.upArrow || (key.ctrl && (input === "p" || input === "k"))) {
     return { type: "up" };
   }
-  if (key.downArrow || (key.ctrl && input === "n")) {
+  if (key.downArrow || (key.ctrl && (input === "n" || input === "j"))) {
     return { type: "down" };
   }
   if (!key.ctrl && !key.meta && isPanelLetterShortcut(input)) {

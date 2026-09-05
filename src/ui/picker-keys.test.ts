@@ -11,6 +11,7 @@ const NO_MODIFIERS: PickerKeyModifiers = {
   meta: false,
   escape: false,
   return: false,
+  tab: false,
   upArrow: false,
   downArrow: false,
   backspace: false,
@@ -23,12 +24,17 @@ const withCtrl = (input: string): [string, PickerKeyModifiers] => [
 ];
 
 describe("resolvePickerKeyAction", () => {
-  it("Escape / Ctrl+C は cancel", () => {
+  it("Escape は cancel (reason: esc)", () => {
     expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, escape: true })).toEqual({
       type: "cancel",
+      reason: "esc",
     });
+  });
+
+  it("Ctrl+C は cancel (reason: ctrlC)", () => {
     expect(resolvePickerKeyAction(...withCtrl("c"))).toEqual({
       type: "cancel",
+      reason: "ctrlC",
     });
   });
 
@@ -38,15 +44,23 @@ describe("resolvePickerKeyAction", () => {
     });
   });
 
-  it("矢印キーと Ctrl+P/Ctrl+N は up/down になる", () => {
+  it("Tab は action panel を開く (openPanel)", () => {
+    expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, tab: true })).toEqual({
+      type: "openPanel",
+    });
+  });
+
+  it("矢印キーと Ctrl+P/N、Ctrl+K/J は up/down になる (emacs と vim の併存)", () => {
     expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, upArrow: true })).toEqual({
       type: "up",
     });
     expect(resolvePickerKeyAction(...withCtrl("p"))).toEqual({ type: "up" });
+    expect(resolvePickerKeyAction(...withCtrl("k"))).toEqual({ type: "up" });
     expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, downArrow: true })).toEqual({
       type: "down",
     });
     expect(resolvePickerKeyAction(...withCtrl("n"))).toEqual({ type: "down" });
+    expect(resolvePickerKeyAction(...withCtrl("j"))).toEqual({ type: "down" });
   });
 
   it("Ctrl+U は検索クエリのクリア", () => {
@@ -78,25 +92,27 @@ describe("resolvePickerKeyAction", () => {
     });
   });
 
-  it("Ctrl+K / Ctrl+X / Ctrl+R はそれぞれ panel を開く / delete / switchRoot のショートカット", () => {
-    expect(resolvePickerKeyAction(...withCtrl("k"))).toEqual({
-      type: "openPanel",
-    });
+  it("Ctrl+X / Ctrl+R はそれぞれ delete / switchRoot のショートカット (Ctrl+K は上移動に再割り当て済みなので panel を開かない)", () => {
     expect(resolvePickerKeyAction(...withCtrl("x"))).toEqual({
       type: "deleteShortcut",
     });
     expect(resolvePickerKeyAction(...withCtrl("r"))).toEqual({
       type: "rootSwitchShortcut",
     });
+    expect(resolvePickerKeyAction(...withCtrl("k"))).not.toEqual({
+      type: "openPanel",
+    });
   });
 });
 
 describe("resolvePanelKeyAction", () => {
-  it("Escape / Ctrl+K は close", () => {
+  it("Escape / Tab は close (Tab は開閉のトグル)", () => {
     expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, escape: true })).toEqual({
       type: "close",
     });
-    expect(resolvePanelKeyAction(...withCtrl("k"))).toEqual({ type: "close" });
+    expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, tab: true })).toEqual({
+      type: "close",
+    });
   });
 
   it("Enter は confirm (ハイライト中のアクションを実行)", () => {
@@ -105,15 +121,17 @@ describe("resolvePanelKeyAction", () => {
     });
   });
 
-  it("矢印キーと Ctrl+P/Ctrl+N は up/down になる", () => {
+  it("矢印キーと Ctrl+P/N、Ctrl+K/J は up/down になる", () => {
     expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, upArrow: true })).toEqual({
       type: "up",
     });
     expect(resolvePanelKeyAction(...withCtrl("p"))).toEqual({ type: "up" });
+    expect(resolvePanelKeyAction(...withCtrl("k"))).toEqual({ type: "up" });
     expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, downArrow: true })).toEqual({
       type: "down",
     });
     expect(resolvePanelKeyAction(...withCtrl("n"))).toEqual({ type: "down" });
+    expect(resolvePanelKeyAction(...withCtrl("j"))).toEqual({ type: "down" });
   });
 
   it("c / d / r は letter ショートカット", () => {
