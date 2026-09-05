@@ -16,7 +16,7 @@ export const USAGE = `Usage: hop [command] [options]
 
 Interactive picker keys:
   Enter                  cd into the selected candidate
-  Tab, →, Ctrl+L         Open the action panel, as a column beside the list
+  Tab, →, Ctrl+L, Ctrl+F Open the action panel, as a column beside the list
                          (stacks below it instead on narrow terminals)
   Ctrl+X                 Delete the selected worktree (y/N confirmation)
   Ctrl+R                 Switch the root clone to the selected branch, immediately

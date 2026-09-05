@@ -84,7 +84,7 @@ since the two can't fit side by side.
 | Key | Action |
 |---|---|
 | `Enter` | cd into the selected candidate |
-| `Tab`, `→`, `Ctrl+L` | Open the action panel for the selected candidate (cd / delete / switch root here) |
+| `Tab`, `→`, `Ctrl+L`, `Ctrl+F` | Open the action panel for the selected candidate (cd / delete / switch root here) |
 | `Ctrl+X` | Delete the selected worktree (asks y/N first) |
 | `Ctrl+R` | Switch the root clone to the selected branch, immediately |
 | `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K`/`Ctrl+J` | Move the selection (arrow, emacs, and vim keys all work side by side) |
@@ -95,8 +95,8 @@ Inside the action panel: the same up/down movement keys (left/right are
 reserved for closing, so they never double as movement), `Enter` to run the
 highlighted action, `c`/`d`/`r` to run cd/delete/switch-root directly, and
 `Esc`, `Tab`, `←`, or `Ctrl+H` to close it back to the list (`←`/`Ctrl+H`
-mirror the `→`/`Ctrl+L` that open it; `Tab` toggles either way — handy on
-terminals like Ghostty that remap a chord such as Cmd+K to Tab). `delete`
+mirror the `→`/`Ctrl+L`/`Ctrl+F` that open it; `Tab` toggles either way —
+handy on terminals like Ghostty that remap a chord such as Cmd+K to Tab). `delete`
 only appears for a worktree nuthatch manages (`managed`); `switch root
 here` doesn't appear on the root worktree itself. Deleting reloads the
 candidate list so you can keep deleting without leaving the picker; cd and

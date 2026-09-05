@@ -6,7 +6,7 @@
  * the search query as literal characters.
  *
  * Three modes, three resolvers: list (resolvePickerKeyAction), the action
- * panel opened with Tab/→/Ctrl+L (resolvePanelKeyAction), and the y/N
+ * panel opened with Tab/→/Ctrl+L/Ctrl+F (resolvePanelKeyAction), and the y/N
  * confirmation overlay shown by the Ctrl+X delete shortcut
  * (resolveConfirmKeyAction). The panel renders as a side column next to the
  * list (see picker-layout.ts's isNarrowTerminal for the width below which it
@@ -20,10 +20,11 @@
  * same bytes a plain Enter-as-newline or Backspace key can send. ink's
  * parser special-cases those bytes to `key.name` "enter"/"backspace"
  * *before* its generic Ctrl+letter range check, so they never come through
- * as `key.ctrl && input === "j"/"h"` the way Ctrl+K, Ctrl+L, Ctrl+N, etc.
- * do (those bytes — 0x0B, 0x0C, 0x0E — aren't special-cased, so the ctrl
- * flag IS set correctly for them). Two different byte-level signals are
- * used instead:
+ * as `key.ctrl && input === "j"/"h"` the way Ctrl+K, Ctrl+L, Ctrl+N, Ctrl+F,
+ * etc. do (those bytes — 0x0B, 0x0C, 0x0E, 0x06 — aren't special-cased, so
+ * the ctrl flag IS set correctly for them; Ctrl+F was re-verified the same
+ * way before adding it as an openPanel key). Two different byte-level
+ * signals are used instead for J and H:
  *   - Ctrl+J arrives as `input === "\n"` with every flag false (not
  *     `key.return` — that's `\r`/CR only). A literal "\n" can't otherwise
  *     reach a single keypress event, so treating it as "down" is safe.
@@ -76,7 +77,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
   if (key.return) {
     return { type: "select" };
   }
-  if (key.tab || key.rightArrow || (key.ctrl && input === "l")) {
+  if (key.tab || key.rightArrow || (key.ctrl && (input === "l" || input === "f"))) {
     return { type: "openPanel" };
   }
   if (key.ctrl && input === "x") {

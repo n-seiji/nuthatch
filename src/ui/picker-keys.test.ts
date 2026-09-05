@@ -57,7 +57,7 @@ describe("resolvePickerKeyAction", () => {
     });
   });
 
-  it("Tab / → / Ctrl+L は action panel を開く (openPanel)", () => {
+  it("Tab / → / Ctrl+L / Ctrl+F は action panel を開く (openPanel)", () => {
     expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, tab: true })).toEqual({
       type: "openPanel",
     });
@@ -65,6 +65,9 @@ describe("resolvePickerKeyAction", () => {
       type: "openPanel",
     });
     expect(resolvePickerKeyAction(...withCtrl("l"))).toEqual({
+      type: "openPanel",
+    });
+    expect(resolvePickerKeyAction(...withCtrl("f"))).toEqual({
       type: "openPanel",
     });
   });
