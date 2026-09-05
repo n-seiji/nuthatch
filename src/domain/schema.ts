@@ -10,6 +10,7 @@ import {
   optional,
   picklist,
   string,
+  variant,
 } from "valibot";
 
 /**
@@ -62,6 +63,30 @@ export const RmDataSchema = object({
 });
 export type RmData = InferOutput<typeof RmDataSchema>;
 
+const PickSourceSchema = picklist(["local", "remote"]);
+const NullableBooleanSchema = nullable(boolean());
+
+/** A candidate for the interactive `hop` picker. */
+export const PickCandidateSchema = variant("kind", [
+  object({
+    kind: literal("worktree"),
+    worktree: WorktreeSchema,
+    dirty: NullableBooleanSchema,
+  }),
+  object({
+    kind: literal("creatable"),
+    branch: string(),
+    source: PickSourceSchema,
+  }),
+]);
+export type PickCandidate = InferOutput<typeof PickCandidateSchema>;
+
+/** `hop` picker data shape. */
+export const PickDataSchema = object({
+  candidates: array(PickCandidateSchema),
+});
+export type PickData = InferOutput<typeof PickDataSchema>;
+
 /** Builds the `{schemaVersion:1, command, data, warnings}` envelope schema for a given data shape. */
 export const jsonEnvelopeSchema = <TDataSchema extends GenericSchema>(dataSchema: TDataSchema) =>
   object({
@@ -79,3 +104,6 @@ export type JumpEnvelope = InferOutput<typeof JumpEnvelopeSchema>;
 
 export const RmEnvelopeSchema = jsonEnvelopeSchema(RmDataSchema);
 export type RmEnvelope = InferOutput<typeof RmEnvelopeSchema>;
+
+export const PickEnvelopeSchema = jsonEnvelopeSchema(PickDataSchema);
+export type PickEnvelope = InferOutput<typeof PickEnvelopeSchema>;

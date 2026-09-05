@@ -93,4 +93,18 @@ export const createGitPort = (): GitPort => ({
     }
     return [...remotes];
   },
+
+  async listRemoteBranches(cwd) {
+    const out = await run(cwd, ["for-each-ref", "--format=%(refname)", "refs/remotes/"]);
+    const branches = new Set<string>();
+    for (const line of out.split("\n")) {
+      const match = /^refs\/remotes\/(?<remote>[^/]+)\/(?<branchName>.+)$/u.exec(line.trim());
+      // "HEAD" here is the remote's symbolic default-branch pointer (e.g.
+      // Refs/remotes/origin/HEAD), not an actual branch — always skip it.
+      if (match?.groups?.branchName !== undefined && match.groups.branchName !== "HEAD") {
+        branches.add(match.groups.branchName);
+      }
+    }
+    return [...branches];
+  },
 });
