@@ -1,35 +1,14 @@
+import { homedir } from "node:os";
 import { Box, render, Text, useInput } from "ink";
-import {
-  candidateBranchLabel,
-  candidateBranchName,
-  type PickCandidate,
-} from "../domain/candidates.ts";
+import { candidateBranchName, type PickCandidate } from "../domain/candidates.ts";
 import { ActionPanel } from "./action-panel.tsx";
 import { usePickerController } from "./picker-controller.ts";
+import { buildDisplayRows, displayRowKey, LEGEND_TEXT } from "./picker-layout.ts";
 import type { PickerCallbacks, PickerOutcome } from "./picker-types.ts";
 
 export type { ActionOutcome, PickerCallbacks, PickerOutcome } from "./picker-types.ts";
 
 const MAX_VISIBLE_ROWS = 15;
-
-const kindTag = (candidate: PickCandidate): string =>
-  candidate.kind === "worktree" ? candidate.worktree.kind : `new (${candidate.source})`;
-
-const dirtyTag = (candidate: PickCandidate): string => {
-  if (candidate.kind !== "worktree") {
-    return "";
-  }
-  if (candidate.dirty === null) {
-    return "";
-  }
-  return candidate.dirty ? " dirty" : "";
-};
-
-const pathTag = (candidate: PickCandidate): string =>
-  candidate.kind === "worktree" ? candidate.worktree.path : "(not created yet)";
-
-export const candidateRowKey = (candidate: PickCandidate, index: number): string =>
-  `${index}:${candidateBranchLabel(candidate)}`;
 
 interface PickerProps {
   readonly candidates: readonly PickCandidate[];
@@ -45,6 +24,8 @@ const Picker = ({ candidates, callbacks, onExit, onCancel }: PickerProps) => {
   useInput(handleInput);
 
   const visible = filtered.slice(0, MAX_VISIBLE_ROWS);
+  const hiddenCount = filtered.length - visible.length;
+  const rows = buildDisplayRows(visible, homedir());
 
   return (
     <Box flexDirection="column">
@@ -52,21 +33,26 @@ const Picker = ({ candidates, callbacks, onExit, onCancel }: PickerProps) => {
         hop: <Text color="cyan">{query}</Text>
         <Text dimColor>{query.length === 0 ? " (type to filter)" : ""}</Text>
       </Text>
-      {visible.length === 0 && <Text dimColor>No matches.</Text>}
-      {visible.map((candidate, rowIndex) => {
-        const selected = rowIndex === clampedIndex;
-        const label = candidateBranchLabel(candidate);
+      {rows.length === 0 && <Text dimColor>No matches.</Text>}
+      {rows.map((row) => {
+        if (row.kind === "header") {
+          return (
+            <Text key={displayRowKey(row)} bold dimColor>
+              {row.label}
+            </Text>
+          );
+        }
+        const selected = row.index === clampedIndex;
         return (
-          <Text key={candidateRowKey(candidate, rowIndex)} inverse={selected}>
-            {`${selected ? "> " : "  "}[${kindTag(candidate)}${dirtyTag(candidate)}] ${label} ${pathTag(candidate)}`}
+          <Text key={displayRowKey(row)} inverse={selected}>
+            {`${selected ? "❯ " : "  "}${row.statusMarker} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`}
           </Text>
         );
       })}
-      {filtered.length > MAX_VISIBLE_ROWS && (
-        <Text dimColor>
-          ... and {filtered.length - MAX_VISIBLE_ROWS} more (keep typing to narrow down)
-        </Text>
+      {hiddenCount > 0 && (
+        <Text dimColor>... and {hiddenCount} more (keep typing to narrow down)</Text>
       )}
+      <Text dimColor>({LEGEND_TEXT})</Text>
       <Text dimColor>
         Ctrl+K actions · Ctrl+X delete · Ctrl+R switch root · Enter cd · Esc cancel
       </Text>

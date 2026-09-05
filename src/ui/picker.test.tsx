@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { type PickCandidate } from "../domain/candidates.ts";
-import { candidateRowKey } from "./picker.tsx";
+import { buildDisplayRows, displayRowKey } from "./picker-layout.ts";
 
-const detachedCandidate = (): PickCandidate => ({
+const detachedCandidate = (path: string): PickCandidate => ({
   kind: "worktree",
   worktree: {
-    path: "/repo/detached",
+    path,
     head: "abc123",
     branch: null,
     detached: true,
@@ -20,9 +20,17 @@ const detachedCandidate = (): PickCandidate => ({
 });
 
 describe("picker row keys", () => {
-  it("同じ (detached) label の行でも index を含めて衝突しない", () => {
-    const candidate = detachedCandidate();
+  it("同じ (detached) label の行でも candidate index が異なれば衝突しない", () => {
+    const candidates = [detachedCandidate("/repo/a"), detachedCandidate("/repo/b")];
+    const [first, second] = buildDisplayRows(candidates, "/repo").filter(
+      (row) => row.kind === "candidate",
+    );
 
-    expect(candidateRowKey(candidate, 0)).not.toBe(candidateRowKey(candidate, 1));
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    if (first === undefined || second === undefined) {
+      throw new Error("unreachable: asserted above");
+    }
+    expect(displayRowKey(first)).not.toBe(displayRowKey(second));
   });
 });

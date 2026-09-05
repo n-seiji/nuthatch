@@ -38,6 +38,28 @@ hop -- <branch>    # escape a branch name that collides with a reserved command
 hop --help         # print usage (also -h / hop help)
 ```
 
+### Interactive picker
+
+The picker groups candidates into sections — existing worktrees (root first)
+and not-yet-created branches — with a status marker, aligned columns, and
+shortened paths:
+
+```
+  WORKTREES
+❯ ● main          root     ~/ghq/.../nuthatch
+  ○ feat/picker   managed  …/_worktree/feat__picker
+  ● codex/fix-x   ext      …/.claude/worktrees/x
+
+  BRANCHES — Enter で worktree 作成
+  + feat/idea     local
+  + origin/hotfix remote
+
+  (●=dirty ○=clean +=未作成)
+```
+
+A section (header included) disappears entirely when it has no candidates —
+including when a search query filters it down to zero.
+
 ### Interactive picker keys
 
 | Key | Action |
