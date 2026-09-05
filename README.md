@@ -62,11 +62,17 @@ including when a search query filters it down to zero.
 
 Ordering within each section is fixed, not insertion order: WORKTREES puts
 root first, then managed worktrees, then external ones (branch name
-ascending within each group); BRANCHES puts local branches before remote
-ones (branch name ascending within each group). This holds under search
-filtering too — narrowing the list never reshuffles what's left. BRANCHES
-rows render dim so "already a worktree" vs. "not created yet" reads at a
-glance, on top of the ○/●/+ markers.
+ascending within each group, detached-HEAD worktrees last within theirs);
+BRANCHES puts local branches before remote ones (branch name ascending
+within each group). This holds under search filtering too — narrowing the
+list never reshuffles what's left. BRANCHES rows render dim so "already a
+worktree" vs. "not created yet" reads at a glance, on top of the ○/●/+
+markers.
+
+The picker runs in the terminal's alternate screen buffer (the same
+mechanism fzf and vim use), so it never gets pushed into your scrollback
+history — each run paints over itself and cleanly restores your shell's
+screen on exit, however it exits (selection, Esc/Ctrl-C, or an interrupt).
 
 ### Interactive picker keys
 
