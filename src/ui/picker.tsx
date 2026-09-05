@@ -1,7 +1,14 @@
 import { Box, render, Text, useInput } from "ink";
-import { useMemo, useState } from "react";
-import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
-import { resolvePickerKeyAction } from "./picker-keys.ts";
+import {
+  candidateBranchLabel,
+  candidateBranchName,
+  type PickCandidate,
+} from "../domain/candidates.ts";
+import { ActionPanel } from "./action-panel.tsx";
+import { usePickerController } from "./picker-controller.ts";
+import type { PickerCallbacks, PickerOutcome } from "./picker-types.ts";
+
+export type { ActionOutcome, PickerCallbacks, PickerOutcome } from "./picker-types.ts";
 
 const MAX_VISIBLE_ROWS = 15;
 
@@ -21,70 +28,21 @@ const dirtyTag = (candidate: PickCandidate): string => {
 const pathTag = (candidate: PickCandidate): string =>
   candidate.kind === "worktree" ? candidate.worktree.path : "(not created yet)";
 
-const matchesQuery = (candidate: PickCandidate, query: string): boolean =>
-  query.length === 0 || candidateBranchLabel(candidate).toLowerCase().includes(query.toLowerCase());
-
 export const candidateRowKey = (candidate: PickCandidate, index: number): string =>
   `${index}:${candidateBranchLabel(candidate)}`;
 
 interface PickerProps {
   readonly candidates: readonly PickCandidate[];
-  readonly onSelect: (candidate: PickCandidate) => void;
+  readonly callbacks: PickerCallbacks;
+  readonly onExit: (outcome: PickerOutcome) => void;
   readonly onCancel: () => void;
 }
 
-const Picker = ({ candidates, onSelect, onCancel }: PickerProps) => {
-  const [query, setQuery] = useState("");
-  const [index, setIndex] = useState(0);
+const Picker = ({ candidates, callbacks, onExit, onCancel }: PickerProps) => {
+  const { query, filtered, clampedIndex, mode, panelIndex, busy, handleInput } =
+    usePickerController(candidates, callbacks, onExit, onCancel);
 
-  const filtered = useMemo(
-    () => candidates.filter((candidate) => matchesQuery(candidate, query)),
-    [candidates, query],
-  );
-  const clampedIndex = Math.min(index, Math.max(filtered.length - 1, 0));
-
-  useInput((input, key) => {
-    const action = resolvePickerKeyAction(input, key);
-    switch (action.type) {
-      case "cancel": {
-        onCancel();
-        break;
-      }
-      case "select": {
-        const selected = filtered[clampedIndex];
-        if (selected !== undefined) {
-          onSelect(selected);
-        }
-        break;
-      }
-      case "up": {
-        setIndex((current) => Math.max(0, current - 1));
-        break;
-      }
-      case "down": {
-        setIndex((current) => Math.min(filtered.length - 1, current + 1));
-        break;
-      }
-      case "clear": {
-        setQuery("");
-        setIndex(0);
-        break;
-      }
-      case "backspace": {
-        setQuery((current) => current.slice(0, -1));
-        setIndex(0);
-        break;
-      }
-      case "char": {
-        setQuery((current) => current + action.char);
-        setIndex(0);
-        break;
-      }
-      case "ignore": {
-        break;
-      }
-    }
-  });
+  useInput(handleInput);
 
   const visible = filtered.slice(0, MAX_VISIBLE_ROWS);
 
@@ -109,6 +67,25 @@ const Picker = ({ candidates, onSelect, onCancel }: PickerProps) => {
           ... and {filtered.length - MAX_VISIBLE_ROWS} more (keep typing to narrow down)
         </Text>
       )}
+      <Text dimColor>
+        Ctrl+K actions · Ctrl+X delete · Ctrl+R switch root · Enter cd · Esc cancel
+      </Text>
+      {mode.kind === "panel" && (
+        <ActionPanel
+          candidate={mode.candidate}
+          panelIndex={panelIndex}
+          error={mode.error}
+          busy={busy}
+        />
+      )}
+      {mode.kind === "confirmDelete" && (
+        <Box flexDirection="column" borderStyle="round" paddingX={1}>
+          <Text>
+            Delete worktree for <Text color="cyan">{candidateBranchName(mode.candidate)}</Text>?
+            (y/N)
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 };
@@ -116,16 +93,20 @@ const Picker = ({ candidates, onSelect, onCancel }: PickerProps) => {
 /**
  * Renders the picker to stderr (never stdout — stdout is reserved for the
  * final selected path, per the CLI's cd contract) and resolves with the
- * chosen candidate, or null on ESC/Ctrl-C.
+ * chosen outcome, or null on ESC/Ctrl-C.
  */
-export const runPicker = (candidates: readonly PickCandidate[]): Promise<PickCandidate | null> =>
+export const runPicker = (
+  candidates: readonly PickCandidate[],
+  callbacks: PickerCallbacks,
+): Promise<PickerOutcome | null> =>
   new Promise((resolve) => {
     const instance = render(
       <Picker
         candidates={candidates}
-        onSelect={(candidate) => {
+        callbacks={callbacks}
+        onExit={(outcome) => {
           instance.unmount();
-          resolve(candidate);
+          resolve(outcome);
         }}
         onCancel={() => {
           instance.unmount();

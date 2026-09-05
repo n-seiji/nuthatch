@@ -7,6 +7,10 @@ import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.t
  * (e.g. not bundled correctly into a `bun build --compile` binary) — see
  * cli.ts's dynamic import of ui/picker.tsx for the primary picker.
  *
+ * Only supports cd (no action panel — readline has no keybindings to hang
+ * one off); cli.ts wraps its result as `{ type: "cd", candidate }` to match
+ * ui/picker.tsx's PickerOutcome contract.
+ *
  * Never writes to stdout — same contract as the ink picker.
  */
 export const runSimplePicker = (

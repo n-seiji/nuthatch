@@ -38,6 +38,24 @@ hop -- <branch>    # escape a branch name that collides with a reserved command
 hop --help         # print usage (also -h / hop help)
 ```
 
+### Interactive picker keys
+
+| Key | Action |
+|---|---|
+| `Enter` | cd into the selected candidate |
+| `Ctrl+K` | Open the action panel for the selected candidate (cd / delete / switch root here) |
+| `Ctrl+X` | Delete the selected worktree (asks y/N first) |
+| `Ctrl+R` | Switch the root clone to the selected branch, immediately |
+| `Esc` / `Ctrl+C` | Cancel |
+
+Inside the action panel: `↑`/`↓` or `Ctrl+P`/`Ctrl+N` to move, `Enter` to run the
+highlighted action, `c`/`d`/`r` to run cd/delete/switch-root directly, `Esc` or
+`Ctrl+K` to close. `delete` only appears for a worktree nuthatch manages
+(`managed`); `switch root here` doesn't appear on the root worktree itself.
+Deleting reloads the candidate list so you can keep deleting without leaving
+the picker; cd and switch-root exit and print the resulting path, per hop's
+stdout contract.
+
 Shell integration (auto-`cd`):
 
 ```sh

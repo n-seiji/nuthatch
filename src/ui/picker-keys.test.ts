@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { type PickerKeyModifiers, resolvePickerKeyAction } from "./picker-keys.ts";
+import {
+  type PickerKeyModifiers,
+  resolveConfirmKeyAction,
+  resolvePanelKeyAction,
+  resolvePickerKeyAction,
+} from "./picker-keys.ts";
 
 const NO_MODIFIERS: PickerKeyModifiers = {
   ctrl: false,
@@ -65,11 +70,88 @@ describe("resolvePickerKeyAction", () => {
   });
 
   it("ctrl/meta 修飾された未知のキーは検索クエリに混入せず ignore になる", () => {
-    expect(resolvePickerKeyAction(...withCtrl("x"))).toEqual({
+    expect(resolvePickerKeyAction(...withCtrl("z"))).toEqual({
       type: "ignore",
     });
     expect(resolvePickerKeyAction("a", { ...NO_MODIFIERS, meta: true })).toEqual({
       type: "ignore",
     });
+  });
+
+  it("Ctrl+K / Ctrl+X / Ctrl+R はそれぞれ panel を開く / delete / switchRoot のショートカット", () => {
+    expect(resolvePickerKeyAction(...withCtrl("k"))).toEqual({
+      type: "openPanel",
+    });
+    expect(resolvePickerKeyAction(...withCtrl("x"))).toEqual({
+      type: "deleteShortcut",
+    });
+    expect(resolvePickerKeyAction(...withCtrl("r"))).toEqual({
+      type: "rootSwitchShortcut",
+    });
+  });
+});
+
+describe("resolvePanelKeyAction", () => {
+  it("Escape / Ctrl+K は close", () => {
+    expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, escape: true })).toEqual({
+      type: "close",
+    });
+    expect(resolvePanelKeyAction(...withCtrl("k"))).toEqual({ type: "close" });
+  });
+
+  it("Enter は confirm (ハイライト中のアクションを実行)", () => {
+    expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, return: true })).toEqual({
+      type: "confirm",
+    });
+  });
+
+  it("矢印キーと Ctrl+P/Ctrl+N は up/down になる", () => {
+    expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, upArrow: true })).toEqual({
+      type: "up",
+    });
+    expect(resolvePanelKeyAction(...withCtrl("p"))).toEqual({ type: "up" });
+    expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, downArrow: true })).toEqual({
+      type: "down",
+    });
+    expect(resolvePanelKeyAction(...withCtrl("n"))).toEqual({ type: "down" });
+  });
+
+  it("c / d / r は letter ショートカット", () => {
+    expect(resolvePanelKeyAction("c", NO_MODIFIERS)).toEqual({
+      type: "letter",
+      char: "c",
+    });
+    expect(resolvePanelKeyAction("d", NO_MODIFIERS)).toEqual({
+      type: "letter",
+      char: "d",
+    });
+    expect(resolvePanelKeyAction("r", NO_MODIFIERS)).toEqual({
+      type: "letter",
+      char: "r",
+    });
+  });
+
+  it("それ以外の文字や ctrl/meta 修飾は ignore", () => {
+    expect(resolvePanelKeyAction("z", NO_MODIFIERS)).toEqual({
+      type: "ignore",
+    });
+    expect(resolvePanelKeyAction("c", { ...NO_MODIFIERS, ctrl: true })).toEqual({
+      type: "ignore",
+    });
+  });
+});
+
+describe("resolveConfirmKeyAction", () => {
+  it("y / Y は yes", () => {
+    expect(resolveConfirmKeyAction("y", NO_MODIFIERS)).toEqual({ type: "yes" });
+    expect(resolveConfirmKeyAction("Y", NO_MODIFIERS)).toEqual({ type: "yes" });
+  });
+
+  it("それ以外 (Escape / n / 何もしない) はすべて no", () => {
+    expect(resolveConfirmKeyAction("n", NO_MODIFIERS)).toEqual({ type: "no" });
+    expect(resolveConfirmKeyAction("", { ...NO_MODIFIERS, escape: true })).toEqual({
+      type: "no",
+    });
+    expect(resolveConfirmKeyAction(...withCtrl("y"))).toEqual({ type: "no" });
   });
 });

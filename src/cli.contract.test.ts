@@ -90,14 +90,19 @@ describe("bare `hop` (no target)", () => {
     expect(parsed.command).toBe("ls");
   });
 
-  it("cli.ts は ink の picker を動的 import のみで読み込む (静的 import しない)", async () => {
+  it("cli.ts / cli-pick.ts は ink の picker を動的 import のみで読み込む (静的 import しない)", async () => {
     // Guarantees the "non-TTY never touches ink" contract can't regress
     // Silently: if someone changes `await import("./ui/picker.tsx")` to a
-    // Static top-level import, ink/react would load unconditionally on
-    // Every invocation, including the fast non-interactive JSON paths above.
-    const source = await readFile(new URL("cli.ts", import.meta.url), "utf8");
-    expect(source).toContain('await import("./ui/picker.tsx")');
-    expect(source).not.toMatch(/^import .* from ["']\.\/ui\/picker\.tsx["'];?$/mu);
+    // Static value import, ink/react would load unconditionally on every
+    // Invocation, including the fast non-interactive JSON paths above.
+    // The dynamic import lives in cli-pick.ts now (cli.ts only calls its
+    // Exported functions). `import type` is allowed — it's erased entirely
+    // At compile time and never touches ink/react at runtime.
+    const cliSource = await readFile(new URL("cli.ts", import.meta.url), "utf8");
+    const cliPickSource = await readFile(new URL("cli-pick.ts", import.meta.url), "utf8");
+    expect(cliSource).not.toMatch(/from ["']\.\/ui\/picker\.tsx["']/u);
+    expect(cliPickSource).toContain('await import("./ui/picker.tsx")');
+    expect(cliPickSource).not.toMatch(/^import (?!type\b).* from ["']\.\/ui\/picker\.tsx["'];?$/mu);
   });
 });
 

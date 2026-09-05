@@ -49,3 +49,13 @@ export const buildPickCandidates = (
 /** Stable, human-searchable key for a candidate row (used for list keys and filtering). */
 export const candidateBranchLabel = (candidate: PickCandidate): string =>
   candidate.kind === "worktree" ? (candidate.worktree.branch ?? "(detached)") : candidate.branch;
+
+/**
+ * The branch name to pass to `rm`/`root` for a candidate. Only meaningful
+ * for candidates where `availableActions` offers `delete`/`switchRoot`
+ * (i.e. never called on a detached-HEAD worktree candidate); returns `null`
+ * there rather than the "(detached)" placeholder `candidateBranchLabel` uses
+ * for display.
+ */
+export const candidateBranchName = (candidate: PickCandidate): string | null =>
+  candidate.kind === "worktree" ? candidate.worktree.branch : candidate.branch;

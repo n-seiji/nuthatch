@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } from "citty";
-import { clean } from "./commands/clean.ts";
 import { dispatchCliArgs, isHelpRequest, normalizeCliArgs } from "./cli-dispatch.ts";
+import {
+  createPickerCallbacks,
+  loadPickCandidates,
+  renderSwitchRootOutcome,
+  runInteractivePicker,
+} from "./cli-pick.ts";
+import { clean } from "./commands/clean.ts";
 import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
-import { pick, type PickCandidate } from "./commands/pick.ts";
 import { rm } from "./commands/rm.ts";
 import { root } from "./commands/root.ts";
 import { type CommandResult, EXIT_CANCELLED, EXIT_USAGE_ERROR, ok } from "./domain/result.ts";
@@ -176,34 +181,35 @@ const jumpArgsSchema = {
 
 /**
  * Runs the interactive picker (TTY only). Loads ink lazily via a literal
- * dynamic import path so non-TTY runs never touch ink/react at all; falls
- * back to the plain readline-based picker if ink fails to load or render
- * (e.g. a `bun build --compile` binary where ink's native pieces don't work).
+ * dynamic import path (in cli-pick.ts) so non-TTY runs never touch
+ * ink/react at all; falls back to the plain readline-based picker if ink
+ * fails to load or render (e.g. a `bun build --compile` binary where ink's
+ * native pieces don't work). Mutation wiring (delete / switch root here)
+ * lives in cli-pick.ts — see its module comment for why.
  */
 const runInteractivePick = async (json: boolean): Promise<void> => {
-  const pickResult = await pick(git, fs, { cwd: process.cwd() });
-  if (!pickResult.ok) {
-    render("pick", pickResult, json);
-    applyExitCode(pickResult);
+  const candidates = await loadPickCandidates(git, fs, json);
+  if (candidates === null) {
     return;
   }
-  const candidates = pickResult.data?.candidates ?? [];
 
-  const selected: PickCandidate | null = await (async () => {
-    try {
-      const { runPicker } = await import("./ui/picker.tsx");
-      return await runPicker(candidates);
-    } catch {
-      const { runSimplePicker } = await import("./ui/simple-picker.ts");
-      return await runSimplePicker(candidates);
-    }
-  })();
+  let lastSwitchedBranch: string | null = null;
+  const callbacks = createPickerCallbacks(git, fs, json, (branch) => {
+    lastSwitchedBranch = branch;
+  });
 
-  if (selected === null) {
+  const outcome = await runInteractivePicker(candidates, callbacks);
+  if (outcome === null) {
     process.exitCode = EXIT_CANCELLED;
     return;
   }
 
+  if (outcome.type === "path") {
+    renderSwitchRootOutcome(outcome.path, lastSwitchedBranch, json);
+    return;
+  }
+
+  const selected = outcome.candidate;
   if (selected.kind === "worktree") {
     const result = ok({
       path: selected.worktree.path,
