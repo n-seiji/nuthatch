@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: ["20", "22"]
+        node-version: ["20", "22", "24"]
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -177,8 +177,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Trusted Publishing (OIDC) requires Node >= 22.14 and npm >= 11.5.1.
-          node-version: "22"
+          # Trusted Publishing (OIDC) requires Node >= 22.14 / npm >= 11.5.1. Use current LTS.
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Update npm for trusted publishing
