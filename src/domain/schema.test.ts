@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { safeParse } from "valibot";
 import {
+  CleanEnvelopeSchema,
   JumpEnvelopeSchema,
   LsEnvelopeSchema,
   PickEnvelopeSchema,
   RmEnvelopeSchema,
+  RootEnvelopeSchema,
 } from "./schema.ts";
 
 describe("JSON envelope schemas", () => {
@@ -32,6 +34,40 @@ describe("JSON envelope schemas", () => {
       schemaVersion: 1,
       command: "rm",
       data: { branch: "main" }, // Missing `path`
+      warnings: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("RootEnvelopeSchema は branch: null (switched なし) を受け付ける", () => {
+    const result = safeParse(RootEnvelopeSchema, {
+      schemaVersion: 1,
+      command: "root",
+      data: { branch: null, switched: false },
+      warnings: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("CleanEnvelopeSchema は removed 省略 (dry-run) を受け付ける", () => {
+    const result = safeParse(CleanEnvelopeSchema, {
+      schemaVersion: 1,
+      command: "clean",
+      data: {
+        candidates: [{ branch: "feat/x", path: "/tmp/x", reason: "merged" }],
+      },
+      warnings: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("CleanEnvelopeSchema は不正な reason を拒否する", () => {
+    const result = safeParse(CleanEnvelopeSchema, {
+      schemaVersion: 1,
+      command: "clean",
+      data: {
+        candidates: [{ branch: "feat/x", path: "/tmp/x", reason: "stale" }],
+      },
       warnings: [],
     });
     expect(result.success).toBe(false);

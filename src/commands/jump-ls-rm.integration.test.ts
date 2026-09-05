@@ -126,14 +126,6 @@ describe("jump → ls → rm (integration)", () => {
     expect(created.ok).toBe(true);
     expect(created.data?.branch).toBe("ls");
   });
-
-  it("root は root clone の path を返す", async () => {
-    const result = await jump(git, fs, term, {
-      cwd: repo.repoPath,
-      target: "root",
-      create: false,
-    });
-    expect(result.ok).toBe(true);
-    expect(result.path).toBe(await fs.realpath(repo.repoPath));
-  });
+  // "Root" as a jump target is covered by commands/root.integration.test.ts
+  // Now — cli.ts dispatches "root" to commands/root.ts before jump ever runs.
 });
