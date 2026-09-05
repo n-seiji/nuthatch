@@ -13,7 +13,7 @@
 src/                 # 実装 (TypeScript, bun)。テストは対象ファイルと同階層に置く (*.test.ts)
 src/testing/         # テスト専用の共有 helper (tmpdir 実 git repo 生成など)。テストからのみ import
 docs/design.md       # 設計書 (source of truth)
-skills/              # 公開 skill の正本 (single source of truth)
+skills/              # plugins/hop/skills へ の symlink (正本は plugin 側)
 plugins/hop/         # 公開 plugin (Claude Code / Codex 両対応)。skills へは symlink
 .claude/rules/       # 開発専用 rule (この repo の開発時のみ使う。配布しない)
 .claude-plugin/      # Claude Code marketplace index
@@ -26,7 +26,7 @@ shell/               # hop init zsh のテンプレート
   `<関心事>.integration.test.ts` のように命名し、対象コマンドが属するディレクトリに置く
   (例: `src/commands/jump-ls-rm.integration.test.ts`)。共有 helper は `src/testing/`。
 
-- **公開 skill の正本は `skills/`**。plugins/hop/skills/ からは相対 symlink で公開する。Claude Code と Codex の両方から
+- **公開 skill の正本は `plugins/hop/skills/`** (Codex の plugin installer が symlink を展開しないため実体は plugin 側に置く)。repo ルートの `skills/` は発見用の symlink。Claude Code と Codex の両方から
   install できる形式 (`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`) を保つ。
 - **開発専用 rule / skill** は `.claude/` 配下。配布物に含めない。
 
