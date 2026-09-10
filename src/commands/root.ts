@@ -116,7 +116,7 @@ const holderRejection = (
 ): CommandResult<RootData> =>
   fail(
     EXIT_SAFE_REJECTION,
-    `Branch "${branch}" is already checked out at ${holderPath}, and it's ${reason}. Not swapping — cd there instead of using hop root.`,
+    `Branch "${branch}" is already checked out at ${holderPath}, and it ${reason}. Not swapping — cd there instead of using hop root.`,
   );
 
 const switchAndReport = async ({
@@ -164,7 +164,7 @@ const switchAndReport = async ({
           return holderRejection(
             target,
             freshHolder.path,
-            `locked by git${freshHolder.lockReason === null ? "" : ` (${freshHolder.lockReason})`}`,
+            `is locked by git${freshHolder.lockReason === null ? "" : ` (${freshHolder.lockReason})`}`,
           );
         }
         const holderDirty = await git.isDirty(
