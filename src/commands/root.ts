@@ -181,10 +181,18 @@ const switchAndReport = async ({
     }
 
     await git.switchBranch(fresh.rootPath, target, switchOptions);
+    // For target === "-", git resolves the destination itself (@{-1}), so we
+    // Don't know the branch name up front — read it back from the worktree
+    // List rather than guessing.
+    let resolvedBranch: string | null = target;
+    if (target === "-") {
+      const afterSwitch = await loadRepoContext(git, fs, fresh.rootPath);
+      resolvedBranch = afterSwitch.worktrees.find((wt) => wt.kind === "root")?.branch ?? null;
+    }
     return ok({
       path: fresh.rootPath,
       data: {
-        branch: target === "-" ? null : target,
+        branch: resolvedBranch,
         switched: true,
         detachedHolder: detachedHolder?.path ?? null,
       },

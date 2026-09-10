@@ -191,7 +191,7 @@ describe("root (integration)", () => {
     await root(git, fs, { cwd: repo.repoPath, target: "feat/verify" });
     const back = await root(git, fs, { cwd: repo.repoPath, target: "-" });
     expect(back.ok).toBe(true);
-    expect(back.data?.branch).toBeNull();
+    expect(back.data?.branch).toBe("main");
     const branchOutput = await repo.git(["branch", "--show-current"]);
     const branch = branchOutput.trim();
     expect(branch).toBe("main");
@@ -214,7 +214,7 @@ describe("root (integration)", () => {
 
     const back = await root(git, fs, { cwd: repo.repoPath, target: "-" });
     expect(back.ok).toBe(true);
-    expect(back.data?.branch).toBeNull();
+    expect(back.data?.branch).toBe("main");
 
     const rootBranchOutput = await repo.git(["branch", "--show-current"]);
     const rootBranch = rootBranchOutput.trim();

@@ -16,8 +16,29 @@ import { render } from "./render.ts";
  */
 export const ROOT_PREVIOUS_TOKEN = " hop-root-previous ";
 
-export const rewriteRootPreviousToken = (args: readonly string[]): string[] =>
-  args[0] === "-" ? [ROOT_PREVIOUS_TOKEN, ...args.slice(1)] : [...args];
+/**
+ * Flags that consume the following token as their value, so a "-" sitting
+ * right after one of these must be left alone (it's a flag's value, not the
+ * `root -` shorthand).
+ */
+const VALUE_FLAGS = new Set(["--track"]);
+
+export const rewriteRootPreviousToken = (args: readonly string[]): string[] => {
+  const rewritten: string[] = [];
+  let expectingFlagValue = false;
+  for (const arg of args) {
+    if (expectingFlagValue) {
+      rewritten.push(arg);
+      expectingFlagValue = false;
+    } else if (VALUE_FLAGS.has(arg)) {
+      rewritten.push(arg);
+      expectingFlagValue = true;
+    } else {
+      rewritten.push(arg === "-" ? ROOT_PREVIOUS_TOKEN : arg);
+    }
+  }
+  return rewritten;
+};
 
 const resolveRootTarget = (branch: unknown): unknown =>
   branch === ROOT_PREVIOUS_TOKEN ? "-" : branch;
