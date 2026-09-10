@@ -4,6 +4,7 @@ import { createGitPort } from "../infra/git.ts";
 import { createTermPort } from "../infra/term.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 import { jump } from "./jump.ts";
+import { rm } from "./rm.ts";
 import { root } from "./root.ts";
 
 const git = createGitPort();
@@ -101,5 +102,42 @@ describe("root (integration) — nested worktree dirty exclusion / rollback warn
     expect(result.warnings?.[0]).toContain("detached HEAD");
     expect(result.warnings?.[1]).toContain(held.path as string);
     expect(result.warnings?.[1]).toContain("detached HEAD");
+  });
+
+  it("root 配下にネストした worktree 自身に真の変更があれば、その worktree 自身は dirty と判定する (exclusion は自分の祖先に対してではなく自分の内側にのみ効く)", async () => {
+    const held = await jump(git, fs, term, {
+      cwd: repo.repoPath,
+      target: "swap-dirty",
+      create: true,
+    });
+    expect(held.ok).toBe(true);
+    // Move the created worktree under root's own tree, mirroring
+    // `.claude/worktrees/<branch>` (an agent-created nested worktree), and
+    // Give it a genuine uncommitted change of its own.
+    const nestedPath = `${repo.repoPath}/.claude/worktrees/swap-dirty`;
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(`${repo.repoPath}/.claude/worktrees`, { recursive: true });
+    await repo.git(["worktree", "move", held.path as string, nestedPath]);
+    await Bun.write(`${nestedPath}/a.txt`, "modified");
+
+    const rootResult = await root(git, fs, {
+      cwd: repo.repoPath,
+      target: "swap-dirty",
+    });
+    expect(rootResult.ok).toBe(false);
+    expect(rootResult.exitCode).toBe(3);
+    const rootBranchOutput = await repo.git(["branch", "--show-current"]);
+    expect(rootBranchOutput.trim()).toBe("main");
+    const holderBranchOutput = await repo.git(["branch", "--show-current"], nestedPath);
+    expect(holderBranchOutput.trim()).toBe("swap-dirty");
+
+    const rmResult = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: "swap-dirty",
+      force: false,
+      ext: false,
+    });
+    expect(rmResult.ok).toBe(false);
+    expect(rmResult.exitCode).toBe(3);
   });
 });

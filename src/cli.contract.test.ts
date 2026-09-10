@@ -106,6 +106,46 @@ describe("bare `hop` (no target)", () => {
   });
 });
 
+describe("hop root <branch> → hop root - (real CLI, holder swap)", () => {
+  // Regression test for a bug citty-level `root -` parsing had: citty's
+  // Positional-arg parser silently drops a bare "-" token, so calling
+  // `root()` directly (as root.integration.test.ts does) never exercises the
+  // Actual argv → citty → root() path and can't catch this. Only spawning
+  // The real CLI binary reproduces it.
+  it("holder swap 後の `hop root -` は root の branch を元に戻す", () => {
+    execFileSync("git", ["branch", "swap-clean"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+    });
+    execFileSync("git", ["worktree", "add", ".claude/worktrees/swap-clean", "swap-clean"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+    });
+
+    const swapped = runHop(["root", "swap-clean", "--json"]) as {
+      data: { branch: string | null };
+    };
+    expect(swapped.data.branch).toBe("swap-clean");
+    const branchAfterSwap = execFileSync("git", ["branch", "--show-current"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+      encoding: "utf8",
+    }).trim();
+    expect(branchAfterSwap).toBe("swap-clean");
+
+    const back = runHop(["root", "-", "--json"]) as {
+      data: { branch: string | null };
+    };
+    expect(back.data.branch).toBeNull();
+    const branchAfterBack = execFileSync("git", ["branch", "--show-current"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+      encoding: "utf8",
+    }).trim();
+    expect(branchAfterBack).toBe("main");
+  });
+});
+
 describe("hop --help / -h / help", () => {
   const runHelp = (args: readonly string[]) =>
     spawnSync("bun", ["run", CLI_ENTRY, ...args], {

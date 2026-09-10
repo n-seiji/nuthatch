@@ -9,7 +9,7 @@ import type { WorktreeKind } from "./model.ts";
  * Implemented as pure string comparison rather than `node:path`'s `relative`
  * so this stays free of Node built-ins, per domain/'s zero-external-dependency rule.
  */
-const isWithin = (parent: string, child: string): boolean => {
+export const isWithin = (parent: string, child: string): boolean => {
   if (parent === child) {
     return false;
   }

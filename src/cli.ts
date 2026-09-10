@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } from "citty";
 import { dispatchCliArgs, isHelpRequest, normalizeCliArgs } from "./cli-dispatch.ts";
+import { createRootCommand, rewriteRootPreviousToken } from "./cli-root-command.ts";
 import {
   createPickerCallbacks,
   loadPickCandidates,
@@ -12,7 +13,6 @@ import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
 import { rm } from "./commands/rm.ts";
-import { root } from "./commands/root.ts";
 import {
   type CommandResult,
   EXIT_CANCELLED,
@@ -73,33 +73,7 @@ const rmCommand = defineCommand({
   },
 });
 
-const rootCommand = defineCommand({
-  meta: {
-    name: "root",
-    description: "cd to the root clone, or temporarily switch its branch",
-  },
-  args: {
-    branch: {
-      type: "positional",
-      required: false,
-      description: 'Branch to switch root to ("-" to switch back)',
-    },
-    track: {
-      type: "string",
-      description: "Remote branch to track when creating",
-    },
-    json: { type: "boolean", description: "Output JSON" },
-  },
-  async run({ args }) {
-    const result = await root(git, fs, {
-      cwd: process.cwd(),
-      ...(args.branch === undefined ? {} : { target: String(args.branch) }),
-      ...(args.track === undefined ? {} : { track: String(args.track) }),
-    });
-    render("root", result, Boolean(args.json));
-    applyExitCode(result);
-  },
-});
+const rootCommand = createRootCommand(git, fs, applyExitCode);
 
 const cleanCommand = defineCommand({
   meta: {
@@ -274,10 +248,14 @@ if (isHelpRequest(rawArgs)) {
   const dispatch = dispatchCliArgs(rawArgs, Object.keys(RESERVED_COMMANDS));
   if (dispatch.kind === "reserved") {
     const command = RESERVED_COMMANDS[dispatch.name as keyof typeof RESERVED_COMMANDS];
+    // For `root`, rewrite a leading bare "-" before citty ever parses it —
+    // See cli-root-token.ts for why.
+    const commandArgs =
+      dispatch.name === "root" ? rewriteRootPreviousToken(dispatch.args) : [...dispatch.args];
     // The command union's arg schemas differ per command, so this cast collapses
     // Them to the common CommandDef<ArgsDef> shape runCommand expects.
     await runCommand(command as unknown as CommandDef<ArgsDef>, {
-      rawArgs: [...dispatch.args],
+      rawArgs: commandArgs,
     });
   } else {
     await runJumpFromArgs(dispatch.args);
