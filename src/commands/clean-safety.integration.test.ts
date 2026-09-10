@@ -1,6 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
@@ -8,6 +7,7 @@ import { createTermPort } from "../infra/term.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 import { clean } from "./clean.ts";
 import { jump } from "./jump.ts";
+import { root } from "./root.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
@@ -55,7 +55,7 @@ afterEach(async () => {
 
 describe("clean safety (integration)", () => {
   it("clean でも未マージかつ upstream 生存の branch は候補にしない", async () => {
-    const originDir = await mkdtemp(join(tmpdir(), "nuthatch-origin-"));
+    const originDir = await mkdtemp(`${tmpdir()}/nuthatch-origin-`);
     try {
       await createUnmergedTrackedWorktree("feat/unmerged-alive", originDir);
 
@@ -74,7 +74,7 @@ describe("clean safety (integration)", () => {
   });
 
   it("prunable かつ未マージの branch は --with-branch でも残し、理由を返す", async () => {
-    const originDir = await mkdtemp(join(tmpdir(), "nuthatch-origin-"));
+    const originDir = await mkdtemp(`${tmpdir()}/nuthatch-origin-`);
     try {
       const worktreePath = await createUnmergedTrackedWorktree("feat/prunable-unmerged", originDir);
       await rm(worktreePath, { recursive: true, force: true });
@@ -99,5 +99,34 @@ describe("clean safety (integration)", () => {
     } finally {
       await rm(originDir, { recursive: true, force: true });
     }
+  });
+
+  it("hop root によって detach された holder (branch なし) は clean 候補にしない", async () => {
+    await repo.git(["branch", "feat/held-for-clean"]);
+    const held = await jump(git, fs, term, {
+      cwd: repo.repoPath,
+      target: "feat/held-for-clean",
+      create: true,
+    });
+    expect(held.path).toBeDefined();
+
+    // Swap root onto the branch, which detaches the holder's HEAD (no branch,
+    // So it must never be treated as a "branch-less" clean candidate).
+    const swapped = await root(git, fs, {
+      cwd: repo.repoPath,
+      target: "feat/held-for-clean",
+    });
+    expect(swapped.ok).toBe(true);
+
+    const result = await clean(git, fs, term, {
+      cwd: repo.repoPath,
+      ext: false,
+      withBranch: false,
+      dryRun: true,
+      yes: false,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.candidates.some((candidate) => candidate.path === held.path)).toBe(false);
   });
 });

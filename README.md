@@ -29,10 +29,11 @@ hop root           # cd into the root clone
 hop -              # cd back to the previous worktree
 
 hop ls [--json]    # list worktrees (dirty, ahead/behind, kind)
-hop rm <branch>    # remove a worktree (branch is kept)
-hop clean          # auto-detect and remove garbage worktrees
-hop root <branch>  # temporarily switch the root clone (for verification)
-hop root -         # switch the root clone back
+hop rm <branch>    # remove a worktree (branch is kept) — managed or external, dirty needs --force
+hop clean          # auto-detect and remove garbage worktrees (managed only)
+hop root <branch>  # temporarily switch the root clone (for verification) —
+                   # swaps out a clean, unlocked holder if the branch is checked out elsewhere
+hop root -         # switch the root clone back (only root's branch; a swapped-out holder stays detached)
 
 hop -- <branch>    # escape a branch name that collides with a reserved command
 hop --help         # print usage (also -h / hop help)
@@ -114,12 +115,18 @@ eval "$(hop init zsh)"
 > Not released yet — no version has been published or tagged. Once the first
 > `v*` tag ships, the options below will work as described.
 
-```sh
-npm i -g @n-seiji/nuthatch        # or: bunx @n-seiji/nuthatch
-mise use -g npm:@n-seiji/nuthatch # mise
+推奨: GitHub Release のバイナリ (bun 製、mise なら
+`mise use github:n-seiji/nuthatch`)。npm 版は Node で動くため git 呼び出しが遅い
+(hop ls ~400ms vs ~60ms) — CI や頻繁な呼び出しにはバイナリを使う。
 
-# Prebuilt binary (macOS arm64/x64, Linux x64) — no Node.js required:
+```sh
+# Prebuilt binary (macOS arm64/x64, Linux x64) — no Node.js required, fastest:
 curl -fsSL https://raw.githubusercontent.com/n-seiji/nuthatch/main/install.sh | sh
+mise use github:n-seiji/nuthatch # mise, via the GitHub Release binary
+
+# npm (slower: shells out to git via Node — hop ls ~400ms vs ~60ms for the binary)
+npm i -g @n-seiji/nuthatch        # or: bunx @n-seiji/nuthatch
+mise use -g npm:@n-seiji/nuthatch # mise, via npm
 ```
 
 The install script places `hop` in `~/.local/bin` (override with

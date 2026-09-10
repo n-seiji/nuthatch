@@ -29,6 +29,8 @@ export interface GitPort {
   listRemoteBranches: (cwd: string) => Promise<string[]>;
   /** Switches the worktree at `cwd` to `ref` (a branch name or "-" for the previous branch). */
   switchBranch: (cwd: string, ref: string, options?: SwitchBranchOptions) => Promise<void>;
+  /** Detaches HEAD at `cwd` (`git switch --detach`), freeing up whatever branch it held. */
+  detachHead: (cwd: string) => Promise<void>;
   /** The repo's default branch ref: origin/HEAD if set, else local main/master. Null if none found. */
   resolveDefaultBranchRef: (cwd: string) => Promise<string | null>;
   /** Whether every commit on `branch` is also reachable from `ref` ("unknown" if undeterminable). */

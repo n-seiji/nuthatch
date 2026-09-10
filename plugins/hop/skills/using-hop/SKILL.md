@@ -27,9 +27,9 @@ hop rm feat/my-task                 # 自分が作った worktree のみ片付�
 | `hop <branch> --create` | worktree があれば path を返す。なければ default branch から作成して path を返す。`--create` なしで未存在なら安全拒否 (exit 3) |
 | `hop root` | root clone の path |
 | `hop ls --json` | 全 worktree の JSON 一覧 (`{schemaVersion, command, data, warnings}`)。kind (root/managed/external)・dirty・ahead/behind を含む |
-| `hop rm <branch>` | worktree 削除 (branch は残る)。dirty なら拒否 (`--force` で強制)。external は `--ext --force` の両方が必要 |
-| `hop clean --dry-run` | ゴミ worktree 候補 (prunable / merged / gone) を JSON で返す。`--yes` で削除実行。`--with-branch` は merged/gone が確認できた branch のみ削除 (未確認の branch は残る) |
-| `hop root <branch>` / `hop root -` | root clone を一時的に切替 / 復帰 (動作確認用) |
+| `hop rm <branch>` | worktree 削除 (branch は残る)。managed / external を区別しない。dirty なら拒否 (`--force` で強制)。git が locked と報告する worktree は `--force` でも常に拒否 (`--ext` は非推奨の no-op で、渡すと警告のみ) |
+| `hop clean --dry-run` | ゴミ worktree 候補 (prunable / merged / gone) を JSON で返す。対象は managed のみ (`--ext` で external も含む)。`--yes` で削除実行。`--with-branch` は merged/gone が確認できた branch のみ削除 (未確認の branch は残る) |
+| `hop root <branch>` / `hop root -` | root clone を一時的に切替 / 復帰 (動作確認用)。対象 branch を他 worktree (holder) が checkout 済みでも、holder が clean かつ git-lock されていなければ holder を detached HEAD にして自動で swap する。holder が dirty/locked なら拒否。`hop root -` は root の branch だけ戻し、swap した holder は detached のまま |
 | `hop -- <branch>` | branch 名が予約語 (ls/rm/clean/root/init) と被るときのエスケープ |
 
 - stdout: path または JSON のみ。ログは stderr。
@@ -40,8 +40,12 @@ hop rm feat/my-task                 # 自分が作った worktree のみ片付�
 
 1. **root clone では編集しない**。編集・テストは worktree 側で行う。
 2. viewer / picker 前提で使わない。branch は常に引数で明示する。
-3. 他 agent や人間の worktree (kind=external、または自分が作っていない managed) を
-   rm / clean しない。cleanup は自分が作ったものだけ。
+3. `hop rm` は external worktree (kind=external、他 agent が作ったもの) も
+   削除できるが、他 agent や人間が今使っている worktree は壊しかねないので、
+   自分が作った worktree 以外を rm / clean しない。cleanup は自分が作ったものだけ。
 4. 同じ branch を複数 agent で共有しない。unique な branch 名を使う。
 5. dirty 拒否 (exit 3) に遭ったら commit / stash を先に行う。`--force` を安易に使わない。
 6. root の一時切替 (`hop root <branch>`) を使ったら、作業後に必ず `hop root -` で戻す。
+   対象 branch が他 worktree に checkout 済みでも hop は自動で detach して swap
+   するが、それは他 agent の作業ブランチを解放し得るということでもある —
+   自分専用の unique な branch 名を使っていれば基本問題にならない。

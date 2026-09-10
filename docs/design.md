@@ -46,9 +46,9 @@ git worktree manager。コマンド名は `hop` (パッケージ名は nuthatch)
 | コマンド | 動作 |
 |---|---|
 | `hop ls [--json]` | 一覧。branch / path / 分類 / dirty / ahead-behind |
-| `hop rm <branch>` | worktree を削除 (branch は残す)。dirty (untracked 含む) は拒否、`--force` で強制。external は `--ext --force` の二重ガード |
-| `hop clean [--yes\|--dry-run]` | ゴミ worktree を自動判定して削除 (下記) |
-| `hop root <branch>` | 動作確認用に root を一時切替。`hop root -` で復帰 (git の `@{-1}` 利用、状態ファイル不要) |
+| `hop rm <branch>` | worktree を削除 (branch は残す)。dirty (untracked 含む) は拒否、`--force` で強制。managed / external を区別しない。git が locked と報告する worktree は `--force` でも常に拒否 (`git worktree unlock` は絶対に呼ばない)。`--ext` は非推奨の no-op (後方互換のみ、渡すと deprecation warning) |
+| `hop clean [--yes\|--dry-run]` | ゴミ worktree を自動判定して削除 (下記)。対象は managed のみ (`--ext` で external も対象に追加可能、こちらは従来どおり有効) |
+| `hop root <branch>` | 動作確認用に root を一時切替。対象 branch を他 worktree (holder) が checkout 済みでも、holder が clean かつ git-lock されていなければ holder を detached HEAD にして swap する。holder が dirty/locked なら拒否。`hop root -` で復帰 (git の `@{-1}` 利用、状態ファイル不要。root の branch のみ戻し、swap で detach した holder は re-attach しない) |
 
 ## worktree の 3 分類
 
@@ -56,12 +56,18 @@ git worktree manager。コマンド名は `hop` (パッケージ名は nuthatch)
 |---|---|---|
 | root | 本体 clone | cd / `hop root <branch>` での一時切替のみ。編集作業はしない |
 | managed | `_worktree/<repo>/` 配下 (nuthatch が作成) | cd / rm / clean すべて可 |
-| external | それ以外 (Claude Code の EnterWorktree、Codex 等) | cd / 一覧 / jump は可。削除・切替は `--ext` 明示時のみ |
+| external | それ以外 (Claude Code の EnterWorktree、Codex 等) | cd / 一覧 / jump / rm が可。clean の自動候補には含めない (`--ext` で明示的に含められる) |
 
 **安全規則 (最重要):**「見える・移動できる」と「nuthatch が変更権を持つ」を
-分離する。external への jump は常に可能だが、mutation がデフォルトで external
-に触れると agent の作業場所を破壊する。分類判定は realpath + パス境界で行い、
-文字列 prefix 比較はしない。
+分離する。external への jump は常に可能。hop は今や external worktree も
+managed と同じ手順 (dirty チェック → `--force` で上書き可) で `rm` できるが、
+picker からの削除は external に対して常に y/N 確認を要求する (agent の
+作業中セッションを誤って壊さないため。managed の既存確認挙動は変更しない)。
+git 自身が locked と報告する worktree は、`rm` でも `hop root` の holder swap
+でも `--force` の有無に関わらず常に拒否する — hop は `git worktree unlock` を
+決して自動では呼ばない。`hop clean` の自動判定対象は変わらず managed のみ
+(`--ext` で明示的に external も含められる)。分類判定は realpath + パス境界で
+行い、文字列 prefix 比較はしない。
 
 ## hop clean — ゴミ判定
 
@@ -85,9 +91,21 @@ git worktree manager。コマンド名は `hop` (パッケージ名は nuthatch)
 docker 等で root clone でしか動作確認できないケース向け。
 
 - root が dirty (untracked 含む) なら切替拒否。
-- 対象 branch を他 worktree が checkout 済みなら **swap せず拒否**して
-  その path を案内 (自動 swap は agent 並走時に危険なため廃止)。
-- 復帰は git の `@{-1}` に委ねる。失敗時は rollback。
+- 対象 branch を他 worktree (holder) が checkout 済みでも、holder が
+  clean かつ git-lock されていなければ **swap する**: holder を
+  `git switch --detach` して branch を解放してから root をそこへ切り替える。
+  holder が dirty または locked なら、従来どおり swap せず拒否してその path を
+  案内する。
+- 判定はすべて repo lock 内で再検証する (holder の dirty/lock/branch を
+  lock 取得後に再取得してから detach する。TOCTOU 対策)。
+- root の switch が holder detach の後に失敗した場合は、holder を detach 前の
+  branch へ rollback してから失敗を返す (holder を中途半端な状態で放置しない)。
+- 復帰 (`hop root -`) は git の `@{-1}` に委ねる。失敗時は root の branch を
+  rollback する。**holder の re-attach はしない** — swap で detach した
+  holder は `hop root -` の後も detached HEAD のまま。
+- `--json` の `data.detachedHolder` に、swap で detach した holder の path
+  (無ければ `null`) を返す。人間向け出力では
+  `<path> を detached HEAD にしました` を stderr に出す。
 
 ## CLI 契約 (仕様として固定)
 

@@ -150,6 +150,10 @@ const createBranchMethods = () => ({
   async deleteBranch(cwd: string, branch: string) {
     await run(cwd, ["branch", "-D", branch]);
   },
+
+  async detachHead(cwd: string) {
+    await run(cwd, ["switch", "--detach", "HEAD"]);
+  },
 });
 
 const createGarbagePolicyMethods = () => ({
