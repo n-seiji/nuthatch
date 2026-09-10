@@ -126,6 +126,8 @@ describe("root (integration) — nested worktree dirty exclusion / rollback warn
     });
     expect(rootResult.ok).toBe(false);
     expect(rootResult.exitCode).toBe(3);
+    // Confirm hop's own dirty check rejected this (exit 3 alone could also come from git's own safety net).
+    expect(rootResult.errorMessage).toContain("has uncommitted or untracked changes");
     const rootBranchOutput = await repo.git(["branch", "--show-current"]);
     expect(rootBranchOutput.trim()).toBe("main");
     const holderBranchOutput = await repo.git(["branch", "--show-current"], nestedPath);
@@ -139,5 +141,10 @@ describe("root (integration) — nested worktree dirty exclusion / rollback warn
     });
     expect(rmResult.ok).toBe(false);
     expect(rmResult.exitCode).toBe(3);
+    // Same reasoning: confirm hop rejected this before git's own `git worktree remove` safety net could.
+    expect(rmResult.errorMessage).toContain(
+      "has uncommitted or untracked changes. Use --force to remove anyway.",
+    );
+    expect(rmResult.errorMessage).not.toContain("contains modified or untracked files");
   });
 });
