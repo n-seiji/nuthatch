@@ -64,7 +64,13 @@ bun run lint          # oxlint
 bun run format:check  # oxfmt --check
 ```
 
-- external worktree (agent が作ったもの) を mutation の対象にしない、が最重要の安全規則。
+- hop は誰が作った worktree でも (managed / external 問わず) 移動・削除・root 入れ替えの対象にする方針。
+  external だからといって mutation を拒否しない。その代わりの安全弁が最重要の安全規則:
+  - dirty な worktree は拒否 (`--force` で上書き可)
+  - git が locked と報告する worktree は `--force` でも常に拒否 (hop からは lock を外さない)
+  - picker / Ctrl+X からの external worktree 削除は必ず y/N 確認を挟む
+  - `hop clean` の自動候補は managed のみ (external は自動では消さない)
+  - mutation は repo lock を取得したうえで「再検証 → 実行」
   破壊操作に関わる変更では必ず docs/design.md の「worktree の 3 分類」「CLI 契約」を再読すること。
 
 ## Working Rules

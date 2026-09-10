@@ -99,7 +99,9 @@ describe("root (integration) — nested worktree dirty exclusion / rollback warn
     expect(result.errorMessage).toContain("injected failure");
     expect(result.warnings).toHaveLength(2);
     expect(result.warnings?.[0]).toContain(rootRealPath);
-    expect(result.warnings?.[0]).toContain("detached HEAD");
+    // Root itself is never detached by this command — only the holder is —
+    // So its rollback-failure warning must not claim "detached HEAD".
+    expect(result.warnings?.[0]).not.toContain("detached HEAD");
     expect(result.warnings?.[1]).toContain(held.path as string);
     expect(result.warnings?.[1]).toContain("detached HEAD");
   });
@@ -146,5 +148,46 @@ describe("root (integration) — nested worktree dirty exclusion / rollback warn
       "has uncommitted or untracked changes. Use --force to remove anyway.",
     );
     expect(rmResult.errorMessage).not.toContain("contains modified or untracked files");
+  });
+
+  it("lock 取得前後で root の branch が変わっていたら、lock 後の branch に rollback する", async () => {
+    await repo.git(["branch", "develop"]);
+    await repo.git(["branch", "target"]);
+
+    // Simulate another process switching root's branch (main -> develop)
+    // While this call is between its pre-lock check and acquiring the lock.
+    // The pre-lock `isDirty` call is the last thing root() does before
+    // Handing off to switchAndReport (which acquires the lock), so hooking
+    // It is the closest we can get to that race without a real second
+    // Process.
+    let sawInitialCheck = false;
+    const racingGit: typeof git = {
+      ...git,
+      isDirty: async (cwd, otherPaths) => {
+        const dirty = await git.isDirty(cwd, otherPaths);
+        if (!sawInitialCheck) {
+          sawInitialCheck = true;
+          await repo.git(["switch", "develop"]);
+        }
+        return dirty;
+      },
+      switchBranch: async (cwd, ref) => {
+        if (ref === "target") {
+          throw new Error("injected failure");
+        }
+        await git.switchBranch(cwd, ref, {});
+      },
+    };
+
+    const result = await root(racingGit, fs, {
+      cwd: repo.repoPath,
+      target: "target",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(3);
+    // Rolled back to "develop" (the lock-guarded state), not "main" (the
+    // Stale pre-lock snapshot).
+    const branchOutput = await repo.git(["branch", "--show-current"]);
+    expect(branchOutput.trim()).toBe("develop");
   });
 });

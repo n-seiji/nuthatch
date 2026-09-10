@@ -59,8 +59,6 @@ export const root = async (
     );
   }
 
-  const previousBranch = rootWorktree?.branch ?? null;
-
   if (options.target === "-") {
     return switchAndReport({
       git,
@@ -68,7 +66,6 @@ export const root = async (
       context,
       target: "-",
       switchOptions: {},
-      previousBranch,
     });
   }
 
@@ -101,7 +98,6 @@ export const root = async (
       createBranch: !branchExistsLocally,
       ...(track === undefined ? {} : { track }),
     },
-    previousBranch,
   });
 };
 
@@ -111,7 +107,6 @@ interface SwitchAndReportOptions {
   readonly context: Awaited<ReturnType<typeof loadRepoContext>>;
   readonly target: string;
   readonly switchOptions: { createBranch?: boolean; track?: string };
-  readonly previousBranch: string | null;
 }
 
 const holderRejection = (
@@ -130,16 +125,21 @@ const switchAndReport = async ({
   context,
   target,
   switchOptions,
-  previousBranch,
 }: SwitchAndReportOptions): Promise<CommandResult<RootData>> => {
   const lock = await acquireRepoLock(context.commonDir);
   // Set only if this run detaches a holder's HEAD, so a failed root switch
   // Can roll the holder back to the branch it actually had checked out.
   let detachedHolder: { path: string; branch: string } | null = null;
+  // The branch to roll root back to if the switch below fails. Read from
+  // The lock-guarded `fresh` context (not the pre-lock `context`), so a
+  // Branch change by another process while we waited for the lock doesn't
+  // Send us rolling back to a stale branch.
+  let previousBranch: string | null = null;
   try {
     // Re-validate under lock: root may have gone dirty, or another process
     // May have started checking out the target branch, since the checks above.
     const fresh = await loadRepoContext(git, fs, context.rootPath);
+    previousBranch = fresh.worktrees.find((wt) => wt.kind === "root")?.branch ?? null;
     const stillDirty = await git.isDirty(
       fresh.rootPath,
       otherWorktreePaths(fresh.worktrees, fresh.rootPath),
@@ -211,8 +211,11 @@ const switchAndReport = async ({
       try {
         await git.switchBranch(context.rootPath, previousBranch, {});
       } catch {
+        // Unlike the holder below, root was never detached by this command —
+        // It's just still sitting on whatever branch the failed switch left
+        // It on, so "detached HEAD" would be a misleading claim here.
         rollbackWarnings.push(
-          `${context.rootPath} を元の branch (${previousBranch}) に戻せませんでした。detached HEAD のままです`,
+          `${context.rootPath} を元の branch (${previousBranch}) に戻せませんでした`,
         );
       }
     }
