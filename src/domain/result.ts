@@ -37,8 +37,10 @@ export const ok = <T>(
 export const fail = <T>(
   exitCode: Exclude<ExitCode, typeof EXIT_SUCCESS>,
   errorMessage: string,
+  warnings?: readonly string[],
 ): CommandResult<T> => ({
   ok: false,
   exitCode,
   errorMessage,
+  ...(warnings === undefined || warnings.length === 0 ? {} : { warnings }),
 });

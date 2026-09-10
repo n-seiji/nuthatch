@@ -1,7 +1,7 @@
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import { type CommandResult, ok } from "../domain/result.ts";
 import type { LsEntry } from "../domain/schema.ts";
-import { loadRepoContext } from "../infra/repo.ts";
+import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
 
 export type { LsEntry } from "../domain/schema.ts";
 
@@ -24,7 +24,9 @@ export const ls = async (
     // oxlint-disable-next-line oxc/no-map-spread
     context.worktrees.map(async (wt): Promise<LsEntry> => {
       const [dirty, aheadBehind] = await Promise.all([
-        wt.bare ? Promise.resolve(false) : git.isDirty(wt.path),
+        wt.bare
+          ? Promise.resolve(false)
+          : git.isDirty(wt.path, otherWorktreePaths(context.worktrees, wt.path)),
         wt.branch === null ? Promise.resolve(null) : git.aheadBehind(context.rootPath, wt.branch),
       ]);
       return {

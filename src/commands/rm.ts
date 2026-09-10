@@ -9,7 +9,7 @@ import {
 } from "../domain/result.ts";
 import type { RmData } from "../domain/schema.ts";
 import { acquireRepoLock } from "../infra/lock.ts";
-import { loadRepoContext } from "../infra/repo.ts";
+import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
 
 export type { RmData } from "../domain/schema.ts";
 
@@ -63,7 +63,10 @@ export const rm = async (
   }
 
   if (!options.force) {
-    const dirty = await git.isDirty(target.path);
+    const dirty = await git.isDirty(
+      target.path,
+      otherWorktreePaths(context.worktrees, target.path),
+    );
     if (dirty) {
       return finish(
         fail(
@@ -86,7 +89,10 @@ export const rm = async (
       return finish(lockedRejection(options.branch, freshTarget.lockReason));
     }
     if (!options.force) {
-      const stillDirty = await git.isDirty(freshTarget.path);
+      const stillDirty = await git.isDirty(
+        freshTarget.path,
+        otherWorktreePaths(fresh.worktrees, freshTarget.path),
+      );
       if (stillDirty) {
         return finish(
           fail(

@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import { isDirtyFromStatus } from "../domain/dirty.ts";
 import type { AddWorktreeOptions, GitPort, SwitchBranchOptions } from "../domain/ports.ts";
 
 const execFile = promisify(execFileCb);
@@ -48,9 +49,9 @@ const createWorktreeMethods = () => ({
     return out.trim();
   },
 
-  async isDirty(path: string) {
+  async isDirty(path: string, otherWorktreePaths: readonly string[]) {
     const status = await run(path, ["status", "--porcelain", "--untracked-files=all"]);
-    return status.trim().length > 0;
+    return isDirtyFromStatus(status, path, otherWorktreePaths);
   },
 
   async addWorktree(cwd: string, path: string, branch: string, options: AddWorktreeOptions) {

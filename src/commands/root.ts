@@ -8,7 +8,7 @@ import {
 } from "../domain/result.ts";
 import type { RootData } from "../domain/schema.ts";
 import { acquireRepoLock } from "../infra/lock.ts";
-import { loadRepoContext } from "../infra/repo.ts";
+import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
 
 export type { RootData } from "../domain/schema.ts";
 
@@ -48,7 +48,10 @@ export const root = async (
     });
   }
 
-  const dirty = await git.isDirty(context.rootPath);
+  const dirty = await git.isDirty(
+    context.rootPath,
+    otherWorktreePaths(context.worktrees, context.rootPath),
+  );
   if (dirty) {
     return fail(
       EXIT_SAFE_REJECTION,
@@ -137,7 +140,10 @@ const switchAndReport = async ({
     // Re-validate under lock: root may have gone dirty, or another process
     // May have started checking out the target branch, since the checks above.
     const fresh = await loadRepoContext(git, fs, context.rootPath);
-    const stillDirty = await git.isDirty(fresh.rootPath);
+    const stillDirty = await git.isDirty(
+      fresh.rootPath,
+      otherWorktreePaths(fresh.worktrees, fresh.rootPath),
+    );
     if (stillDirty) {
       return fail(
         EXIT_SAFE_REJECTION,
@@ -161,7 +167,10 @@ const switchAndReport = async ({
             `locked by git${freshHolder.lockReason === null ? "" : ` (${freshHolder.lockReason})`}`,
           );
         }
-        const holderDirty = await git.isDirty(freshHolder.path);
+        const holderDirty = await git.isDirty(
+          freshHolder.path,
+          otherWorktreePaths(fresh.worktrees, freshHolder.path),
+        );
         if (holderDirty) {
           return holderRejection(target, freshHolder.path, "has uncommitted or untracked changes");
         }
@@ -185,14 +194,18 @@ const switchAndReport = async ({
   } catch (error) {
     // Best-effort rollback: try to restore the branch root was on before this
     // Call, in case the switch partially applied (e.g. created a new local
-    // Branch via -c and then failed setting it up). Failure here is swallowed
-    // — We're already reporting the original error, and there is nothing more
-    // Useful to do than leave root on whatever branch it ended up on.
+    // Branch via -c and then failed setting it up). A rollback failure here
+    // Does not change the exit code (the original failure is still what's
+    // Reported) but is surfaced as a warning — otherwise root or holder could
+    // Be left in detached HEAD with no way for the caller to know.
+    const rollbackWarnings: string[] = [];
     if (previousBranch !== null) {
       try {
         await git.switchBranch(context.rootPath, previousBranch, {});
       } catch {
-        // Ignore: see comment above.
+        rollbackWarnings.push(
+          `${context.rootPath} を元の branch (${previousBranch}) に戻せませんでした。detached HEAD のままです`,
+        );
       }
     }
     // Same best-effort rollback for a holder we detached: if the root switch
@@ -202,10 +215,16 @@ const switchAndReport = async ({
       try {
         await git.switchBranch(detachedHolder.path, detachedHolder.branch, {});
       } catch {
-        // Ignore: see comment above.
+        rollbackWarnings.push(
+          `${detachedHolder.path} を元の branch (${detachedHolder.branch}) に戻せませんでした。detached HEAD のままです`,
+        );
       }
     }
-    return fail(EXIT_SAFE_REJECTION, `Failed to switch root: ${(error as Error).message}`);
+    return fail(
+      EXIT_SAFE_REJECTION,
+      `Failed to switch root: ${(error as Error).message}`,
+      rollbackWarnings,
+    );
   } finally {
     await lock.release();
   }
