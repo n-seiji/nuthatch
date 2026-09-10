@@ -20,35 +20,56 @@ export interface RmOptions {
   readonly ext: boolean;
 }
 
+const EXT_DEPRECATION_WARNING =
+  "--ext is deprecated and no longer required: hop rm can now remove external worktrees without it.";
+
+const lockedRejection = <T>(branch: string, lockReason: string | null): CommandResult<T> =>
+  fail(
+    EXIT_SAFE_REJECTION,
+    `Worktree for "${branch}" is locked by git${lockReason === null ? "" : ` (${lockReason})`}. hop never unlocks worktrees automatically — run "git worktree unlock" yourself first if you're sure.`,
+  );
+
 export const rm = async (
   git: GitPort,
   fs: FsPort,
   options: RmOptions,
 ): Promise<CommandResult<RmData>> => {
+  // --ext is a deprecated no-op kept for backward compatibility: it no
+  // Longer gates anything, but every return path still surfaces the warning
+  // When it was passed, so callers can migrate off it.
+  const finish = <T>(result: CommandResult<T>): CommandResult<T> =>
+    options.ext
+      ? {
+          ...result,
+          warnings: [...(result.warnings ?? []), EXT_DEPRECATION_WARNING],
+        }
+      : result;
+
   const context = await loadRepoContext(git, fs, options.cwd);
   const target = context.worktrees.find((wt) => wt.branch === options.branch);
 
   if (target === undefined) {
-    return fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`);
+    return finish(fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`));
   }
 
   if (target.kind === "root") {
-    return fail(EXIT_USAGE_ERROR, "Cannot remove the root clone.");
+    return finish(fail(EXIT_USAGE_ERROR, "Cannot remove the root clone."));
   }
 
-  if (target.kind === "external" && !(options.ext && options.force)) {
-    return fail(
-      EXIT_SAFE_REJECTION,
-      `"${options.branch}" is an external worktree not managed by nuthatch. Removal requires both --ext and --force.`,
-    );
+  // A worktree git itself reports as locked is always rejected, even with
+  // --force — hop must never call `git worktree unlock` on a caller's behalf.
+  if (target.locked) {
+    return finish(lockedRejection(options.branch, target.lockReason));
   }
 
   if (!options.force) {
     const dirty = await git.isDirty(target.path);
     if (dirty) {
-      return fail(
-        EXIT_SAFE_REJECTION,
-        `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
+      return finish(
+        fail(
+          EXIT_SAFE_REJECTION,
+          `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
+        ),
       );
     }
   }
@@ -59,22 +80,29 @@ export const rm = async (
     const fresh = await loadRepoContext(git, fs, options.cwd);
     const freshTarget = fresh.worktrees.find((wt) => wt.branch === options.branch);
     if (freshTarget === undefined) {
-      return fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`);
+      return finish(fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`));
+    }
+    if (freshTarget.locked) {
+      return finish(lockedRejection(options.branch, freshTarget.lockReason));
     }
     if (!options.force) {
       const stillDirty = await git.isDirty(freshTarget.path);
       if (stillDirty) {
-        return fail(
-          EXIT_SAFE_REJECTION,
-          `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
+        return finish(
+          fail(
+            EXIT_SAFE_REJECTION,
+            `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
+          ),
         );
       }
     }
 
     await git.removeWorktree(context.rootPath, freshTarget.path, options.force);
-    return ok({ data: { branch: options.branch, path: freshTarget.path } });
+    return finish(ok({ data: { branch: options.branch, path: freshTarget.path } }));
   } catch (error) {
-    return fail(EXIT_SAFE_REJECTION, `Failed to remove worktree: ${(error as Error).message}`);
+    return finish(
+      fail(EXIT_SAFE_REJECTION, `Failed to remove worktree: ${(error as Error).message}`),
+    );
   } finally {
     await lock.release();
   }

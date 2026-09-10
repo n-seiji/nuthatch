@@ -114,6 +114,90 @@ describe("jump → ls → rm (integration)", () => {
     expect(kinds).toEqual(["root"]);
   });
 
+  it("clean な external worktree は rm で削除できる (--ext なしでよい)", async () => {
+    await repo.git(["branch", "feat/ext"]);
+    const externalPath = `${repo.rootDir}/agent-worktrees/feat-ext`;
+    await repo.git(["worktree", "add", externalPath, "feat/ext"]);
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: "feat/ext",
+      force: false,
+      ext: false,
+    });
+    expect(result.ok).toBe(true);
+
+    const after = await ls(git, fs, { cwd: repo.repoPath });
+    const kinds = after.data?.map((wt) => wt.kind).toSorted();
+    expect(kinds).toEqual(["root"]);
+  });
+
+  it("dirty な external worktree を --force なしで rm すると exit 3 になる", async () => {
+    await repo.git(["branch", "feat/ext-dirty"]);
+    const externalPath = `${repo.rootDir}/agent-worktrees/feat-ext-dirty`;
+    await repo.git(["worktree", "add", externalPath, "feat/ext-dirty"]);
+    await Bun.write(`${externalPath}/untracked.txt`, "dirty");
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: "feat/ext-dirty",
+      force: false,
+      ext: false,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(3);
+  });
+
+  it("dirty な external worktree でも --force なら rm できる", async () => {
+    await repo.git(["branch", "feat/ext-force"]);
+    const externalPath = `${repo.rootDir}/agent-worktrees/feat-ext-force`;
+    await repo.git(["worktree", "add", externalPath, "feat/ext-force"]);
+    await Bun.write(`${externalPath}/untracked.txt`, "dirty");
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: "feat/ext-force",
+      force: true,
+      ext: false,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("git がロック中の worktree は --force でも rm を拒否する (exit 3)", async () => {
+    await repo.git(["branch", "feat/locked"]);
+    const lockedPath = `${repo.rootDir}/agent-worktrees/feat-locked`;
+    await repo.git(["worktree", "add", lockedPath, "feat/locked"]);
+    await repo.git(["worktree", "lock", lockedPath, "--reason", "in use by an agent"]);
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: "feat/locked",
+      force: true,
+      ext: false,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(3);
+
+    const after = await ls(git, fs, { cwd: repo.repoPath });
+    const kinds = after.data?.map((wt) => wt.kind).toSorted();
+    expect(kinds).toEqual(["external", "root"]);
+  });
+
+  it("--ext は非推奨の no-op として動作し、成功時に警告を出す", async () => {
+    await repo.git(["branch", "feat/ext-deprecated"]);
+    const externalPath = `${repo.rootDir}/agent-worktrees/feat-ext-deprecated`;
+    await repo.git(["worktree", "add", externalPath, "feat/ext-deprecated"]);
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: "feat/ext-deprecated",
+      force: false,
+      ext: true,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.warnings?.some((warning) => warning.includes("--ext is deprecated"))).toBe(true);
+  });
+
   it("予約語と同名の branch も -- でエスケープして扱える", async () => {
     // The domain layer itself has no notion of reserved words — that's a
     // Cli.ts concern — so this exercises the command directly with "ls" as

@@ -57,7 +57,7 @@ const rmCommand = defineCommand({
     force: { type: "boolean", description: "Force removal even if dirty" },
     ext: {
       type: "boolean",
-      description: "Allow removing an external worktree",
+      description: "Deprecated, no-op: external worktrees no longer require it",
     },
     json: { type: "boolean", description: "Output JSON" },
   },

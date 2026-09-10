@@ -1,4 +1,8 @@
-import { type PickerActionKind, availableActions } from "../domain/actions.ts";
+import {
+  type PickerActionKind,
+  availableActions,
+  requiresDeleteConfirmation,
+} from "../domain/actions.ts";
 import type { PickCandidate } from "../domain/candidates.ts";
 import { ACTION_LETTERS } from "./side-panel.tsx";
 import {
@@ -39,6 +43,23 @@ interface PanelInputContext {
   readonly setMode: (mode: PickerMode) => void;
 }
 
+/**
+ * Runs a panel-selected action, unless it's a delete that requires
+ * confirmation (external worktrees) — in that case it opens the same y/N
+ * overlay the Ctrl+X shortcut uses, instead of deleting immediately.
+ */
+const runOrConfirmDelete = (
+  candidate: PickCandidate,
+  action: PickerActionKind,
+  ctx: PanelInputContext,
+): void => {
+  if (action === "delete" && requiresDeleteConfirmation(candidate)) {
+    ctx.setMode({ kind: "confirmDelete", candidate, error: null });
+    return;
+  }
+  ctx.runAction(candidate, action);
+};
+
 /** Handles a keypress while the action panel is open. */
 export const handlePanelInput = (
   input: string,
@@ -64,14 +85,14 @@ export const handlePanelInput = (
     case "confirm": {
       const chosen = actions[Math.min(ctx.panelIndex, actions.length - 1)];
       if (chosen !== undefined) {
-        ctx.runAction(panelMode.candidate, chosen);
+        runOrConfirmDelete(panelMode.candidate, chosen, ctx);
       }
       break;
     }
     case "letter": {
       const chosen = actions.find((action) => ACTION_LETTERS[action] === panelAction.char);
       if (chosen !== undefined) {
-        ctx.runAction(panelMode.candidate, chosen);
+        runOrConfirmDelete(panelMode.candidate, chosen, ctx);
       }
       break;
     }
