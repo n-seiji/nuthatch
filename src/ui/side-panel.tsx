@@ -53,16 +53,28 @@ export const ActionPanel = ({ candidate, panelIndex, error, busy }: ActionPanelP
   );
 };
 
-interface ConfirmDeletePanelProps {
+interface ConfirmPanelProps {
   readonly candidate: PickCandidate;
+  readonly action: Exclude<PickerActionKind, "cd">;
 }
 
-/** The y/N delete-confirmation panel (Ctrl+X shortcut), rendered in the same side-column slot the action panel uses. */
-export const ConfirmDeletePanel = ({ candidate }: ConfirmDeletePanelProps) => (
+const CONFIRM_QUESTIONS: Record<Exclude<PickerActionKind, "cd">, string> = {
+  delete: "Delete worktree for",
+  switchRoot: "Switch root here for",
+};
+
+/**
+ * The y/N confirmation panel for a mutation on an external worktree (delete
+ * via Ctrl+X, or switch root via Ctrl+R/panel) — rendered in the same
+ * side-column slot the action panel uses. Switching root can detach the
+ * candidate's HEAD, so the question makes that explicit.
+ */
+export const ConfirmPanel = ({ candidate, action }: ConfirmPanelProps) => (
   <Box flexDirection="column" borderStyle="round" paddingX={1} width={SIDE_PANEL_WIDTH}>
     <Text>
-      Delete worktree for <Text color="cyan">{candidateBranchName(candidate)}</Text>?
+      {CONFIRM_QUESTIONS[action]} <Text color="cyan">{candidateBranchName(candidate)}</Text>?
     </Text>
+    {action === "switchRoot" && <Text dimColor>This will put it into detached HEAD.</Text>}
     <Text dimColor>(y/N)</Text>
   </Box>
 );

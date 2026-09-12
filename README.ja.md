@@ -81,8 +81,8 @@ action を選ぶ間も一覧が見え続ける。60 列未満の terminal では
 |---|---|
 | `Enter` | 選択中の候補へ cd |
 | `Tab`, `→`, `Ctrl+L`, `Ctrl+F` | 選択中の候補の action panel を開く (ここで cd / 削除 / root 切替) |
-| `Ctrl+X` | 選択中の worktree を削除 (先に y/N を確認) |
-| `Ctrl+R` | root clone を選択中の branch へ即座に切替 |
+| `Ctrl+X` | 選択中の worktree を削除 (`external` は先に y/N を確認) |
+| `Ctrl+R` | root clone を選択中の branch へ切替 (`external` は先に y/N を確認) |
 | `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K`/`Ctrl+J` | 選択を移動 (矢印・emacs・vim キーがすべて併用可) |
 | `Esc` | 静かにキャンセル — exit 0、stdout は空のまま (shell wrapper は cd しない) |
 | `Ctrl+C` | 割り込みとしてキャンセル — exit 130、実際の SIGINT と同じ |
@@ -93,10 +93,13 @@ action panel 内: 同じ上下移動キー (左右は閉じる操作に予約さ
 `Ctrl+H` で一覧に戻る (`←`/`Ctrl+H` は開く操作の `→`/`Ctrl+L`/`Ctrl+F` と
 対になっている; `Tab` はどちらの状態からでもトグルする — Ghostty のように
 Cmd+K のようなキーの組み合わせを Tab に remap する terminal で便利)。
-`delete` は nuthatch が管理する worktree (`managed`) にのみ表示される;
-`switch root here` は root worktree 自身には表示されない。削除すると
-候補一覧が再読み込みされ、picker を抜けずに削除を続けられる; cd と
-switch-root は終了して結果の path を出力する (hop の stdout 契約どおり)。
+`delete` はすでに作成済みの worktree (`managed` / `external`) すべてに
+表示される (`external` の削除は panel からでも Ctrl+X からでも必ず y/N
+を確認する); `switch root here` は root worktree 自身には表示されず、
+`external` worktree に対しては HEAD を detach する可能性があるため
+同じく先に y/N を確認する。削除すると候補一覧が再読み込みされ、picker を
+抜けずに削除を続けられる; cd と switch-root は終了して結果の path を
+出力する (hop の stdout 契約どおり)。
 
 Shell 統合 (自動 `cd`):
 

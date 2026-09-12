@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { PickerActionKind } from "../domain/actions.ts";
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
 import { sortCandidatesForDisplay } from "./picker-layout.ts";
-import { handleConfirmDeleteInput, handleListInput, handlePanelInput } from "./picker-input.ts";
+import { handleConfirmInput, handleListInput, handlePanelInput } from "./picker-input.ts";
 import type { PickerCancelReason, PickerKeyModifiers } from "./picker-keys.ts";
 import type { PickerCallbacks, PickerMode, PickerOutcome } from "./picker-types.ts";
 
@@ -41,7 +41,7 @@ export interface PickerController {
 /**
  * All picker state, extracted from picker.tsx into a plain hook so the
  * component itself stays a thin render function. Per-mode key handling
- * (list / panel / confirmDelete) is further split into picker-input.ts's
+ * (list / panel / confirm) is further split into picker-input.ts's
  * pure-ish handlers, which this hook wires up to real setState calls.
  */
 export const usePickerController = (
@@ -118,8 +118,8 @@ export const usePickerController = (
     if (busy) {
       return;
     }
-    if (mode.kind === "confirmDelete") {
-      handleConfirmDeleteInput(input, key, mode, { runAction, setMode });
+    if (mode.kind === "confirm") {
+      handleConfirmInput(input, key, mode, { runAction, setMode });
       return;
     }
     if (mode.kind === "panel") {

@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import type { Worktree } from "../domain/model.ts";
 import type { PickCandidate } from "../domain/candidates.ts";
-import { handlePanelInput } from "./picker-input.ts";
+import { handleListInput, handlePanelInput } from "./picker-input.ts";
 import type { PickerKeyModifiers } from "./picker-keys.ts";
 import type { PickerMode } from "./picker-types.ts";
 
@@ -75,7 +75,8 @@ describe("handlePanelInput — delete confirmation gating", () => {
 
     expect(runAction).not.toHaveBeenCalled();
     expect(setMode).toHaveBeenCalledWith({
-      kind: "confirmDelete",
+      kind: "confirm",
+      action: "delete",
       candidate,
       error: null,
     });
@@ -96,7 +97,80 @@ describe("handlePanelInput — delete confirmation gating", () => {
 
     expect(runAction).not.toHaveBeenCalled();
     expect(setMode).toHaveBeenCalledWith({
-      kind: "confirmDelete",
+      kind: "confirm",
+      action: "delete",
+      candidate,
+      error: null,
+    });
+  });
+});
+
+describe("handleListInput / handlePanelInput — switchRoot confirmation gating", () => {
+  const ctrlR: PickerKeyModifiers = { ...noMods, ctrl: true };
+
+  it("managed worktree: Ctrl+R runs switchRoot immediately (no confirm overlay)", () => {
+    const candidate = worktreeCandidate({ kind: "managed" });
+    const runAction = mock(() => {});
+    const setMode = mock((_mode: PickerMode) => {});
+
+    handleListInput("r", ctrlR, {
+      selectedCandidate: candidate,
+      filteredLength: 1,
+      runAction,
+      onCancel: () => {},
+      setIndex: () => {},
+      setQuery: () => {},
+      setPanelIndex: () => {},
+      setMode,
+    });
+
+    expect(runAction).toHaveBeenCalledWith(candidate, "switchRoot");
+    expect(setMode).not.toHaveBeenCalled();
+  });
+
+  it("external worktree: Ctrl+R opens the y/N confirm overlay instead of switching immediately", () => {
+    const candidate = worktreeCandidate({ kind: "external" });
+    const runAction = mock(() => {});
+    const setMode = mock((_mode: PickerMode) => {});
+
+    handleListInput("r", ctrlR, {
+      selectedCandidate: candidate,
+      filteredLength: 1,
+      runAction,
+      onCancel: () => {},
+      setIndex: () => {},
+      setQuery: () => {},
+      setPanelIndex: () => {},
+      setMode,
+    });
+
+    expect(runAction).not.toHaveBeenCalled();
+    expect(setMode).toHaveBeenCalledWith({
+      kind: "confirm",
+      action: "switchRoot",
+      candidate,
+      error: null,
+    });
+  });
+
+  it("external worktree: panel Enter on switchRoot opens the confirm overlay instead of running", () => {
+    const candidate = worktreeCandidate({ kind: "external" });
+    const runAction = mock(() => {});
+    const setMode = mock((_mode: PickerMode) => {});
+    const panelMode = { kind: "panel" as const, candidate, error: null };
+
+    // Panel order is [cd, delete, switchRoot] for external — index 2 is switchRoot.
+    handlePanelInput("\r", enterKey, panelMode, {
+      panelIndex: 2,
+      runAction,
+      setPanelIndex: () => {},
+      setMode,
+    });
+
+    expect(runAction).not.toHaveBeenCalled();
+    expect(setMode).toHaveBeenCalledWith({
+      kind: "confirm",
+      action: "switchRoot",
       candidate,
       error: null,
     });

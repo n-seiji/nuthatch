@@ -55,3 +55,13 @@ export const availableActions = (candidate: PickCandidate): readonly PickerActio
  */
 export const requiresDeleteConfirmation = (candidate: PickCandidate): boolean =>
   candidate.kind === "worktree" && candidate.worktree.kind === "external";
+
+/**
+ * Whether switching root "here" for this candidate must go through an
+ * explicit y/N confirmation. Switching root can detach whatever worktree
+ * currently holds the target branch (see commands/root.ts's holder swap) —
+ * for an external worktree that's someone else's in-use working copy, so
+ * this mirrors requiresDeleteConfirmation rather than running immediately.
+ */
+export const requiresSwitchRootConfirmation = (candidate: PickCandidate): boolean =>
+  candidate.kind === "worktree" && candidate.worktree.kind === "external";

@@ -12,7 +12,7 @@ import {
   type DisplayRow,
 } from "./picker-layout.ts";
 import type { PickerCallbacks, PickerMode, PickerResult } from "./picker-types.ts";
-import { ActionPanel, ConfirmDeletePanel } from "./side-panel.tsx";
+import { ActionPanel, ConfirmPanel } from "./side-panel.tsx";
 import { useTerminalWidth } from "./use-terminal-width.ts";
 
 export type {
@@ -92,8 +92,8 @@ const renderSidePanel = (mode: PickerMode, panelIndex: number, busy: boolean) =>
       />
     );
   }
-  if (mode.kind === "confirmDelete") {
-    return <ConfirmDeletePanel candidate={mode.candidate} />;
+  if (mode.kind === "confirm") {
+    return <ConfirmPanel candidate={mode.candidate} action={mode.action} />;
   }
   return null;
 };
