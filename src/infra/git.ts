@@ -50,7 +50,9 @@ const createWorktreeMethods = () => ({
   },
 
   async isDirty(path: string, otherWorktreePaths: readonly string[]) {
-    const status = await run(path, ["status", "--porcelain", "--untracked-files=all"]);
+    // -z is required, not just convenient: see dirty.ts's parseStatusPaths
+    // Doc comment for why the non -z, quoted form can't be parsed reliably.
+    const status = await run(path, ["status", "--porcelain", "-z", "--untracked-files=all"]);
     return isDirtyFromStatus(status, path, otherWorktreePaths);
   },
 

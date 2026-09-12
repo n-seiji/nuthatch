@@ -66,9 +66,17 @@ export const loadRepoContext = async (
  * happens to live inside some other, unrelated worktree; only status
  * entries that belong to a worktree nested *inside the target itself* are
  * noise worth filtering out.
+ *
+ * `prunable` entries are excluded: git already reports those as prunable
+ * because their working directory is gone (e.g. `rm -rf`'d without `git
+ * worktree prune`), so treating one as a live nested worktree would hide
+ * real untracked files that later reappear at that same path from a dirty
+ * check — making the containing worktree look clean when it isn't.
  */
 export const otherWorktreePaths = (worktrees: readonly Worktree[], path: string): string[] =>
-  worktrees.filter((wt) => wt.path !== path && isWithin(path, wt.path)).map((wt) => wt.path);
+  worktrees
+    .filter((wt) => wt.path !== path && !wt.prunable && isWithin(path, wt.path))
+    .map((wt) => wt.path);
 
 const realpathOrRaw = async (fs: FsPort, path: string): Promise<string> => {
   try {
