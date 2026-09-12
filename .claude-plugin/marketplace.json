@@ -8,7 +8,7 @@
     {
       "name": "hop",
       "source": "./plugins/hop",
-      "description": "git worktree manager「hop」の使い方 skill (agent / 人間向け)"
+      "description": "Usage skill for the git worktree manager \"hop\" (for agents and humans)"
     }
   ]
 }

@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 <p align="center">
   <img src="docs/assets/logo.png" alt="nuthatch — hop between git worktrees" width="560">
 </p>
@@ -51,11 +53,11 @@ shortened paths:
   ○ feat/picker   managed  …/_worktree/feat__picker
   ● codex/fix-x   ext      …/.claude/worktrees/x
 
-  BRANCHES — Enter で worktree 作成
+  BRANCHES — Enter creates a worktree
   + feat/idea     local
   + origin/hotfix remote
 
-  (●=dirty ○=clean +=未作成)
+  (●=dirty ○=clean +=not created)
 ```
 
 A section (header included) disappears entirely when it has no candidates —
@@ -115,9 +117,10 @@ eval "$(hop init zsh)"
 > Not released yet — no version has been published or tagged. Once the first
 > `v*` tag ships, the options below will work as described.
 
-推奨: GitHub Release のバイナリ (bun 製、mise なら
-`mise use github:n-seiji/nuthatch`)。npm 版は Node で動くため git 呼び出しが遅い
-(hop ls ~400ms vs ~60ms) — CI や頻繁な呼び出しにはバイナリを使う。
+Recommended: the GitHub Release binary (built with bun; via mise,
+`mise use github:n-seiji/nuthatch`). The npm version runs on Node, so its git
+calls are slower (hop ls ~400ms vs ~60ms) — prefer the binary for CI or
+frequent invocations.
 
 ```sh
 # Prebuilt binary (macOS arm64/x64, Linux x64) — no Node.js required, fastest:
@@ -152,7 +155,7 @@ codex plugin install hop
 
 ## Docs
 
-- [docs/design.md](docs/design.md) — full design document (Japanese)
+- [docs/design.md](docs/design.md) — full design document
 - [AGENTS.md](AGENTS.md) — guide for coding agents working on this repo
 
 ## License

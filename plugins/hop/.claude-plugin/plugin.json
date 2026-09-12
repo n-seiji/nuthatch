@@ -1,7 +1,7 @@
 {
   "name": "hop",
   "version": "0.1.2",
-  "description": "git worktree manager「hop」(nuthatch) の使い方 skill",
+  "description": "Usage skill for the git worktree manager \"hop\" (nuthatch)",
   "author": {
     "name": "n-seiji"
   }

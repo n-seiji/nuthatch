@@ -1,203 +1,241 @@
-# nuthatch 設計書
+# nuthatch design document
 
-git worktree manager。コマンド名は `hop` (パッケージ名は nuthatch)。
-固定 slot 制の旧 bash 版 wt を捨て、状態ファイルを持たない create-or-jump 型として作り直す。
+A git worktree manager. The command name is `hop` (the package name is
+nuthatch). It replaces the old bash `wt` with its fixed slot system, rebuilt
+as a stateless create-or-jump tool.
 
-## 設計原則
+## Design principles
 
-| 原則 | 内容 |
+| Principle | Description |
 |---|---|
-| zero setup | 状態ファイル・初期化コマンドなし。`git worktree list --porcelain` が唯一の正本。任意のリポジトリで即動く |
-| convention over config | 置き場所は規約で固定 (ghq 流)。場所が決まっているから一覧も推測も速い |
-| ai-native | 全コマンド非対話で完結。`--json` あり。path は stdout、ログは stderr。エラーは次の一手を含む |
-| fast list | porcelain 1 回 + 詳細 (dirty / ahead-behind) のみ並列取得 |
+| zero setup | No state files, no init command. `git worktree list --porcelain` is the single source of truth. Works immediately in any repository |
+| convention over config | Placement is fixed by convention (ghq-style). Because the location is fixed, listing and inference are fast |
+| ai-native | Every command completes non-interactively. `--json` everywhere. Paths on stdout, logs on stderr. Errors include the next step |
+| fast list | One porcelain call, then fetch details (dirty / ahead-behind) only in parallel |
 
-## ディレクトリ規約
+## Directory convention
 
 ```
-~/ghq/github.com/<user>/<repo>                      # root clone (動作確認専用)
-~/ghq/github.com/<user>/_worktree/<repo>/<branch>   # worktree (branch ごと)
+~/ghq/github.com/<user>/<repo>                      # root clone (verification only)
+~/ghq/github.com/<user>/_worktree/<repo>/<branch>   # worktree (one per branch)
 ```
 
-- slot 番号は無し。**1 branch = 1 worktree = 1 dir**。上限なし。
-- dir 名は branch 名を sanitize したもの。`/` は `__` に変換
-  (`-` だと `feat/foo` と `feat-foo` が衝突するため)。
-  case-insensitive FS / 長大パス / 既存 dir との衝突時は末尾に short hash。
-- Claude Code / Codex 等が独自の場所に作った worktree も `git worktree list`
-  経由で発見し、一覧・移動の対象にする (external 扱い、後述)。
+- No slot numbers. **1 branch = 1 worktree = 1 dir.** No upper limit.
+- The dir name is the branch name sanitized: `/` becomes `__` (not `-`,
+  since that would collide `feat/foo` with `feat-foo`). On collisions with a
+  case-insensitive filesystem, an overly long path, or an existing dir, a
+  short hash is appended.
+- Worktrees created elsewhere by Claude Code, Codex, etc. are also
+  discovered via `git worktree list` and included in listing/jumping
+  (treated as `external`, described below).
 
-## コマンド体系 — hop 一本
+## Command surface — a single `hop`
 
-コマンドは `hop` 1 つ。予約サブコマンドは `ls / rm / clean / root / init` の
-5 つだけで、branch 名と被る場合は `hop -- <branch>` でエスケープする
-(全コマンド統一)。`eval "$(hop init zsh)"` が自動 cd 用 shell function を定義する。
+There is exactly one command: `hop`. Only five names are reserved as
+subcommands — `ls / rm / clean / root / init` — and a branch name that
+collides with one of them is escaped with `hop -- <branch>` (uniform across
+all commands). `eval "$(hop init zsh)"` defines the shell function used for
+auto-`cd`.
 
-### 移動
+### Navigation
 
-| コマンド | 動作 |
+| Command | Behavior |
 |---|---|
-| `hop` | TTY: ink のピッカーで worktree / branch を選んで cd。worktree 未作成の branch (local/remote) も候補に出し、選べば作って cd。非 TTY: 一覧出力 |
-| `hop <branch>` | **create-or-jump**。worktree があれば cd。なければ default branch から作って cd。新規作成時は TTY なら確認、非 TTY では `--create` 必須 (typo 誤作成防止) |
-| `hop root` | root clone へ cd |
-| `hop -` | 直前にいた worktree へ戻る |
+| `hop` | TTY: pick a worktree/branch with the ink picker and `cd` into it. Branches without a worktree yet (local/remote) are also offered as candidates — selecting one creates it and `cd`s in. Non-TTY: prints a listing |
+| `hop <branch>` | **create-or-jump.** `cd`s into the worktree if it exists; otherwise creates it from the default branch and `cd`s in. On creation, TTY prompts for confirmation; non-TTY requires `--create` (to prevent accidental creation from a typo) |
+| `hop root` | `cd` into the root clone |
+| `hop -` | Return to the previously visited worktree |
 
-### 管理
+### Management
 
-| コマンド | 動作 |
+| Command | Behavior |
 |---|---|
-| `hop ls [--json]` | 一覧。branch / path / 分類 / dirty / ahead-behind |
-| `hop rm <branch>` | worktree を削除 (branch は残す)。dirty (untracked 含む) は拒否、`--force` で強制。managed / external を区別しない。git が locked と報告する worktree は `--force` でも常に拒否 (`git worktree unlock` は絶対に呼ばない)。`--ext` は非推奨の no-op (後方互換のみ、渡すと deprecation warning) |
-| `hop clean [--yes\|--dry-run]` | ゴミ worktree を自動判定して削除 (下記)。対象は managed のみ (`--ext` で external も対象に追加可能、こちらは従来どおり有効) |
-| `hop root <branch>` | 動作確認用に root を一時切替。対象 branch を他 worktree (holder) が checkout 済みでも、holder が clean かつ git-lock されていなければ holder を detached HEAD にして swap する。holder が dirty/locked なら拒否。`hop root -` で復帰 (git の `@{-1}` 利用、状態ファイル不要。root の branch のみ戻し、swap で detach した holder は re-attach しない) |
+| `hop ls [--json]` | Listing: branch / path / category / dirty / ahead-behind |
+| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
+| `hop clean [--yes\|--dry-run]` | Auto-detects and removes garbage worktrees (below). Targets managed worktrees only by default (`--ext` extends the target to external ones as well, unchanged from before) |
+| `hop root <branch>` | Temporarily switches root for verification purposes. Even if the target branch is already checked out on another worktree (the "holder"), swaps it out as long as the holder is clean and not git-locked — the holder is set to detached HEAD to free up the branch. Refuses if the holder is dirty/locked. `hop root -` returns (using git's `@{-1}`, no state file needed — this restores only root's branch; a holder detached by the swap is not re-attached) |
 
-## worktree の 3 分類
+## The 3 worktree categories
 
-| 分類 | 定義 | できること |
+| Category | Definition | Allowed operations |
 |---|---|---|
-| root | 本体 clone | cd / `hop root <branch>` での一時切替のみ。編集作業はしない |
-| managed | `_worktree/<repo>/` 配下 (nuthatch が作成) | cd / rm / clean すべて可 |
-| external | それ以外 (Claude Code の EnterWorktree、Codex 等) | cd / 一覧 / jump / rm が可。clean の自動候補には含めない (`--ext` で明示的に含められる) |
+| root | The main clone | `cd` / temporary switching via `hop root <branch>` only. Never used for editing |
+| managed | Under `_worktree/<repo>/` (created by nuthatch) | `cd` / `rm` / `clean`, all allowed |
+| external | Everything else (created by Claude Code's EnterWorktree, Codex, etc.) | `cd` / listing / jump / `rm` allowed. Not included in `clean`'s automatic candidates (can be included explicitly with `--ext`) |
 
-**安全規則 (最重要):**「見える・移動できる」と「nuthatch が変更権を持つ」を
-分離する。external への jump は常に可能。hop は今や external worktree も
-managed と同じ手順 (dirty チェック → `--force` で上書き可) で `rm` できるが、
-picker からの削除は external に対して常に y/N 確認を要求する (agent の
-作業中セッションを誤って壊さないため。managed の既存確認挙動は変更しない)。
-git 自身が locked と報告する worktree は、`rm` でも `hop root` の holder swap
-でも `--force` の有無に関わらず常に拒否する — hop は `git worktree unlock` を
-決して自動では呼ばない。`hop clean` の自動判定対象は変わらず managed のみ
-(`--ext` で明示的に external も含められる)。分類判定は realpath + パス境界で
-行い、文字列 prefix 比較はしない。
+**Safety rule (most important):** "visible and reachable" is kept separate
+from "nuthatch may change it." Jumping to an external worktree is always
+allowed. `hop` can now `rm` an external worktree with the same procedure as
+a managed one (dirty check → overridable with `--force`), but deleting from
+the picker always requires a y/N confirmation for an external worktree (to
+avoid accidentally destroying another agent's in-progress session — the
+existing confirmation behavior for managed worktrees is unchanged). Any
+worktree git itself reports as locked is always refused — for `rm` as well
+as for the holder swap in `hop root` — regardless of `--force`; hop never
+calls `git worktree unlock` automatically. `hop clean`'s automatic targets
+remain managed-only (external can be added explicitly with `--ext`).
+Category classification uses realpath plus path-boundary comparison, never
+a string-prefix comparison.
 
-## hop clean — ゴミ判定
+## hop clean — garbage detection
 
-1 つでも失うものがある worktree は候補にしない。
+A worktree is never a candidate if removing it would lose anything.
 
-| 判定 | 条件 |
+| Judgment | Condition |
 |---|---|
-| prunable | git が prunable と報告 (worktree の候補化は無条件。branch の安全性は別途判定) |
-| merged | branch が origin/HEAD (なければ main/master) に merge 済み、かつ clean |
-| gone | upstream が `[gone]`、かつ origin/HEAD から到達不能な commit がない、かつ clean。判定不能なら削除拒否 |
+| prunable | git reports it as prunable (this alone makes the worktree a candidate; the branch's safety is judged separately) |
+| merged | The branch is merged into origin/HEAD (or main/master if that's unavailable), and the worktree is clean |
+| gone | The upstream is `[gone]`, no commit is unreachable from origin/HEAD, and the worktree is clean. If this can't be determined, deletion is refused |
 
-- 対象は managed のみ。external は `--ext` 明示時のみ。
-- TTY: 候補一覧 (branch / 理由 / path) を提示して一括確認。
-  非 TTY: `--dry-run` が JSON で候補を返し、`--yes` で実行。
-- `--with-branch` で branch ごと削除 (merged/gone 判定済みの場合のみ)。
-  prunable は worktree が消えているため、branch の merged/gone 判定が別途成立しなければ
-  worktree だけ削除して branch は残し、理由を warning として stderr に出す。
+- Targets managed worktrees only; external ones only when `--ext` is passed
+  explicitly.
+- TTY: presents the candidate list (branch / reason / path) for a single
+  batch confirmation. Non-TTY: `--dry-run` returns the candidates as JSON,
+  and `--yes` executes.
+- `--with-branch` also deletes the branch itself (only when merged/gone has
+  been confirmed). Since a prunable worktree has already disappeared, if the
+  branch's merged/gone status can't be separately confirmed, only the
+  worktree is removed, the branch is kept, and the reason is emitted as a
+  warning on stderr.
 
-## hop root — 動作確認セッション
+## hop root — verification session
 
-docker 等で root clone でしか動作確認できないケース向け。
+For cases (e.g. Docker) where verification can only happen in the root
+clone.
 
-- root が dirty (untracked 含む) なら切替拒否。
-- 対象 branch を他 worktree (holder) が checkout 済みでも、holder が
-  clean かつ git-lock されていなければ **swap する**: holder を
-  `git switch --detach` して branch を解放してから root をそこへ切り替える。
-  holder が dirty または locked なら、従来どおり swap せず拒否してその path を
-  案内する。
-- 判定はすべて repo lock 内で再検証する (holder の dirty/lock/branch を
-  lock 取得後に再取得してから detach する。TOCTOU 対策)。
-- root の switch が holder detach の後に失敗した場合は、holder を detach 前の
-  branch へ rollback してから失敗を返す (holder を中途半端な状態で放置しない)。
-- 復帰 (`hop root -`) は git の `@{-1}` に委ねる。失敗時は root の branch を
-  rollback する。**holder の re-attach はしない** — swap で detach した
-  holder は `hop root -` の後も detached HEAD のまま。
-- `--json` の `data.detachedHolder` に、swap で detach した holder の path
-  (無ければ `null`) を返す。人間向け出力では
-  `<path> を detached HEAD にしました` を stderr に出す。
+- Refuses to switch if root is dirty (including untracked changes).
+- Even if the target branch is already checked out on another worktree (the
+  "holder"), it is **swapped**, as long as the holder is clean and not
+  git-locked: the holder is switched to `git switch --detach` to free up the
+  branch, and root is switched onto it. If the holder is dirty or locked,
+  the switch is refused as before, and its path is reported.
+- All checks are re-validated inside the repo lock (the holder's
+  dirty/lock/branch state is re-read after acquiring the lock, then
+  detached — a TOCTOU guard).
+- If root's switch fails after the holder has been detached, the holder is
+  rolled back to its pre-detach branch before returning the failure (never
+  leaving the holder in a half-finished state).
+- Returning (`hop root -`) is delegated to git's `@{-1}`. On failure, root's
+  branch is rolled back. **The holder is never re-attached** — a holder
+  detached by a swap stays in detached HEAD even after `hop root -`.
+- `--json`'s `data.detachedHolder` returns the path of the holder detached
+  by the swap (`null` if none). The human-readable output writes
+  `Put <path> into detached HEAD` to stderr.
 
-## CLI 契約 (仕様として固定)
+## CLI contract (fixed as spec)
 
-- **stdout**: cd 系成功時は path のみ (改行を含む path は非対応と明記)。
-  一覧は表 or JSON。ログ・警告・ピッカーは常に stderr。
-- **JSON**: 全コマンド `{schemaVersion, command, data, warnings}`。
-  schema は snapshot テストで後方互換を固定。
-- **exit code**: 0=成功 (picker の Esc キャンセルも含む。stdout は空) / 1=一般エラー /
-  2=使い方誤り / 3=安全拒否 (dirty 等) / 130=SIGINT (picker の Ctrl+C キャンセルも
-  同じ扱い)。shell wrapper は exit code を保持し、rc=0 かつ stdout 非空のときのみ cd。
-- **mutation の排他**: 全 mutation (create / rm / clean / root 切替) は repo 単位の
-  プロセス間 lock 内で「再検証 → 実行」する。lock は git common dir 配下に mkdir で
-  作成し、PID・開始時刻・token を記録、保持中は heartbeat で更新。回収は
-  プロセス生存確認 + 期限の両方を満たす場合のみ。確認不能なら安全側で拒否。
-- **git 実行**: 常に argv 配列で spawn (文字列連結禁止)。git の失敗は exit 3 に写像。
-- **remote branch からの作成**: origin に同名があれば常に origin。origin に無く
-  複数 remote に同名があれば曖昧エラー。作成 branch は `--track`。
+- **stdout**: On a successful `cd`-type command, only the path (a path
+  containing a newline is explicitly unsupported). A listing is a table or
+  JSON. Logs, warnings, and the picker always go to stderr.
+- **JSON**: every command returns
+  `{schemaVersion, command, data, warnings}`. The schema's backward
+  compatibility is pinned by snapshot tests.
+- **exit code**: 0=success (including a picker Esc cancel, with empty
+  stdout) / 1=generic error / 2=usage error / 3=safety rejection (e.g.
+  dirty) / 130=SIGINT (a picker Ctrl+C cancel is treated the same way). The
+  shell wrapper preserves the exit code and `cd`s only when rc=0 and stdout
+  is non-empty.
+- **mutation exclusivity**: every mutation (create / rm / clean / switching
+  root) runs "re-validate → execute" inside a per-repo, cross-process lock.
+  The lock is created with `mkdir` under the git common dir, records PID,
+  start time, and a token, and is refreshed with a heartbeat while held.
+  Reclaiming it requires both confirming the process is dead and the TTL
+  having expired. If that can't be confirmed, the safe default is to
+  refuse.
+- **git execution**: always spawned with an argv array (never string
+  concatenation). A git failure maps to exit 3.
+- **creating from a remote branch**: if origin has a branch of the same
+  name, origin always wins. If origin doesn't have it but multiple other
+  remotes do, this is an ambiguity error. The created branch uses
+  `--track`.
 
-## アーキテクチャ — 疎結合・コンポーネント志向
+## Architecture — loosely coupled, component-oriented
 
-ports & adapters (hexagonal) を軽量に適用。外部依存 (git subprocess / fs / TTY)
-はすべて `infra/` に隔離し、ドメインロジックは純関数として外部依存ゼロ。
+Applies a lightweight ports & adapters (hexagonal) style. All external
+dependencies (git subprocess / fs / TTY) are isolated in `infra/`; domain
+logic is pure functions with zero external dependencies.
 
 ```
 src/
-├── cli.ts               # エントリ。citty で parse → command 実行 → 結果を描画
-├── domain/              # 純関数のみ。import できるのは domain 内だけ
-│   ├── model.ts         #   Worktree 型 (kind: root|managed|external)
+├── cli.ts               # Entry point. citty parses args → runs a command → renders the result
+├── domain/              # Pure functions only. May only import from within domain
+│   ├── model.ts         #   Worktree type (kind: root|managed|external)
 │   ├── porcelain.ts     #   worktree list --porcelain parser
-│   ├── sanitize.ts      #   branch名 → dir名
-│   ├── classify.ts      #   root/managed/external 分類
-│   └── garbage.ts       #   clean のゴミ判定 (clock は注入)
-├── infra/               # 外部依存はここだけ。domain の port を実装
-│   ├── git.ts           #   node:child_process execFile (argv 配列のみ)
+│   ├── sanitize.ts      #   branch name → dir name
+│   ├── classify.ts      #   root/managed/external classification
+│   └── garbage.ts       #   garbage detection for clean (clock is injected)
+├── infra/               # The only place with external dependencies. Implements domain's ports
+│   ├── git.ts           #   node:child_process execFile (argv array only)
 │   ├── fs.ts            #   exists / realpath
-│   └── term.ts          #   TTY 判定・stderr ログ
-├── commands/            # 1 コマンド = 1 コンポーネント。相互 import 禁止
+│   └── term.ts          #   TTY detection, stderr logging
+├── commands/             # 1 command = 1 component. Cross-imports forbidden
 │   ├── jump.ts / ls.ts / rm.ts / clean.ts / root.ts / init.ts
-│   │                    #   ★ 描画しない。構造化 Result を return するだけ
-├── ui/picker.tsx        # ink。TTY のときだけ dynamic import (リテラル指定)
-└── render.ts            # cli.ts 専用: Result → plain / JSON。commands からは import しない
-shell/init.zsh           # hop init zsh のテンプレート (quote 厳密・冪等)
-test/                    # domain は unit、commands は実 git repo で integration
+│   │                    #   ★ Never renders. Only returns a structured Result
+├── ui/picker.tsx        # ink. Dynamic-imported (literal specifier) only on TTY
+└── render.ts            # cli.ts only: Result → plain / JSON. Never imported from commands
+shell/init.zsh           # Template for `hop init zsh` (strict quoting, idempotent)
+test/                    # domain gets unit tests; commands get integration tests against a real git repo
 ```
 
-- **依存方向は一方向**: cli → commands → domain + infra。domain は何にも依存しない。
-- **commands は描画しない**: 構造化 Result を返し、cli.ts + render.ts が描画
-  (出力共有モジュールは横断依存になるため置かない)。
-- arg parser は **citty**。parser 固有の型を commands に流さない。
-- subprocess は **node:child_process** — npm 版 (Node 20+) と
-  compile 版 (Bun) の両方で動く。
+- **Dependencies flow one way**: cli → commands → domain + infra. domain
+  depends on nothing.
+- **commands never render**: they return a structured Result, and
+  cli.ts + render.ts do the rendering (no shared output module exists,
+  since that would be a cross-cutting dependency).
+- The arg parser is **citty**. Parser-specific types never flow into
+  commands.
+- Subprocess calls use **node:child_process** — this works for both the npm
+  build (Node 20+) and the compiled build (Bun).
 
-## 実装スタック
+## Implementation stack
 
-| 項目 | 選定 | 補足 |
+| Item | Choice | Notes |
 |---|---|---|
-| 言語 | TypeScript | 開発ランタイムは bun |
-| 最低バージョン | git >= 2.36 / node >= 20 / bun >= 1.1 | porcelain -z と compile の対応範囲 |
-| TUI | ink | TTY のみ dynamic import。compile 同梱を実物検証、不可なら番号選択 fallback |
-| arg parser | citty | 自作禁止 |
+| Language | TypeScript | Development runtime is bun |
+| Minimum versions | git >= 2.36 / node >= 20 / bun >= 1.1 | Range supporting porcelain -z and compilation |
+| TUI | ink | Dynamic-imported only on TTY. Verified compiling to work with the binary; falls back to a numbered selection if not |
+| arg parser | citty | Rolling our own is forbidden |
 | lint/format | biome | |
-| テスト | bun test | unit (domain) + integration (tmpdir 実 repo、GIT_CONFIG_NOSYSTEM=1 / HOME 隔離 / hooks 無効 / LC_ALL=C / clock 注入) |
-| 配布 | npm + GitHub Releases | npm 版は bun build で dist/ に Node 実行可能 bundle。バイナリは bun compile (darwin-arm64/x64, linux-x64) |
+| Testing | bun test | unit (domain) + integration (real repo in a tmpdir, GIT_CONFIG_NOSYSTEM=1 / isolated HOME / hooks disabled / LC_ALL=C / injected clock) |
+| Distribution | npm + GitHub Releases | The npm build is a Node-executable bundle in dist/ via bun build. Binaries are built with bun compile (darwin-arm64/x64, linux-x64) |
 
-## リリース手順 (順序固定)
+## Release procedure (fixed order)
 
-build (tag `vX.Y.Z` と `package.json` version の一致を検証) → `npm pack` → npm 版、
-linux-x64、darwin-arm64 の smoke test → darwin-x64 は compile 確認のみ → 各バイナリの
-SHA-256 生成 → npm publish (--access public, provenance。既存の同 version は skip) →
-Releases 添付。**publish は最後** (壊れた版の公開防止)。
+build (verify tag `vX.Y.Z` matches the `package.json` version) → `npm pack`
+→ smoke test the npm build, linux-x64, and darwin-arm64 → darwin-x64 is
+compile-checked only → generate SHA-256 for each binary → npm publish
+(--access public, provenance; skip if the same version already exists) →
+attach to the Release. **publish happens last** (to avoid publishing a
+broken version).
 
-npm への公開は Trusted Publishing (OIDC・token レス) で行い、**staged publish のみ許可**。
-CI の publish は stage までで、最終公開は npmjs.com 上で手動 promote する (供給網対策)。
+Publishing to npm uses Trusted Publishing (OIDC, token-less), and **only a
+staged publish is allowed**. CI's publish step goes only as far as staging;
+final publication is manually promoted on npmjs.com (a supply-chain
+safeguard).
 
-GitHub Actions の macOS runner では darwin-arm64 を実行 smoke test する。darwin-x64 は
-実行対象 runner を用意していないため compile の成功確認のみとし、install.sh は Release
-添付の `.sha256` と照合してから binary を配置する。
+The GitHub Actions macOS runner runs an execution smoke test for
+darwin-arm64. Since there's no runner available to execute on for
+darwin-x64, only a successful compile is confirmed for it; install.sh
+verifies the binary against the `.sha256` attached to the Release before
+placing it.
 
-## インストール (公開後)
+## Install (post-release)
 
 ```sh
 npm i -g @n-seiji/nuthatch          # npm / bun
 mise use -g npm:@n-seiji/nuthatch   # mise
-curl -fsSL https://raw.githubusercontent.com/n-seiji/nuthatch/main/install.sh | sh  # バイナリ
+curl -fsSL https://raw.githubusercontent.com/n-seiji/nuthatch/main/install.sh | sh  # binary
 ```
 
-shell 統合は `.zshrc` に `eval "$(hop init zsh)"` の 1 行 (starship / zoxide と同方式)。
+Shell integration is a single line in `.zshrc`:
+`eval "$(hop init zsh)"` (the same approach as starship / zoxide).
 
-## 経緯
+## Background
 
-- 旧実装: dotfiles の bash 製 `wt` (固定 10 slot)。問題: slot 上限、`wt list` が
-  逐次 git 実行で重い、agent が作る worktree と統合できない、dirty 判定が
-  untracked を見落とす。
-- 設計レビュー: codex gpt-5.6-sol と複数ラウンド実施済み
-  (external 保護、TOCTOU/lock、gone 判定、npm/Bun 両立、リリース順序など反映)。
+- Previous implementation: dotfiles' bash-based `wt` (fixed 10 slots).
+  Problems: the slot limit, `wt list` being slow due to sequential git
+  calls, no integration with worktrees created by agents, and dirty
+  detection missing untracked files.
+- Design review: went through multiple rounds with codex gpt-5.6-sol
+  (incorporating external protection, TOCTOU/lock handling, gone detection,
+  npm/Bun compatibility, release ordering, and more).

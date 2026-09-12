@@ -1,9 +1,9 @@
 # hop plugin
 
-git worktree manager「hop」(nuthatch) の使い方 skill を配布する plugin。
-Claude Code / Codex の両方から install できる。
+A plugin that distributes the usage skill for the git worktree manager "hop"
+(nuthatch). Installable from both Claude Code and Codex.
 
-- `skills/using-hop/` — coding agent 向けの hop 運用 skill
+- `skills/using-hop/` — the hop operating skill for coding agents
 
 ## Install
 

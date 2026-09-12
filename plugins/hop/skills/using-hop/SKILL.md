@@ -1,51 +1,59 @@
 ---
 name: using-hop
-description: git worktree manager「hop」(nuthatch) を coding agent から扱う。branch ごとの worktree への移動・作成・削除・一覧を非対話で行い、root clone を保護する運用を支える。
+description: Use the git worktree manager "hop" (nuthatch) from a coding agent. Drives non-interactive move, create, delete, and list operations for the per-branch worktree, and keeps the root clone protected.
 ---
 
-# using-hop — coding agent 向け hop の使い方
+# using-hop — using hop from a coding agent
 
-`hop` は git worktree manager。**1 branch = 1 worktree** で、
-`<root clone の親>/_worktree/<repo>/<branch>` に worktree を置く。
-root clone (本体) は動作確認専用で、コード変更は worktree 側で行う。
+`hop` is a git worktree manager. It follows **1 branch = 1 worktree**,
+placing worktrees at `<parent of the root clone>/_worktree/<repo>/<branch>`.
+The root clone (the main checkout) is for verification only — code changes
+happen in a worktree.
 
-## Agent の基本フロー
+## Basic agent flow
 
-Coding agent は shell の cd を保持できないため、path を受けて `git -C` で作業する。
+A coding agent can't hold onto a shell's `cd`, so it takes the path and
+works via `git -C`.
 
 ```bash
-path=$(hop feat/my-task --create)   # create-or-jump: あれば path、なければ作って path
+path=$(hop feat/my-task --create)   # create-or-jump: returns the path if it exists, otherwise creates it and returns the path
 git -C "$path" status --short
-# … 編集・テスト・commit・push …
-hop rm feat/my-task                 # 自分が作った worktree のみ片付ける
+# … edit, test, commit, push …
+hop rm feat/my-task                 # clean up only the worktree you created
 ```
 
-## コマンド一覧 (非対話)
+## Command reference (non-interactive)
 
-| コマンド | 動作 |
+| Command | Behavior |
 |---|---|
-| `hop <branch> --create` | worktree があれば path を返す。なければ default branch から作成して path を返す。`--create` なしで未存在なら安全拒否 (exit 3) |
-| `hop root` | root clone の path |
-| `hop ls --json` | 全 worktree の JSON 一覧 (`{schemaVersion, command, data, warnings}`)。kind (root/managed/external)・dirty・ahead/behind を含む |
-| `hop rm <branch>` | worktree 削除 (branch は残る)。managed / external を区別しない。dirty なら拒否 (`--force` で強制)。git が locked と報告する worktree は `--force` でも常に拒否 (`--ext` は非推奨の no-op で、渡すと警告のみ) |
-| `hop clean --dry-run` | ゴミ worktree 候補 (prunable / merged / gone) を JSON で返す。対象は managed のみ (`--ext` で external も含む)。`--yes` で削除実行。`--with-branch` は merged/gone が確認できた branch のみ削除 (未確認の branch は残る) |
-| `hop root <branch>` / `hop root -` | root clone を一時的に切替 / 復帰 (動作確認用)。対象 branch を他 worktree (holder) が checkout 済みでも、holder が clean かつ git-lock されていなければ holder を detached HEAD にして自動で swap する。holder が dirty/locked なら拒否。`hop root -` は root の branch だけ戻し、swap した holder は detached のまま |
-| `hop -- <branch>` | branch 名が予約語 (ls/rm/clean/root/init) と被るときのエスケープ |
+| `hop <branch> --create` | Returns the path if the worktree exists. Otherwise creates it from the default branch and returns the path. Without `--create`, a missing worktree is a safety rejection (exit 3) |
+| `hop root` | The root clone's path |
+| `hop ls --json` | A JSON listing of every worktree (`{schemaVersion, command, data, warnings}`), including kind (root/managed/external), dirty, and ahead/behind |
+| `hop rm <branch>` | Removes the worktree (the branch is kept). Doesn't distinguish managed from external. Refuses if dirty (`--force` to override). Always refuses a worktree git reports as locked, even with `--force` (`--ext` is a deprecated no-op that only prints a warning) |
+| `hop clean --dry-run` | Returns garbage worktree candidates (prunable / merged / gone) as JSON. Targets managed worktrees only (`--ext` includes external too). `--yes` executes the deletion. `--with-branch` deletes the branch only for branches confirmed merged/gone (unconfirmed branches are kept) |
+| `hop root <branch>` / `hop root -` | Temporarily switches the root clone / returns it (for verification). Even if the target branch is already checked out on another worktree (the "holder"), it's automatically swapped out — detached to HEAD — as long as it's clean and not git-locked; refuses if the holder is dirty/locked. `hop root -` restores only root's branch; a swapped holder stays detached |
+| `hop -- <branch>` | Escapes a branch name that collides with a reserved word (ls/rm/clean/root/init) |
 
-- stdout: path または JSON のみ。ログは stderr。
-- exit code: 0=成功 (picker の ESC キャンセル含む) / 1=一般エラー / 2=使い方誤り / 3=安全拒否 (dirty 等) / 130=SIGINT 中断
-- `hop --help` で全コマンド・フラグの usage を stderr に表示 (exit 0)
+- stdout: only a path or JSON. Logs go to stderr.
+- exit code: 0=success (including a picker ESC cancel) / 1=generic error /
+  2=usage error / 3=safety rejection (e.g. dirty) / 130=SIGINT interruption
+- `hop --help` prints full command/flag usage to stderr (exit 0)
 
-## 運用ルール
+## Operating rules
 
-1. **root clone では編集しない**。編集・テストは worktree 側で行う。
-2. viewer / picker 前提で使わない。branch は常に引数で明示する。
-3. `hop rm` は external worktree (kind=external、他 agent が作ったもの) も
-   削除できるが、他 agent や人間が今使っている worktree は壊しかねないので、
-   自分が作った worktree 以外を rm / clean しない。cleanup は自分が作ったものだけ。
-4. 同じ branch を複数 agent で共有しない。unique な branch 名を使う。
-5. dirty 拒否 (exit 3) に遭ったら commit / stash を先に行う。`--force` を安易に使わない。
-6. root の一時切替 (`hop root <branch>`) を使ったら、作業後に必ず `hop root -` で戻す。
-   対象 branch が他 worktree に checkout 済みでも hop は自動で detach して swap
-   するが、それは他 agent の作業ブランチを解放し得るということでもある —
-   自分専用の unique な branch 名を使っていれば基本問題にならない。
+1. **Never edit in the root clone.** Do editing and testing in a worktree.
+2. Don't rely on the viewer/picker — always pass the branch explicitly as
+   an argument.
+3. `hop rm` can also delete an external worktree (kind=external, created by
+   another agent), but since it might belong to another agent or human's
+   active session, only `rm`/`clean` worktrees you created yourself. Only
+   clean up what you made.
+4. Don't share the same branch across multiple agents. Use a unique branch
+   name.
+5. If you hit a dirty rejection (exit 3), commit or stash first. Don't reach
+   for `--force` casually.
+6. If you use a temporary root switch (`hop root <branch>`), always switch
+   it back with `hop root -` afterward. Even if the target branch is
+   already checked out on another worktree, hop will auto-detach and swap
+   it — which means it can free up another agent's working branch. This is
+   generally not a problem as long as you use your own unique branch name.
