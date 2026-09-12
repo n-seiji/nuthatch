@@ -1,3 +1,4 @@
+import type { Worktree } from "../domain/model.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import {
   type CommandResult,
@@ -8,8 +9,8 @@ import {
   ok,
 } from "../domain/result.ts";
 import type { RmData } from "../domain/schema.ts";
-import { acquireRepoLock } from "../infra/lock.ts";
-import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
+import { acquireRepoLockOrRejection } from "../infra/lock.ts";
+import { loadRepoContext, nestedWorktrees, otherWorktreePaths } from "../infra/repo.ts";
 
 export type { RmData } from "../domain/schema.ts";
 
@@ -28,6 +29,34 @@ const lockedRejection = <T>(branch: string, lockReason: string | null): CommandR
     EXIT_SAFE_REJECTION,
     `Worktree for "${branch}" is locked by git${lockReason === null ? "" : ` (${lockReason})`}. hop never unlocks worktrees automatically — run "git worktree unlock" yourself first if you're sure.`,
   );
+
+/**
+ * Rejects removing `target` when it still contains one or more registered
+ * worktrees — regardless of `--force`, and regardless of whether those inner
+ * worktrees are clean, dirty, or git-locked. Removing the parent would
+ * destroy the inner worktree's files too, which is exactly the kind of
+ * destructive surprise the "always refuse git-locked, --force or not" rule
+ * exists to prevent — that rule must hold just as strongly when the nesting
+ * is what's hiding it. `hop clean`'s automatic deletion path goes through
+ * this same check (see commands/clean.ts).
+ */
+const nestedWorktreeRejection = <T>(
+  branch: string,
+  targetPath: string,
+  worktrees: readonly Worktree[],
+): CommandResult<T> | null => {
+  const nested = nestedWorktrees(worktrees, targetPath);
+  if (nested.length === 0) {
+    return null;
+  }
+  const listing = nested
+    .map((wt) => `  ${wt.path}${wt.branch === null ? "" : ` (${wt.branch})`}`)
+    .join("\n");
+  return fail(
+    EXIT_SAFE_REJECTION,
+    `Worktree for "${branch}" still contains ${nested.length} registered worktree(s) — refusing to remove it, since that would destroy their files too. Remove these first, then retry:\n${listing}`,
+  );
+};
 
 export const rm = async (
   git: GitPort,
@@ -56,6 +85,15 @@ export const rm = async (
     return finish(fail(EXIT_USAGE_ERROR, "Cannot remove the root clone."));
   }
 
+  const nestedRejection = nestedWorktreeRejection<RmData>(
+    options.branch,
+    target.path,
+    context.worktrees,
+  );
+  if (nestedRejection !== null) {
+    return finish(nestedRejection);
+  }
+
   // A worktree git itself reports as locked is always rejected, even with
   // --force — hop must never call `git worktree unlock` on a caller's behalf.
   if (target.locked) {
@@ -77,13 +115,25 @@ export const rm = async (
     }
   }
 
-  const lock = await acquireRepoLock(context.commonDir);
+  const acquisition = await acquireRepoLockOrRejection<RmData>(context.commonDir);
+  if (!acquisition.ok) {
+    return finish(acquisition.rejection);
+  }
+  const { lock } = acquisition;
   try {
     // Re-validate under lock: the worktree may have changed since the check above.
     const fresh = await loadRepoContext(git, fs, options.cwd);
     const freshTarget = fresh.worktrees.find((wt) => wt.branch === options.branch);
     if (freshTarget === undefined) {
       return finish(fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`));
+    }
+    const freshNestedRejection = nestedWorktreeRejection<RmData>(
+      options.branch,
+      freshTarget.path,
+      fresh.worktrees,
+    );
+    if (freshNestedRejection !== null) {
+      return finish(freshNestedRejection);
     }
     if (freshTarget.locked) {
       return finish(lockedRejection(options.branch, freshTarget.lockReason));

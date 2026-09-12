@@ -138,6 +138,11 @@ describe("root (integration)", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(3);
+    // Must be hop's own refusal message, not git's — hop never even
+    // Attempts `git switch --detach` on a locked holder, so git's own
+    // Lock-related wording must never leak through.
+    expect(result.errorMessage).toContain("is locked by git");
+    expect(result.errorMessage).not.toContain("is already used by worktree");
 
     const rootBranchOutput = await repo.git(["branch", "--show-current"]);
     const rootBranch = rootBranchOutput.trim();

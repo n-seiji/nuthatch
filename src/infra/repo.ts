@@ -74,9 +74,19 @@ export const loadRepoContext = async (
  * check — making the containing worktree look clean when it isn't.
  */
 export const otherWorktreePaths = (worktrees: readonly Worktree[], path: string): string[] =>
-  worktrees
-    .filter((wt) => wt.path !== path && !wt.prunable && isWithin(path, wt.path))
-    .map((wt) => wt.path);
+  nestedWorktrees(worktrees, path).map((wt) => wt.path);
+
+/**
+ * Registered worktrees nested *inside* `path` (see otherWorktreePaths'
+ * doc for the descendants-only / prunable-excluded rules — this returns
+ * the same set, but as full Worktree records rather than bare paths, for
+ * callers that need to report what's inside (see commands/rm.ts and
+ * commands/clean.ts: removing a worktree that still contains a live,
+ * registered worktree must be refused, since that would destroy the
+ * inner worktree's files too).
+ */
+export const nestedWorktrees = (worktrees: readonly Worktree[], path: string): Worktree[] =>
+  worktrees.filter((wt) => wt.path !== path && !wt.prunable && isWithin(path, wt.path));
 
 const realpathOrRaw = async (fs: FsPort, path: string): Promise<string> => {
   try {

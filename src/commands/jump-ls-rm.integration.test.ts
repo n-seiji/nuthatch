@@ -177,10 +177,60 @@ describe("jump → ls → rm (integration)", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(3);
+    // Must be hop's own refusal message, not git's — hop never even attempts
+    // `git worktree remove` on a locked target, so git's own "is already
+    // Used by worktree" / lock-related wording must never leak through.
+    expect(result.errorMessage).toContain("is locked by git");
+    expect(result.errorMessage).not.toContain("contains modified or untracked files");
 
     const after = await ls(git, fs, { cwd: repo.repoPath });
     const kinds = after.data?.map((wt) => wt.kind).toSorted();
     expect(kinds).toEqual(["external", "root"]);
+  });
+
+  it("中にネストした登録済み worktree (locked かつ dirty) を含む親は --force でも rm を拒否する (exit 3)", async () => {
+    // Regression for the "hop's own locked-worktree refusal can be bypassed
+    // Through a parent worktree" bug: removing the parent used to delete the
+    // Child's files too, and hop's message must be the reason (not git's own
+    // "contains modified or untracked files" text) — see AGENTS.md's "always
+    // Refuse git-locked, --force or not" safety rule.
+    await repo.git(["branch", "parent"]);
+    const parentPath = `${repo.rootDir}/agent-worktrees/parent`;
+    await repo.git(["worktree", "add", parentPath, "parent"]);
+    const childPath = `${parentPath}/nested-child`;
+    await repo.git(["worktree", "add", childPath, "-b", "child"]);
+    await repo.git(["worktree", "lock", childPath, "--reason", "in use"]);
+    await Bun.write(`${childPath}/untracked.txt`, "dirty");
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: "parent",
+      force: true,
+      ext: false,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(3);
+    expect(result.errorMessage).toContain("still contains");
+    expect(result.errorMessage).not.toContain("contains modified or untracked files");
+    expect(result.errorMessage).not.toContain("is already used by worktree");
+
+    const after = await ls(git, fs, { cwd: repo.repoPath });
+    expect(after.data?.some((wt) => wt.branch === "parent")).toBe(true);
+    expect(after.data?.some((wt) => wt.branch === "child")).toBe(true);
+  });
+
+  it("中身が空の (ネストした worktree を含まない) worktree は通常どおり rm できる", async () => {
+    await repo.git(["branch", "plain"]);
+    const plainPath = `${repo.rootDir}/agent-worktrees/plain`;
+    await repo.git(["worktree", "add", plainPath, "plain"]);
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: "plain",
+      force: false,
+      ext: false,
+    });
+    expect(result.ok).toBe(true);
   });
 
   it("--ext は非推奨の no-op として動作し、成功時に警告を出す", async () => {
