@@ -7,6 +7,7 @@ import {
   loadPickCandidates,
   renderSwitchRootOutcome,
   runInteractivePicker,
+  type SwitchRootOutcome,
 } from "./cli-pick.ts";
 import { clean } from "./commands/clean.ts";
 import { renderInit } from "./commands/init.ts";
@@ -173,9 +174,9 @@ const runInteractivePick = async (json: boolean): Promise<void> => {
     return;
   }
 
-  let lastSwitchedBranch: string | null = null;
-  const callbacks = createPickerCallbacks(git, fs, json, (branch) => {
-    lastSwitchedBranch = branch;
+  let lastSwitchRootOutcome: SwitchRootOutcome | null = null;
+  const callbacks = createPickerCallbacks(git, fs, json, (outcome) => {
+    lastSwitchRootOutcome = outcome;
   });
 
   const outcome = await runInteractivePicker(candidates, callbacks);
@@ -188,7 +189,7 @@ const runInteractivePick = async (json: boolean): Promise<void> => {
   }
 
   if (outcome.type === "path") {
-    renderSwitchRootOutcome(outcome.path, lastSwitchedBranch, json);
+    renderSwitchRootOutcome(outcome.path, lastSwitchRootOutcome, json);
     return;
   }
 

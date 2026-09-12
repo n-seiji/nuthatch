@@ -50,19 +50,27 @@ const deleteWorktree = async (
   return { ok: true };
 };
 
+/** What a successful in-picker switchRoot produced, for renderSwitchRootOutcome afterwards. */
+export interface SwitchRootOutcome {
+  readonly branch: string;
+  readonly detachedHolder: string | null;
+  readonly warnings: readonly string[];
+}
+
 /**
  * Wires the picker's action-panel mutations (delete / switch root here) to
  * commands/rm.ts and commands/root.ts here, rather than in ui/picker.tsx,
  * because ui/ must not import commands/ (see AGENTS.md's dependency
  * direction) — picker.tsx only ever calls the callbacks it's handed.
- * `onSwitchedBranch` records the branch a successful switchRoot targeted,
- * so the caller can render its `--json` output afterwards.
+ * `onSwitchedBranch` records the full outcome of a successful switchRoot
+ * (branch, any detached holder, any warnings), so the caller can render its
+ * `--json` output — and stderr warnings — afterwards with nothing lost.
  */
 export const createPickerCallbacks = (
   git: GitPort,
   fs: FsPort,
   json: boolean,
-  onSwitchedBranch: (branch: string) => void,
+  onSwitchedBranch: (outcome: SwitchRootOutcome) => void,
 ): PickerCallbacks => ({
   deleteWorktree: (candidate) => deleteWorktree(git, fs, candidate),
   switchRootHere: async (candidate) => {
@@ -80,7 +88,11 @@ export const createPickerCallbacks = (
         message: result.errorMessage ?? "Failed to switch root.",
       };
     }
-    onSwitchedBranch(branch);
+    onSwitchedBranch({
+      branch,
+      detachedHolder: result.data?.detachedHolder ?? null,
+      warnings: result.warnings ?? [],
+    });
     return {
       ok: true,
       ...(result.path === undefined ? {} : { path: result.path }),
@@ -113,15 +125,28 @@ export const runInteractivePicker = async (
   }
 };
 
-/** Renders a completed switchRoot outcome (Ctrl+R / panel "switch root here") as the CLI's cd contract expects. */
+/**
+ * Renders a completed switchRoot outcome (Ctrl+R / panel "switch root
+ * here") as the CLI's cd contract expects. Threads detachedHolder and
+ * warnings all the way through — previously these were dropped here, so
+ * `--json` never reported a holder that switchRootHere detached, and its
+ * warning (`Put <path> into detached HEAD`) never reached stderr either,
+ * unlike the non-picker `hop root <branch>` path.
+ */
 export const renderSwitchRootOutcome = (
   path: string,
-  branch: string | null,
+  outcome: SwitchRootOutcome | null,
   json: boolean,
 ): void => {
+  const branch = outcome?.branch ?? null;
+  const detachedHolder = outcome?.detachedHolder ?? null;
+  const warnings = outcome?.warnings ?? [];
   if (json) {
-    render("root", ok({ path, data: { branch, switched: true } }), true);
+    render("root", ok({ path, data: { branch, switched: true, detachedHolder }, warnings }), true);
     return;
   }
   process.stdout.write(`${path}\n`);
+  for (const warning of warnings) {
+    process.stderr.write(`warning: ${warning}\n`);
+  }
 };
