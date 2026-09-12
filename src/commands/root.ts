@@ -9,6 +9,7 @@ import {
 import type { RootData } from "../domain/schema.ts";
 import { acquireRepoLock } from "../infra/lock.ts";
 import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
+import { type DetachedHolder, resolveHolderSwap } from "./root-holder-swap.ts";
 
 export type { RootData } from "../domain/schema.ts";
 
@@ -109,16 +110,6 @@ interface SwitchAndReportOptions {
   readonly switchOptions: { createBranch?: boolean; track?: string };
 }
 
-const holderRejection = (
-  branch: string,
-  holderPath: string,
-  reason: string,
-): CommandResult<RootData> =>
-  fail(
-    EXIT_SAFE_REJECTION,
-    `Branch "${branch}" is already checked out at ${holderPath}, and it ${reason}. Not swapping — cd there instead of using hop root.`,
-  );
-
 const switchAndReport = async ({
   git,
   fs,
@@ -129,7 +120,7 @@ const switchAndReport = async ({
   const lock = await acquireRepoLock(context.commonDir);
   // Set only if this run detaches a holder's HEAD, so a failed root switch
   // Can roll the holder back to the branch it actually had checked out.
-  let detachedHolder: { path: string; branch: string } | null = null;
+  let detachedHolder: DetachedHolder | null = null;
   // The branch to roll root back to if the switch below fails. Read from
   // The lock-guarded `fresh` context (not the pre-lock `context`), so a
   // Branch change by another process while we waited for the lock doesn't
@@ -151,34 +142,11 @@ const switchAndReport = async ({
       );
     }
 
-    if (target !== "-") {
-      const freshHolder = fresh.worktrees.find((wt) => wt.branch === target && wt.kind !== "root");
-      if (freshHolder !== undefined) {
-        if (switchOptions.createBranch === true) {
-          // Someone else created and checked out this branch between our
-          // Initial (pre-lock) check and now — we were about to `-c` it,
-          // Which would now collide. Refuse rather than guess at intent.
-          return holderRejection(target, freshHolder.path, "was just created elsewhere");
-        }
-        if (freshHolder.locked) {
-          return holderRejection(
-            target,
-            freshHolder.path,
-            `is locked by git${freshHolder.lockReason === null ? "" : ` (${freshHolder.lockReason})`}`,
-          );
-        }
-        const holderDirty = await git.isDirty(
-          freshHolder.path,
-          otherWorktreePaths(fresh.worktrees, freshHolder.path),
-        );
-        if (holderDirty) {
-          return holderRejection(target, freshHolder.path, "has uncommitted or untracked changes");
-        }
-
-        await git.detachHead(freshHolder.path);
-        detachedHolder = { path: freshHolder.path, branch: target };
-      }
+    const holderSwap = await resolveHolderSwap(git, fresh, target, switchOptions);
+    if ("rejection" in holderSwap) {
+      return holderSwap.rejection;
     }
+    ({ detachedHolder } = holderSwap);
 
     await git.switchBranch(fresh.rootPath, target, switchOptions);
     // For target === "-", git resolves the destination itself (@{-1}), so we
