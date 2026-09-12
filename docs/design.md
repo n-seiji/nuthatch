@@ -42,7 +42,7 @@ auto-`cd`.
 | Command | Behavior |
 |---|---|
 | `hop` | TTY: pick a worktree/branch with the ink picker and `cd` into it. Branches without a worktree yet (local/remote) are also offered as candidates — selecting one creates it and `cd`s in. Non-TTY: prints a listing |
-| `hop <branch>` | **create-or-jump.** `cd`s into the worktree if it exists; otherwise creates it from the default branch and `cd`s in. On creation, TTY prompts for confirmation; non-TTY requires `--create` (to prevent accidental creation from a typo) |
+| `hop <branch>` | **create-or-jump.** `cd`s into the worktree if it exists; otherwise creates it from the default branch and `cd`s in. Creation always requires `--create` (TTY or not — to prevent accidental creation from a typo); without it, `hop <branch>` refuses with a message to re-run with `--create` |
 | `hop root` | `cd` into the root clone |
 | `hop -` | Return to the previously visited worktree |
 
@@ -195,7 +195,7 @@ test/                    # domain gets unit tests; commands get integration test
 | Minimum versions | git >= 2.36 / node >= 20 / bun >= 1.1 | Range supporting porcelain -z and compilation |
 | TUI | ink | Dynamic-imported only on TTY. Verified compiling to work with the binary; falls back to a numbered selection if not |
 | arg parser | citty | Rolling our own is forbidden |
-| lint/format | biome | |
+| lint/format | oxlint / oxfmt | |
 | Testing | bun test | unit (domain) + integration (real repo in a tmpdir, GIT_CONFIG_NOSYSTEM=1 / isolated HOME / hooks disabled / LC_ALL=C / injected clock) |
 | Distribution | npm + GitHub Releases | The npm build is a Node-executable bundle in dist/ via bun build. Binaries are built with bun compile (darwin-arm64/x64, linux-x64) |
 

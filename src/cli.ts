@@ -250,7 +250,7 @@ if (isHelpRequest(rawArgs)) {
   if (dispatch.kind === "reserved") {
     const command = RESERVED_COMMANDS[dispatch.name as keyof typeof RESERVED_COMMANDS];
     // For `root`, rewrite a leading bare "-" before citty ever parses it —
-    // See cli-root-token.ts for why.
+    // See cli-root-command.ts for why.
     const commandArgs =
       dispatch.name === "root" ? rewriteRootPreviousToken(dispatch.args) : [...dispatch.args];
     // The command union's arg schemas differ per command, so this cast collapses
