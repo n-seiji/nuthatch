@@ -50,11 +50,11 @@ picker は候補を section に分けて表示する — 既存の worktree (roo
   ○ feat/picker   managed  …/_worktree/feat__picker
   ● codex/fix-x   ext      …/.claude/worktrees/x
 
-  BRANCHES — Enter で worktree を作成
+  BRANCHES — Enter creates a worktree
   + feat/idea     local
   + origin/hotfix remote
 
-  (●=dirty ○=clean +=未作成)
+  (●=dirty ○=clean +=not created)
 ```
 
 candidate が 0 件になった section は (header ごと) 丸ごと消える —
