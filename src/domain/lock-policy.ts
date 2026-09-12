@@ -9,7 +9,7 @@ export interface LockReclaimInput {
 /**
  * A held lock may only be reclaimed if the owning process is confirmed dead
  * AND the lock has exceeded its TTL. If liveness cannot be determined, the
- * safe default is to refuse reclaiming (per docs/design.md: "確認不能なら拒否").
+ * safe default is to refuse reclaiming (per docs/design.md: "refuse when unverifiable").
  */
 export const canReclaimLock = (input: LockReclaimInput): boolean => {
   if (input.processAlive !== false) {

@@ -10,7 +10,7 @@ import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.t
 const MAX_PATH_LENGTH = 40;
 const MAX_BRANCH_COLUMN_WIDTH = 24;
 
-export const LEGEND_TEXT = "●=dirty ○=clean +=未作成";
+export const LEGEND_TEXT = "●=dirty ○=clean +=not created";
 
 /** Below this terminal width, the side-by-side action panel doesn't fit alongside the list; picker.tsx falls back to stacking the panel below the list instead. */
 export const NARROW_TERMINAL_WIDTH_THRESHOLD = 60;
@@ -234,7 +234,7 @@ export const buildDisplayRows = (
     }
   }
   if (branchEntries.length > 0) {
-    rows.push({ kind: "header", label: "BRANCHES — Enter で worktree 作成" });
+    rows.push({ kind: "header", label: "BRANCHES — Enter creates a worktree" });
     for (const entry of branchEntries) {
       rows.push(
         toCandidateRow(entry.candidate, {

@@ -23,7 +23,7 @@ export interface RootOptions {
  * `hop root` — bare form just reports the root clone's path (like `hop
  * root` navigation). With a branch (or "-"), temporarily switches the root
  * clone's checked-out branch for verification purposes (docs/design.md's
- * "hop root — 動作確認セッション"), refusing if root is dirty. If the target
+ * "hop root — verification session"), refusing if root is dirty. If the target
  * branch is already checked out on another (managed or external) worktree —
  * the "holder" — and that holder is clean and not locked by git, its HEAD is
  * detached to free up the branch (see swapHolderAndReport below); a dirty or
@@ -196,8 +196,7 @@ const switchAndReport = async ({
         switched: true,
         detachedHolder: detachedHolder?.path ?? null,
       },
-      warnings:
-        detachedHolder === null ? [] : [`${detachedHolder.path} を detached HEAD にしました`],
+      warnings: detachedHolder === null ? [] : [`Put ${detachedHolder.path} into detached HEAD`],
     });
   } catch (error) {
     // Best-effort rollback: try to restore the branch root was on before this
@@ -215,7 +214,7 @@ const switchAndReport = async ({
         // It's just still sitting on whatever branch the failed switch left
         // It on, so "detached HEAD" would be a misleading claim here.
         rollbackWarnings.push(
-          `${context.rootPath} を元の branch (${previousBranch}) に戻せませんでした`,
+          `Could not restore ${context.rootPath} to its original branch (${previousBranch})`,
         );
       }
     }
@@ -227,7 +226,7 @@ const switchAndReport = async ({
         await git.switchBranch(detachedHolder.path, detachedHolder.branch, {});
       } catch {
         rollbackWarnings.push(
-          `${detachedHolder.path} を元の branch (${detachedHolder.branch}) に戻せませんでした。detached HEAD のままです`,
+          `Could not restore ${detachedHolder.path} to its original branch (${detachedHolder.branch}); it remains in detached HEAD`,
         );
       }
     }
