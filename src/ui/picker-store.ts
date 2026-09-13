@@ -8,17 +8,7 @@ import type { PickerCallbacks, PickerMode, PickerOutcome } from "./picker-types.
 const matchesQuery = (candidate: PickCandidate, query: string): boolean =>
   query.length === 0 || candidateBranchLabel(candidate).toLowerCase().includes(query.toLowerCase());
 
-/**
- * The panel-with-error transition after a failed mutation (dirty rejection,
- * etc.). Always resets panelIndex to 0 — a previous version of this hook set
- * `mode` back to "panel" here without resetting panelIndex, so a stale
- * highlight from a larger action list (e.g. panelIndex 2 from a managed
- * worktree's panel) could survive onto a candidate with fewer actions (e.g.
- * external, cd + switchRoot only). The highlight then showed nothing
- * selected, but Enter still ran the index-clamped last action — a mismatch
- * between what's displayed and what runs. Exported (and pure) so this stays
- * covered without rendering the store — see picker-store.test.ts.
- */
+/** The panel-with-error transition after a failed mutation. Always resets panelIndex to 0 -- a previous version left a stale highlight from a larger action list surviving onto a candidate with fewer actions, so Enter could run a different action than the one shown highlighted. Exported (and pure) so this stays covered without rendering the store -- see picker-store.test.ts. */
 export const panelErrorTransition = (
   candidate: PickCandidate,
   error: string,
@@ -124,22 +114,32 @@ export interface PickerStore {
   handleInput: (input: string, key: PickerKeyModifiers) => void;
 }
 
+/** Wraps onExit/onCancel so a second call after the first is inert, and exposes whether either fired via `isExited` -- lets handleInput stop dispatching once the picker has resolved (second layer of defense; terminal-session.ts's handleData is the first). Factored out of createPickerStore to keep that function under the lint line limit. */
+const createExitGuard = (
+  onExit: (outcome: PickerOutcome) => void,
+  onCancel: (reason: PickerCancelReason) => void,
+) => {
+  let exited = false;
+  return {
+    isExited: () => exited,
+    guardedOnExit: (outcome: PickerOutcome): void => {
+      exited = true;
+      onExit(outcome);
+    },
+    guardedOnCancel: (reason: PickerCancelReason): void => {
+      exited = true;
+      onCancel(reason);
+    },
+  };
+};
+
 /**
- * All picker state and transitions, framework-free (no React). A previous
- * version of this lived as a `useState`/`useMemo` React hook
- * (picker-controller.ts), which made the picker's rendering layer (ink)
- * mandatory just to exercise state transitions. Extracting it here lets
- * picker.ts become a thin ink adapter (via useSyncExternalStore, see
- * picker-controller.ts) and lets a future non-ink renderer subscribe the
- * same way.
- *
- * Async mutations (delete / switchRoot) don't wait for a keypress to show
- * their result: `runAction` flips `busy` and notifies immediately, then
- * notifies again once the callback resolves (success or failure) so a
- * renderer subscribed via `subscribe` re-paints without needing more input.
- * `handleInput` ignores keys entirely while `busy` is true, so an in-flight
- * mutation can't be double-triggered by input that arrives before it
- * resolves.
+ * All picker state and transitions, framework-free (no React) -- lets
+ * picker.ts stay a thin adapter and a future non-ink renderer subscribe the
+ * same way. Async mutations (delete/switchRoot) notify immediately on start
+ * (`busy: true`) and again on settling, so a subscribed renderer repaints
+ * without new input; `handleInput` ignores keys while busy so an in-flight
+ * mutation can't be double-triggered.
  */
 export const createPickerStore = (
   initialCandidates: readonly PickCandidate[],
@@ -155,6 +155,7 @@ export const createPickerStore = (
     panelIndex: 0,
     busy: false,
   };
+  const { isExited, guardedOnExit, guardedOnCancel } = createExitGuard(onExit, onCancel);
   const listeners = new Set<() => void>();
   const getFiltered = createFilteredSelector();
 
@@ -191,7 +192,7 @@ export const createPickerStore = (
 
   const runAction = (candidate: PickCandidate, action: PickerActionKind): void => {
     if (action === "cd") {
-      onExit({ type: "cd", candidate });
+      guardedOnExit({ type: "cd", candidate });
       return;
     }
     if (state.busy) {
@@ -201,7 +202,7 @@ export const createPickerStore = (
     void (async () => {
       const outcome = await runMutation(callbacks, candidate, action);
       if (outcome.type === "exit") {
-        onExit(outcome.outcome);
+        guardedOnExit(outcome.outcome);
         return;
       }
       setState({ ...outcome.patch, busy: false });
@@ -225,7 +226,7 @@ export const createPickerStore = (
   };
 
   const handleInput = (input: string, key: PickerKeyModifiers): void => {
-    if (state.busy) {
+    if (isExited() || state.busy) {
       return;
     }
     const { mode, panelIndex } = state;
@@ -248,7 +249,7 @@ export const createPickerStore = (
       selectedCandidate: filtered[clampedIndex],
       filteredLength: filtered.length,
       runAction,
-      onCancel,
+      onCancel: guardedOnCancel,
       setIndex,
       setQuery,
       setPanelIndex: setPanelIndexByValue,

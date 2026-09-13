@@ -12,6 +12,7 @@ stdin: a list of steps, each either
   {"wait_for": "<substring>", "timeout_ms": <int>}
   {"send": "<string, python escapes ok>"}
   {"signal": "TERM"|"HUP"}
+  {"resize": {"rows": <int>, "cols": <int>}}
 Runs them in order against the child's pty, then waits for the child to
 exit (or kills it after a timeout). Prints one JSON object to stdout:
 {"output": "<all bytes read, latin1-decoded>", "exit_code": <int|null>}
@@ -23,13 +24,16 @@ writes in its very last instants (e.g. a signal handler's terminal-restore
 sequence) if nothing has read them from the master side yet.
 """
 
+import fcntl
 import json
 import os
 import pty
 import select
 import signal
+import struct
 import subprocess
 import sys
+import termios
 import time
 
 
@@ -42,6 +46,19 @@ def main() -> None:
     master, slave = pty.openpty()
     env = dict(os.environ)
     env["TERM"] = "xterm-256color"
+    def _make_controlling_tty() -> None:
+        # Runs in the forked child, just before exec. Making the child a
+        # session leader (setsid) is not enough on its own: the pty slave
+        # was opened by *this* (parent) process, and inheriting an
+        # already-open fd across fork/exec never makes it a controlling
+        # terminal -- only an open(2) call by a session leader with no
+        # controlling terminal does that. TIOCSCTTY forces the (already
+        # inherited) slave fd to become the controlling terminal instead,
+        # which is what makes job-control signals -- SIGWINCH on a resize,
+        # in particular -- actually reach the child.
+        os.setsid()
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
     proc = subprocess.Popen(
         [binary, *extra_args],
         stdin=slave,
@@ -50,6 +67,7 @@ def main() -> None:
         cwd=cwd,
         env=env,
         close_fds=True,
+        preexec_fn=_make_controlling_tty,
     )
 
     output = b""
@@ -88,6 +106,17 @@ def main() -> None:
             sig = getattr(signal, f"SIG{step['signal']}")
             try:
                 proc.send_signal(sig)
+            except OSError:
+                pass
+        elif "resize" in step:
+            # Setting the pty's window size delivers SIGWINCH to the
+            # foreground process group automatically (standard tty
+            # behavior) -- no explicit signal needed.
+            rows = step["resize"]["rows"]
+            cols = step["resize"]["cols"]
+            winsize = struct.pack("HHHH", rows, cols, 0, 0)
+            try:
+                fcntl.ioctl(master, termios.TIOCSWINSZ, winsize)
             except OSError:
                 pass
 

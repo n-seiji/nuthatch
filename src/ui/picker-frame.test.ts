@@ -93,12 +93,52 @@ describe("wrapInBox", () => {
     expect(rendered.at(-1)?.startsWith("╰")).toBe(true);
     expect(rendered[1]).toContain("hi");
   });
+});
 
-  it("内側の幅に収まらない行はクリップしてボーダーからはみ出さない", () => {
-    const boxed = wrapInBox([line("a very very long line of text")], 12);
+/** Strips box-drawing border chars and per-row padding, then joins every content row back together -- reconstructs the original (unwrapped) text from a wrapped box's rows so tests can check nothing was lost. */
+const unwrapContent = (boxed: readonly StyledLine[]): string =>
+  boxed
+    .slice(1, -1)
+    .map((row) =>
+      row
+        .map((span) => span.text)
+        .join("")
+        .replaceAll("│", "")
+        .slice(1)
+        .trimEnd(),
+    )
+    .join("");
+
+describe("wrapInBox content wrapping", () => {
+  it("内側の幅に収まらない行は複数行に折り返し、ボーダーからはみ出さない (末尾を欠落させない)", () => {
+    const original = "a very very long line of text";
+    const boxed = wrapInBox([line(original)], 12);
     const widths = new Set(
       boxed.map((row) => row.reduce((total, span) => total + span.text.length, 0)),
     );
+    // Every row (top border, each wrapped content row, bottom border) is padded/sized to the same total width.
     expect(widths.size).toBe(1);
+    // Unlike clipping, the full text must still be present, unbroken, across the wrapped rows.
+    expect(unwrapContent(boxed)).toBe(original);
+  });
+
+  it("branch 名のように空白のない長い文字列でも、折り返して末尾 (?) まで読める", () => {
+    const branch = "feature/very-long-branch-name-that-does-not-fit";
+    const original = `Delete worktree for ${branch}?`;
+    const boxed = wrapInBox([[{ text: original }]], 34);
+    const rendered = unwrapContent(boxed);
+    expect(rendered).toBe(original);
+    expect(rendered).toContain(branch);
+    expect(rendered.endsWith("?")).toBe(true);
+  });
+
+  it("CJK・絵文字を含む行でも表示幅基準で折り返り、枠の幅を超えない (グラフェムを分断しない)", () => {
+    const wide = "フィーチャー/日本語-ブランチ-🎉-emoji-name-that-is-long";
+    const width = 20;
+    const boxed = wrapInBox([[{ text: wide }]], width);
+    const rendered = unwrapContent(boxed);
+    expect(rendered).toBe(wide);
+    expect(rendered).toContain("🎉");
+    expect(rendered).toContain("日本語");
   });
 });

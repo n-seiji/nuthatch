@@ -1,4 +1,4 @@
-import { displayWidth } from "../domain/display-width.ts";
+import { displayWidth, graphemes } from "../domain/display-width.ts";
 
 /**
  * Pure frame builder for the self-drawn picker (replaces ink's render tree).
@@ -71,7 +71,8 @@ export interface FrameInput {
   readonly colorEnabled: boolean;
 }
 
-const GUTTER = "  ";
+/** The horizontal gap between the list column and the side panel in the non-stacked layout — exported so picker.ts can factor it into the minimum width needed for side-by-side (see picker-layout.ts's dynamic narrow-terminal threshold). */
+export const GUTTER = "  ";
 
 const buildSideBySide = (
   left: readonly StyledLine[],
@@ -101,15 +102,73 @@ const BOX_PADDING = 1;
 const BOX_PADDING_TOTAL = BOX_PADDING + BOX_PADDING;
 const BOX_BORDER_WIDTH = 2;
 
-const renderPlain = (line: StyledLine): string => line.map((span) => span.text).join("");
+interface StyledGrapheme {
+  readonly text: string;
+  readonly style: LineStyle | undefined;
+}
+
+const flattenToGraphemes = (line: StyledLine): StyledGrapheme[] =>
+  line.flatMap((span) => graphemes(span.text).map((text) => ({ text, style: span.style })));
+
+const toStyledSpan = (char: StyledGrapheme): StyledSpan =>
+  char.style === undefined ? { text: char.text } : { text: char.text, style: char.style };
+
+/** Regroups a flat grapheme+style list back into spans, merging consecutive graphemes that share a style so wrapping doesn't fragment a line into one span per character. */
+const groupIntoSpans = (chars: readonly StyledGrapheme[]): StyledLine => {
+  const spans: StyledSpan[] = [];
+  for (const char of chars) {
+    const last = spans.at(-1);
+    if (last !== undefined && last.style === char.style) {
+      spans[spans.length - 1] = toStyledSpan({
+        text: last.text + char.text,
+        style: last.style,
+      });
+    } else {
+      spans.push(toStyledSpan(char));
+    }
+  }
+  return spans;
+};
+
+/**
+ * Wraps one line to at most `width` display columns per row, breaking at
+ * grapheme-cluster boundaries (never mid-cluster, so CJK/emoji content is
+ * never split in half) rather than at word boundaries -- good enough for
+ * branch names, paths, and the panel's short fixed copy, none of which have
+ * natural word-wrap points anyway. Always returns at least one row (an
+ * empty line still needs a row to close the box on).
+ */
+const wrapLineToWidth = (line: StyledLine, width: number): StyledLine[] => {
+  if (width <= 0) {
+    return [line];
+  }
+  const rows: StyledLine[] = [];
+  let current: StyledGrapheme[] = [];
+  let currentWidth = 0;
+  for (const char of flattenToGraphemes(line)) {
+    const charWidth = displayWidth(char.text);
+    if (currentWidth + charWidth > width && current.length > 0) {
+      rows.push(groupIntoSpans(current));
+      current = [];
+      currentWidth = 0;
+    }
+    current.push(char);
+    currentWidth += charWidth;
+  }
+  if (current.length > 0 || rows.length === 0) {
+    rows.push(groupIntoSpans(current));
+  }
+  return rows;
+};
 
 /**
  * Wraps `content` in a round-cornered border, `width` display columns wide
  * -- replaces ink's `borderStyle="round"` box for the action/confirm side
- * panel. A content line wider than the inner width is clipped to plain text
- * (losing its styling) rather than overflowing the border; this only
- * happens for pathologically long candidate/branch names, never for the
- * fixed panel copy.
+ * panel. A content line wider than the inner width wraps onto additional
+ * rows (display-width based, grapheme-safe) rather than being clipped --
+ * losing the tail of a branch name or the "?" off a confirm prompt left the
+ * user unable to tell what they were about to delete (astra/Fable-reported
+ * regression from the ink version, which wrapped the same way).
  */
 export const wrapInBox = (content: readonly StyledLine[], width: number): StyledLine[] => {
   const innerWidth = Math.max(0, width - BOX_BORDER_WIDTH - BOX_PADDING_TOTAL);
@@ -117,11 +176,13 @@ export const wrapInBox = (content: readonly StyledLine[], width: number): Styled
   const pad = " ".repeat(BOX_PADDING);
   const top: StyledLine = [{ text: `${BOX_TOP_LEFT}${horizontal}${BOX_TOP_RIGHT}` }];
   const bottom: StyledLine = [{ text: `${BOX_BOTTOM_LEFT}${horizontal}${BOX_BOTTOM_RIGHT}` }];
-  const middle = content.map((line): StyledLine => {
-    const fits = lineWidth(line) <= innerWidth;
-    const body: StyledLine = fits ? line : [{ text: renderPlain(line).slice(0, innerWidth) }];
-    const gap = " ".repeat(Math.max(0, innerWidth - lineWidth(body)));
-    return [{ text: `${BOX_VERTICAL}${pad}` }, ...body, { text: `${gap}${pad}${BOX_VERTICAL}` }];
+  const boxRow = (row: StyledLine): StyledLine => {
+    const gap = " ".repeat(Math.max(0, innerWidth - lineWidth(row)));
+    return [{ text: `${BOX_VERTICAL}${pad}` }, ...row, { text: `${gap}${pad}${BOX_VERTICAL}` }];
+  };
+  const middle = content.flatMap((line): StyledLine[] => {
+    const rows = lineWidth(line) <= innerWidth ? [line] : wrapLineToWidth(line, innerWidth);
+    return rows.map((row) => boxRow(row));
   });
   return [top, ...middle, bottom];
 };

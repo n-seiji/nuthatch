@@ -4,7 +4,7 @@ import { displayWidth, padToWidth, truncateToWidthKeepingTail } from "../domain/
 // Re-exported so picker.ts (already at its import-count budget) doesn't
 // Need a separate import source for viewport math — picker-viewport.ts
 // Stays its own module for testability, this is just a re-export.
-export { computeViewport, rowBudget } from "./picker-viewport.ts";
+export { computeViewport, DEFAULT_TERMINAL_HEIGHT, rowBudget } from "./picker-viewport.ts";
 
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
@@ -13,16 +13,12 @@ export { computeViewport, rowBudget } from "./picker-viewport.ts";
  * without rendering — see picker-layout.test.ts.
  */
 
-const MAX_PATH_LENGTH = 40;
-const MAX_BRANCH_COLUMN_WIDTH = 24;
+/** Exported for picker-side-by-side.ts's MAX_CANDIDATE_ROW_WIDTH -- kept here since it's this module's own column-width budget. */
+export const MAX_PATH_LENGTH = 40;
+/** Exported for picker-side-by-side.ts's MAX_CANDIDATE_ROW_WIDTH -- see MAX_PATH_LENGTH above. */
+export const MAX_BRANCH_COLUMN_WIDTH = 24;
 
 export const LEGEND_TEXT = "●=dirty ○=clean +=not created";
-
-/** Below this terminal width, the side-by-side action panel doesn't fit alongside the list; picker.ts falls back to stacking the panel below the list instead. */
-export const NARROW_TERMINAL_WIDTH_THRESHOLD = 60;
-
-export const isNarrowTerminal = (columns: number): boolean =>
-  columns < NARROW_TERMINAL_WIDTH_THRESHOLD;
 
 const WORKTREE_KIND_LABELS: Record<"root" | "managed" | "external", string> = {
   root: "root",

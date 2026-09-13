@@ -132,6 +132,18 @@ const installExitSignalHandler = (
   };
 };
 
+/** Installs the SIGINT/SIGTERM/SIGHUP triple via installExitSignalHandler and returns one function that removes all three -- factored out only to keep runTerminalSession under the lint line-count limit. */
+const installExitSignalHandlers = (cleanup: () => void): (() => void) => {
+  const removeSigint = installExitSignalHandler("SIGINT", EXIT_CANCELLED, cleanup);
+  const removeSigterm = installExitSignalHandler("SIGTERM", EXIT_SIGTERM, cleanup);
+  const removeSighup = installExitSignalHandler("SIGHUP", EXIT_SIGHUP, cleanup);
+  return () => {
+    removeSigint();
+    removeSigterm();
+    removeSighup();
+  };
+};
+
 /**
  * Runs one picker session. `createHandlers` receives the session API
  * (requestRender/finish) up front so it can close over them when building
@@ -203,9 +215,16 @@ export const runTerminalSession = <T>(
       }, PENDING_ESCAPE_TIMEOUT_MS);
     };
 
+    /* A single chunk can contain more than one key (fast typing, a paste, or a macro/pre-typed sequence like "\r\x18y"). If an earlier event in this same chunk calls finish() (e.g. Enter selecting a candidate), the remaining events must not still reach onKey -- otherwise a trailing Ctrl+X/y in the same chunk runs a delete against a picker that has already resolved and torn down. See picker-store.ts's own `exited` guard for the second layer of defense against the same failure mode. */
     const handleData = (chunk: Buffer): void => {
       for (const event of parser.feed(chunk)) {
+        if (finished) {
+          return;
+        }
         handlers?.onKey(event);
+      }
+      if (finished) {
+        return;
       }
       if (parser.hasPendingEscape()) {
         scheduleEscapeFlush();
@@ -227,14 +246,7 @@ export const runTerminalSession = <T>(
       handleResize,
       clearPendingEscapeTimer,
     });
-    const removeSigint = installExitSignalHandler("SIGINT", EXIT_CANCELLED, cleanup);
-    const removeSigterm = installExitSignalHandler("SIGTERM", EXIT_SIGTERM, cleanup);
-    const removeSighup = installExitSignalHandler("SIGHUP", EXIT_SIGHUP, cleanup);
-    const removeSignalListeners = (): void => {
-      removeSigint();
-      removeSigterm();
-      removeSighup();
-    };
+    const removeSignalListeners = installExitSignalHandlers(cleanup);
     process.once("exit", cleanup);
 
     enterAltScreen(altScreenTarget);
@@ -243,6 +255,10 @@ export const runTerminalSession = <T>(
       stdin.setRawMode?.(true);
       stdin.resume();
       stdin.on("data", handleData);
+    }
+    /* Repaint on SIGWINCH so a mid-session terminal resize doesn't leave a stale frame (wrong row count, overflowing/scrolling the screen) up until the next keypress. Registered whenever stderr is a TTY at all (not gated on isInteractive/stdin being one too) since resize is purely a stderr-side concern, matching cleanup's unconditional `stderr.off("resize", ...)` above. */
+    if (altScreenTarget.isTTY) {
+      stderr.on("resize", handleResize);
     }
 
     handlers = createHandlers({ requestRender, finish });

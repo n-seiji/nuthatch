@@ -4,17 +4,17 @@ import { buildFrame, type StyledLine, wrapInBox } from "./picker-frame.ts";
 import {
   buildDisplayRows,
   computeViewport,
-  isNarrowTerminal,
+  DEFAULT_TERMINAL_HEIGHT,
   LEGEND_TEXT,
   rowBudget,
   type DisplayRow,
 } from "./picker-layout.ts";
 import type { PickerKeyEvent } from "./picker-key-parser.ts";
+import { isNarrowTerminal, LIST_FOOTER_HINT, PANEL_FOOTER_HINT } from "./picker-side-by-side.ts";
 import { createPickerStore, type PickerSnapshot } from "./picker-store.ts";
 import type { PickerCallbacks, PickerMode, PickerResult } from "./picker-types.ts";
 import { buildActionPanelRows, buildConfirmPanelRows, SIDE_PANEL_WIDTH } from "./side-panel.ts";
 import { runTerminalSession } from "./terminal-session.ts";
-import { DEFAULT_TERMINAL_HEIGHT } from "./picker-viewport.ts";
 
 export type {
   ActionOutcome,
@@ -25,11 +25,6 @@ export type {
 } from "./picker-types.ts";
 
 const DEFAULT_TERMINAL_WIDTH = 80;
-
-const LIST_FOOTER_HINT =
-  "Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K,J move · Enter cd · Esc cancel";
-const PANEL_FOOTER_HINT =
-  "↑↓/Ctrl+P,N,K,J move · Enter run · c/d/r shortcuts · Esc/Tab/←/Ctrl+H close";
 
 /** Whether SGR color codes should be emitted at all — NO_COLOR (any non-empty value, per the convention) or a non-TTY stderr both disable it; a picker running under `--json`-style piping should never leak escape codes into whatever's consuming stderr. */
 const colorEnabled = (stderr: NodeJS.WriteStream): boolean =>

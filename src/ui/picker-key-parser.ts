@@ -74,6 +74,28 @@ const utf8SequenceLength = (leadByte: number): number => {
 const decodeUtf8 = (bytes: Buffer): string =>
   new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 
+/** Below this codepoint, a character is a C0 control code (or DEL) rather than printable text -- never something the picker's single-line query should render or act on literally. */
+const CONTROL_CODEPOINT_MAX = 0x1f;
+const isPrintableChar = (char: string): boolean =>
+  (char.codePointAt(0) ?? 0) > CONTROL_CODEPOINT_MAX;
+
+/**
+ * Turns decoded paste text into key events, dropping control characters
+ * (newlines included) rather than passing them through as literal input.
+ * Pasted text commonly carries a trailing newline (copying a branch name
+ * out of `git branch`'s output, e.g.) or embedded CR/LF from a multi-line
+ * clipboard selection; without this, a bare "\n" reaches the same
+ * `event("\n")` shape a *real* Ctrl+J keypress produces (see the module
+ * comment above), and picker-keys.ts's isCtrlJByte can't tell them apart --
+ * so a pasted branch name silently moved the selection instead of just
+ * filling the query (astra/Fable-reported). Paste content has no legitimate
+ * use for control bytes in a single-line query field, so dropping them
+ * outright (rather than trying to tag paste-origin events some other way)
+ * is both simpler and correct.
+ */
+const pastedTextToEvents = (text: string): PickerKeyEvent[] =>
+  [...text].filter((char) => isPrintableChar(char)).map((char) => event(char));
+
 const CSI_INTRODUCER_CODE = "[".codePointAt(0) as number;
 const SS3_INTRODUCER_CODE = "O".codePointAt(0) as number;
 
@@ -132,7 +154,7 @@ export class PickerKeyParser {
       const text = decodeUtf8(this.buffer.subarray(0, markerIndex));
       this.buffer = this.buffer.subarray(markerIndex + endMarker.length);
       this.inPaste = false;
-      return [...text].map((char) => event(char));
+      return pastedTextToEvents(text);
     }
 
     const maxOverlap = Math.min(endMarker.length - 1, this.buffer.length);
@@ -150,7 +172,7 @@ export class PickerKeyParser {
     }
     const text = decodeUtf8(this.buffer.subarray(0, safeLength));
     this.buffer = this.buffer.subarray(safeLength);
-    return text.length > 0 ? [...text].map((char) => event(char)) : null;
+    return text.length > 0 ? pastedTextToEvents(text) : null;
   }
 
   private step(): PickerKeyEvent[] | null {
@@ -181,6 +203,11 @@ export class PickerKeyParser {
     if (first >= CTRL_LETTER_START && first <= CTRL_LETTER_END) {
       this.buffer = this.buffer.subarray(1);
       return [event(ctrlLetterFromByte(first), { ctrl: true })];
+    }
+    if (first <= CONTROL_CODEPOINT_MAX) {
+      // A C0 control byte not covered above (0x00, 0x1C-0x1F -- ESC/CR/LF/TAB and the Ctrl+letter range are all handled by now). Drop it rather than let it flow into the query as an invisible character that still gets written to the terminal.
+      this.buffer = this.buffer.subarray(1);
+      return [];
     }
     return this.stepUtf8Char();
   }
