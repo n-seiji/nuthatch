@@ -1,4 +1,5 @@
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
+import { displayWidth, padToWidth, truncateToWidthKeepingTail } from "../domain/display-width.ts";
 
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
@@ -116,7 +117,13 @@ export const KIND_COLUMN_WIDTH = Math.max(
   ...Object.values(CREATABLE_SOURCE_LABELS).map((label) => label.length),
 );
 
-/** Replaces a leading `$HOME` with `~`, then truncates from the front (keeping the tail) past maxLength. */
+/**
+ * Replaces a leading `$HOME` with `~`, then truncates from the front
+ * (keeping the tail) past maxLength *display columns* — not
+ * `.length`/UTF-16 units, so a path containing wide characters (CJK
+ * directory names, emoji) truncates at the same visual width a plain
+ * ASCII path would, and never splits a grapheme cluster in half.
+ */
 export const shortenPath = (
   path: string,
   homeDir: string,
@@ -126,27 +133,21 @@ export const shortenPath = (
     homeDir.length > 0 && (path === homeDir || path.startsWith(`${homeDir}/`))
       ? `~${path.slice(homeDir.length)}`
       : path;
-  if (withTilde.length <= maxLength) {
-    return withTilde;
-  }
-  const ellipsis = "…";
-  const keepLength = maxLength - ellipsis.length;
-  return `${ellipsis}${withTilde.slice(withTilde.length - keepLength)}`;
+  return truncateToWidthKeepingTail(withTilde, maxLength);
 };
 
 const candidatePathLabel = (candidate: PickCandidate, homeDir: string): string =>
   candidate.kind === "worktree" ? shortenPath(candidate.worktree.path, homeDir) : "";
 
-/** The branch/kind column width: the longest label in the list, capped so one long name can't blow out the layout. */
+/** The branch/kind column width (in display columns): the longest label in the list, capped so one long name can't blow out the layout. */
 export const branchColumnWidth = (candidates: readonly PickCandidate[]): number =>
-  candidates.reduce(
-    (max, candidate) =>
-      Math.min(MAX_BRANCH_COLUMN_WIDTH, Math.max(max, candidateBranchLabel(candidate).length)),
-    0,
-  );
+  candidates.reduce((max, candidate) => {
+    const width = displayWidth(candidateBranchLabel(candidate));
+    return Math.min(MAX_BRANCH_COLUMN_WIDTH, Math.max(max, width));
+  }, 0);
 
-export const padBranchLabel = (label: string, width: number): string =>
-  label.length >= width ? label : label.padEnd(width, " ");
+/** Pads `label` to `width` *display columns* — a fullwidth branch name (CJK, emoji) still lines its column up with an ASCII one. */
+export const padBranchLabel = (label: string, width: number): string => padToWidth(label, width);
 
 export interface HeaderRow {
   readonly kind: "header";
