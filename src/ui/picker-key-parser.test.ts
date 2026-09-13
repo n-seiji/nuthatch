@@ -195,4 +195,12 @@ describe("PickerKeyParser", () => {
     const rest = feed(parser, "a");
     expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["a"]);
   });
+
+  it("SS3 (ESC O) 収集中に来た Ctrl+C (0x03) も即座に ctrl+c として通知する (1 回目の Ctrl+C が無反応になるのを防ぐ)", () => {
+    const parser = new PickerKeyParser();
+    const events = feed(parser, "\u001BO\u0003");
+    expect(events).toEqual([{ input: "c", key: expect.objectContaining({ ctrl: true }) }]);
+    const rest = feed(parser, "a");
+    expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["a"]);
+  });
 });

@@ -165,4 +165,13 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
     ]);
     expect(result.exit_code).toBe(130);
   }, 10_000);
+
+  it("ESC O (SS3 導入子) の直後の Ctrl+C 1 回で exit 130 になる (1 回目が無反応にならない)", () => {
+    const result = runInPty(repo, [
+      { wait_for: "WORKTREES", timeout_ms: 5000 },
+      { wait_ms: STARTUP_SETTLE_MS },
+      { send: "O" },
+    ]);
+    expect(result.exit_code).toBe(130);
+  }, 10_000);
 });

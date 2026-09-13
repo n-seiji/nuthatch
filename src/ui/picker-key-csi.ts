@@ -130,6 +130,14 @@ export const parseSs3 = (buf: Buffer): SequenceResult => {
     return { kind: "incomplete" };
   }
   const finalByte = buf[2] as number;
+  if (finalByte === CTRL_C_BYTE) {
+    /* Same reasoning as parseCsi's mid-sequence check: `ESC O` isn't a real SS3 introducer for Ctrl+C, so without this the byte would resolve as an unrecognized SS3 (event: null) and silently vanish -- a Ctrl+C press that visibly does nothing until pressed again. */
+    return {
+      kind: "interrupted",
+      consumed: SS3_SEQUENCE_LENGTH,
+      event: event("c", { ctrl: true }),
+    };
+  }
   const arrowKey = arrowModifierKey(finalByte);
   return {
     kind: "resolved",
