@@ -38,6 +38,7 @@ hop root <branch>  # temporarily switch the root clone (for verification) —
 hop root -         # switch the root clone back (only root's branch; a swapped-out holder stays detached)
 
 hop -- <branch>    # escape a branch name that collides with a reserved command
+                   # (also required for a branch named the same as your `hop` binary/alias, e.g. `hop -- hop`)
 hop --help         # print usage (also -h / hop help)
 ```
 

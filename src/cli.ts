@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } from "citty";
-import { dispatchCliArgs, isHelpRequest, normalizeCliArgs } from "./cli-dispatch.ts";
+import {
+  dispatchCliArgs,
+  isHelpRequest,
+  isRunningAsCompiledBinary,
+  normalizeCliArgs,
+} from "./cli-dispatch.ts";
 import { createRootCommand, rewriteRootPreviousToken } from "./cli-root-command.ts";
 import {
   createPickerCallbacks,
@@ -239,7 +244,7 @@ const ARGV_USER_ARGS_START = 2;
 const rawArgs = normalizeCliArgs(
   process.argv.slice(ARGV_USER_ARGS_START),
   process.argv0,
-  process.stdout.isTTY === true,
+  isRunningAsCompiledBinary(),
 );
 
 if (isHelpRequest(rawArgs)) {

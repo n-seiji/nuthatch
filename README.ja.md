@@ -36,6 +36,7 @@ hop root <branch>  # root clone を一時的に切替 (動作確認用) —
 hop root -         # root clone を元に戻す (root の branch のみ; swap で detach した holder はそのまま)
 
 hop -- <branch>    # 予約コマンドと被る branch 名をエスケープ
+                   # (`hop` 自体と同名の branch (例: `hop -- hop`) にも必要)
 hop --help         # usage を表示 (-h / hop help でも同じ)
 ```
 

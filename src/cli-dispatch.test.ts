@@ -4,11 +4,24 @@ import { dispatchCliArgs, isHelpRequest, normalizeCliArgs } from "./cli-dispatch
 const reservedNames = ["ls", "rm", "clean", "root", "init"];
 
 describe("cli dispatch", () => {
-  it("argv0 と同じ引数は stdout が TTY のときだけ除去する", () => {
+  it("argv0 と同じ引数はコンパイル済みバイナリのときだけ除去する (stdout の TTY 判定には依存しない)", () => {
     const argv0 = "/usr/local/bin/hop";
 
+    // Stdout がパイプ (shell wrapper が `$(command hop "$@")` で捕まえるケース)
+    // でも、コンパイル済みバイナリなら除去する — ここが今回の不具合そのもの。
     expect(normalizeCliArgs([argv0], argv0, true)).toEqual([]);
+  });
+
+  it("コンパイル済みバイナリでなければ、argv0 と同じ引数でも素通りする", () => {
+    const argv0 = "/usr/local/bin/hop";
+
     expect(normalizeCliArgs([argv0], argv0, false)).toEqual([argv0]);
+  });
+
+  it("引数がある場合は除去しない", () => {
+    const argv0 = "/usr/local/bin/hop";
+
+    expect(normalizeCliArgs([argv0, "extra"], argv0, true)).toEqual([argv0, "extra"]);
   });
 
   it("-- の後ろは予約語でも jump の branch として扱う", () => {
