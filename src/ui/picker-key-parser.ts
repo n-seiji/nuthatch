@@ -74,10 +74,22 @@ const utf8SequenceLength = (leadByte: number): number => {
 const decodeUtf8 = (bytes: Buffer): string =>
   new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 
-/** Below this codepoint, a character is a C0 control code (or DEL) rather than printable text -- never something the picker's single-line query should render or act on literally. */
+/** Below this codepoint, a character is a C0 control code rather than printable text -- never something the picker's single-line query should render or act on literally. Used for the non-paste byte-level path below (which never sees DEL/C1 -- those are handled by their own branches: DEL is BACKSPACE_DEL, and a raw C1 byte can't survive UTF-8 decoding as itself). */
 const CONTROL_CODEPOINT_MAX = 0x1f;
-const isPrintableChar = (char: string): boolean =>
-  (char.codePointAt(0) ?? 0) > CONTROL_CODEPOINT_MAX;
+
+/** DEL and the C1 control range (U+0080-U+009F) -- pasted text is decoded UTF-8, so unlike the byte-level path above these can validly appear as their own codepoints and must be filtered explicitly. */
+const DEL_CODEPOINT = 0x7f;
+const C1_CONTROL_MIN = 0x80;
+const C1_CONTROL_MAX = 0x9f;
+
+/** Whether `char` is safe to pass through literally from pasted text -- excludes C0 controls, DEL, and the C1 control range (see pastedTextToEvents below for why paste content needs this at all). */
+const isPrintableChar = (char: string): boolean => {
+  const codePoint = char.codePointAt(0) ?? 0;
+  if (codePoint <= CONTROL_CODEPOINT_MAX || codePoint === DEL_CODEPOINT) {
+    return false;
+  }
+  return codePoint < C1_CONTROL_MIN || codePoint > C1_CONTROL_MAX;
+};
 
 /**
  * Turns decoded paste text into key events, dropping control characters

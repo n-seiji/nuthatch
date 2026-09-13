@@ -203,4 +203,29 @@ describe("PickerKeyParser", () => {
     const rest = feed(parser, "a");
     expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["a"]);
   });
+
+  it("貼り付け中の DEL (0x7F) は query に混入しない (Fable 指摘: 落とすとコメントにあったが実際には落ちていなかった)", () => {
+    const parser = new PickerKeyParser();
+    const events = feed(parser, "\u001B[200~a\u007Fb\u001B[201~");
+    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["a", "b"]);
+  });
+
+  it("貼り付け中の C1 制御文字 (U+0080-U+009F) も query に混入しない", () => {
+    const parser = new PickerKeyParser();
+    // Unlike the other cases here, U+0085 must be fed as its real UTF-8 encoding (not the latin1-per-byte `feed` helper) -- a raw 0x85 byte alone isn't valid UTF-8 and would decode to U+FFFD instead of the C1 control this test targets.
+    const events = parser.feed(
+      Buffer.concat([
+        Buffer.from("\u001B[200~a", "latin1"),
+        Buffer.from("\u0085", "utf8"),
+        Buffer.from("b\u001B[201~", "latin1"),
+      ]),
+    );
+    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["a", "b"]);
+  });
+
+  it("貼り付け経路以外の DEL は従来どおり backspace として扱われる (paste 用のフィルタが非 paste 経路に影響しないこと)", () => {
+    const parser = new PickerKeyParser();
+    const events = feed(parser, "\u007F");
+    expect(events[0]?.key.backspace).toBe(true);
+  });
 });

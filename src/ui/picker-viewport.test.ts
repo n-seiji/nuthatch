@@ -4,32 +4,39 @@ import {
   DEFAULT_TERMINAL_HEIGHT,
   MIN_VISIBLE_CANDIDATE_ROWS,
   rowBudget,
-  STACKED_PANEL_ROW_BUDGET,
 } from "./picker-viewport.ts";
 
 describe("rowBudget", () => {
   it("端末の高さからチロム分を引いた行数を返す", () => {
-    const budget = rowBudget({ terminalHeight: 30, panelStacked: false });
+    const budget = rowBudget({ terminalHeight: 30, stackedPanelRows: 0 });
     expect(budget).toBeLessThan(30);
     expect(budget).toBeGreaterThan(0);
   });
 
-  it("panel が縦積みのときは追加で STACKED_PANEL_ROW_BUDGET 分減る", () => {
-    const withoutPanel = rowBudget({ terminalHeight: 30, panelStacked: false });
-    const withPanel = rowBudget({ terminalHeight: 30, panelStacked: true });
-    expect(withoutPanel - withPanel).toBe(STACKED_PANEL_ROW_BUDGET);
+  it("panel が縦積みのときは実際の panel 行数分だけ減る (固定値ではない -- 折り返しで panel が伸びても budget が追従する)", () => {
+    const withoutPanel = rowBudget({ terminalHeight: 30, stackedPanelRows: 0 });
+    const withSmallPanel = rowBudget({
+      terminalHeight: 30,
+      stackedPanelRows: 4,
+    });
+    const withWrappedPanel = rowBudget({
+      terminalHeight: 30,
+      stackedPanelRows: 11,
+    });
+    expect(withoutPanel - withSmallPanel).toBe(4);
+    expect(withoutPanel - withWrappedPanel).toBe(11);
   });
 
   it("端末が極端に低くても MIN_VISIBLE_CANDIDATE_ROWS を下回らない", () => {
-    expect(rowBudget({ terminalHeight: 1, panelStacked: true })).toBe(MIN_VISIBLE_CANDIDATE_ROWS);
-    expect(rowBudget({ terminalHeight: 0, panelStacked: false })).toBe(MIN_VISIBLE_CANDIDATE_ROWS);
+    expect(rowBudget({ terminalHeight: 1, stackedPanelRows: 8 })).toBe(MIN_VISIBLE_CANDIDATE_ROWS);
+    expect(rowBudget({ terminalHeight: 0, stackedPanelRows: 0 })).toBe(MIN_VISIBLE_CANDIDATE_ROWS);
   });
 
   it("DEFAULT_TERMINAL_HEIGHT でも妥当な正の budget になる (高さが取れない場合の既定値)", () => {
     expect(
       rowBudget({
         terminalHeight: DEFAULT_TERMINAL_HEIGHT,
-        panelStacked: false,
+        stackedPanelRows: 0,
       }),
     ).toBeGreaterThan(MIN_VISIBLE_CANDIDATE_ROWS);
   });

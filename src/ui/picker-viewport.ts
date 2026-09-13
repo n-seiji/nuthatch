@@ -43,31 +43,26 @@ const SECTION_HEADER_ROWS = 2;
 /** One row reserved for "... and N more" above the window, one below — reserved unconditionally so the budget doesn't shrink/grow as scrolling crosses the edges. */
 const HIDDEN_COUNT_INDICATOR_ROWS = 2;
 
-/**
- * Rows the side panel/confirm box costs when it can't sit beside the list
- * and stacks below it instead (narrow terminals — see
- * picker-layout.ts's isNarrowTerminal). A rough but stable estimate: the
- * action panel's border (2) + title (1) + up to 3 action lines + a
- * busy/error line (1) — ConfirmPanel is smaller but this only needs to be
- * a safe upper bound, not exact, since underestimating risks the list
- * pushing the panel off-screen.
- */
-export const STACKED_PANEL_ROW_BUDGET = 8;
-
 export interface RowBudgetInputs {
   /** Terminal height in rows; falls back to DEFAULT_TERMINAL_HEIGHT when unavailable. */
   readonly terminalHeight: number;
-  /** Whether the side panel/confirm box is currently shown stacked below the list (narrow terminal) rather than beside it or not at all. */
-  readonly panelStacked: boolean;
+  /**
+   * How many rows the side panel/confirm box actually occupies when it's
+   * stacked below the list instead of beside it (narrow terminals — see
+   * picker-layout.ts's isNarrowTerminal); 0 when there's no panel or it
+   * sits beside the list instead. Pass the real rendered row count (the
+   * panel's content wraps onto extra rows for long branch names/errors —
+   * see picker-frame.ts's wrapInBox), not an estimate: a fixed guess here
+   * previously under-reserved for a wrapped panel, pushing the frame past
+   * the terminal height and scrolling the screen (astra/Fable-reported).
+   */
+  readonly stackedPanelRows: number;
 }
 
 /** How many candidate rows the list can show, after reserving space for chrome (and the stacked panel, if any). Never below MIN_VISIBLE_CANDIDATE_ROWS. */
-export const rowBudget = ({ terminalHeight, panelStacked }: RowBudgetInputs): number => {
+export const rowBudget = ({ terminalHeight, stackedPanelRows }: RowBudgetInputs): number => {
   const reserved =
-    BASE_CHROME_ROWS +
-    SECTION_HEADER_ROWS +
-    HIDDEN_COUNT_INDICATOR_ROWS +
-    (panelStacked ? STACKED_PANEL_ROW_BUDGET : 0);
+    BASE_CHROME_ROWS + SECTION_HEADER_ROWS + HIDDEN_COUNT_INDICATOR_ROWS + stackedPanelRows;
   return Math.max(MIN_VISIBLE_CANDIDATE_ROWS, terminalHeight - reserved);
 };
 

@@ -1,5 +1,10 @@
 import { displayWidth, graphemes } from "../domain/display-width.ts";
 
+// Re-exported so picker.ts (already at its import-count budget) doesn't
+// Need a separate import source just for the query line's tail-preserving
+// Truncation -- see picker.ts's queryLine.
+export { truncateToWidthKeepingTail } from "../domain/display-width.ts";
+
 /**
  * Pure frame builder for the self-drawn picker (replaces ink's render tree).
  * Turns a list of styled lines (the left column: query/rows/legend/footer,

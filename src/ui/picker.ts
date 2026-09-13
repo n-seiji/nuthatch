@@ -4,15 +4,16 @@ import {
   buildFrame,
   GUTTER,
   truncateLineToWidth,
+  truncateToWidthKeepingTail,
   type StyledLine,
   wrapInBox,
 } from "./picker-frame.ts";
 import {
-  branchColumnWidth,
   buildDisplayRows,
   computeViewport,
   DEFAULT_TERMINAL_HEIGHT,
   LEGEND_TEXT,
+  rawBranchColumnWidth,
   rowBudget,
   type DisplayRow,
 } from "./picker-layout.ts";
@@ -53,11 +54,26 @@ const terminalDimension = (value: number | undefined, fallback: number): number 
 const colorEnabled = (stderr: NodeJS.WriteStream): boolean =>
   stderr.isTTY === true && (process.env["NO_COLOR"] ?? "") === "";
 
-const queryLine = (query: string): StyledLine => [
-  { text: "hop: " },
-  { text: query, style: "cyan" },
-  { text: query.length === 0 ? " (type to filter)" : "", style: "dim" },
-];
+const QUERY_PREFIX = "hop: ";
+
+/**
+ * Unlike every other line, the query line must keep its *tail* when
+ * truncated, not its head -- the user is actively typing at the end of
+ * it, so cutting the end off (as picker-frame.ts's generic
+ * truncateLineToWidth, applied to every other line, does) would hide the
+ * very characters they just typed (Fable-reported). `maxWidth` is the
+ * full line's budget; the "hop: " prefix and, for an empty query, the "
+ * (type to filter)" hint both come out of it first.
+ */
+const queryLine = (query: string, maxWidth: number): StyledLine => {
+  const hint = query.length === 0 ? " (type to filter)" : "";
+  const budget = Math.max(0, maxWidth - QUERY_PREFIX.length - hint.length);
+  return [
+    { text: QUERY_PREFIX },
+    { text: truncateToWidthKeepingTail(query, budget), style: "cyan" },
+    { text: hint, style: "dim" },
+  ];
+};
 
 const hiddenCountLine = (count: number, direction: "above" | "below"): StyledLine | null => {
   if (count === 0) {
@@ -92,6 +108,7 @@ const displayRowLine = (row: DisplayRow, clampedIndex: number): StyledLine =>
 
 interface BuildListLinesInput {
   readonly query: string;
+  readonly maxWidth: number;
   readonly rows: readonly DisplayRow[];
   readonly clampedIndex: number;
   readonly hiddenAbove: number;
@@ -101,13 +118,14 @@ interface BuildListLinesInput {
 
 const buildListLines = ({
   query,
+  maxWidth,
   rows,
   clampedIndex,
   hiddenAbove,
   hiddenBelow,
   footerHint,
 }: BuildListLinesInput): StyledLine[] => {
-  const lines: StyledLine[] = [queryLine(query)];
+  const lines: StyledLine[] = [queryLine(query, maxWidth)];
   if (rows.length === 0) {
     lines.push([{ text: "No matches.", style: "dim" }]);
   }
@@ -174,14 +192,16 @@ export const renderPickerFrame = ({
   // The list column's own available width: the full terminal width unless the panel sits beside it, in which case the gutter and panel width come out of it first -- rows/footer built wider than this would get line-wrapped by the terminal itself, throwing off rowBudget's row-count estimate (astra/Fable-reported).
   const listColumnWidth =
     right !== null && !stacked ? width - GUTTER.length - SIDE_PANEL_WIDTH : width;
-  const budget = rowBudget({ terminalHeight: height, panelStacked: stacked });
+  const stackedPanelRows = stacked && right !== null ? right.length : 0;
+  const budget = rowBudget({ terminalHeight: height, stackedPanelRows });
   const viewport = computeViewport(filtered.length, clampedIndex, budget);
   const visible = filtered.slice(viewport.start, viewport.end);
-  const columnWidths = constrainRowColumnWidths(branchColumnWidth(visible), listColumnWidth);
+  const columnWidths = constrainRowColumnWidths(rawBranchColumnWidth(visible), listColumnWidth);
   const rows = buildDisplayRows(visible, homedir(), viewport.start, columnWidths);
 
   const left = buildListLines({
     query,
+    maxWidth: listColumnWidth,
     rows,
     clampedIndex,
     hiddenAbove: viewport.hiddenAbove,

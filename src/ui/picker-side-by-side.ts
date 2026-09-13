@@ -22,35 +22,44 @@ const CANDIDATE_ROW_CHROME_WIDTH =
  * picker-layout.ts (which stays focused on row content) to keep that file
  * under the lint line-count limit. `isNarrowTerminal` used to compare
  * `columns` against a fixed 60-column threshold, which badly underestimated
- * the list column's own content width (a candidate row, or especially the
- * footer key-hint line, easily reaches 75-100+ columns), so side-by-side
- * got picked even when it didn't actually fit and the resulting row wrapped
- * in the terminal (Fable-reported regression from the ink version, which
- * never let this happen). The threshold is now computed from the list's
- * actual worst-case content width plus the gutter and panel width.
+ * the list column's own content width (a candidate row easily reaches
+ * 75+ columns), so side-by-side got picked even when it didn't actually
+ * fit and the resulting row wrapped in the terminal (Fable-reported
+ * regression from the ink version, which never let this happen).
+ *
+ * The threshold is *not* sized off the full candidate row width
+ * (MAX_CANDIDATE_ROW_WIDTH, which assumes the full MAX_PATH_LENGTH path
+ * budget) or the full-length footer hint: both degrade gracefully when
+ * squeezed (constrainRowColumnWidths shrinks the path first; the footer
+ * has a short fallback, footerHintForWidth below), so neither should
+ * decide whether side-by-side is even attempted. Sizing the threshold off
+ * the 104-column footer instead needlessly forced 80-139 column terminals
+ * (most real terminals) into stacked mode -- a Fable-reported regression,
+ * since the ink version went side-by-side around 100 columns. Requiring
+ * only half the path budget (rather than all of it) plus the row's fixed
+ * columns keeps the threshold in that same ballpark.
  */
+const HALF_DIVISOR = 2;
+const MIN_PATH_DISPLAY_LENGTH = Math.ceil(MAX_PATH_LENGTH / HALF_DIVISOR);
 
-/** The picker's two footer key-hint lines -- kept here (rather than in picker.ts) so MIN_SIDE_BY_SIDE_WIDTH can size itself off their real width. */
-export const LIST_FOOTER_HINT =
-  "Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K,J move · Enter cd · Esc cancel";
-export const PANEL_FOOTER_HINT =
-  "↑↓/Ctrl+P,N,K,J move · Enter run · c/d/r shortcuts · Esc/Tab/←/Ctrl+H close";
-
-/** Upper bound on a rendered candidate row's display width (branch/path columns capped at their max, kind column at its fixed width). */
 export const MAX_CANDIDATE_ROW_WIDTH =
   CANDIDATE_ROW_CHROME_WIDTH + MAX_BRANCH_COLUMN_WIDTH + KIND_COLUMN_WIDTH + MAX_PATH_LENGTH;
 
-/** Below this terminal width, the side-by-side panel doesn't fit next to the list (a candidate row or a footer hint would wrap) -- picker.ts falls back to stacking the panel under the list instead. */
 export const MIN_SIDE_BY_SIDE_WIDTH =
-  Math.max(
-    displayWidth(LIST_FOOTER_HINT),
-    displayWidth(PANEL_FOOTER_HINT),
-    MAX_CANDIDATE_ROW_WIDTH,
-  ) +
+  CANDIDATE_ROW_CHROME_WIDTH +
+  MAX_BRANCH_COLUMN_WIDTH +
+  KIND_COLUMN_WIDTH +
+  MIN_PATH_DISPLAY_LENGTH +
   displayWidth(GUTTER) +
   SIDE_PANEL_WIDTH;
 
 export const isNarrowTerminal = (columns: number): boolean => columns < MIN_SIDE_BY_SIDE_WIDTH;
+
+/** The picker's two footer key-hint lines -- kept here (rather than in picker.ts) so footerHintForWidth (below) can pick between this and its short fallback. */
+export const LIST_FOOTER_HINT =
+  "Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K,J move · Enter cd · Esc cancel";
+export const PANEL_FOOTER_HINT =
+  "↑↓/Ctrl+P,N,K,J move · Enter run · c/d/r shortcuts · Esc/Tab/←/Ctrl+H close";
 
 /**
  * Shrinks a candidate row's branch/path column widths to fit `maxRowWidth`,

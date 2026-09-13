@@ -21,9 +21,8 @@ describe("isNarrowTerminal", () => {
     expect(MIN_SIDE_BY_SIDE_WIDTH).toBeGreaterThan(MAX_CANDIDATE_ROW_WIDTH);
   });
 
-  it("しきい値は 100〜150 桁程度 (80/100 桁端末で panel を開くと従来の固定 60 では折り返していた)", () => {
-    // Sanity-checks the computed threshold is in the ballpark astra/Fable arrived at by hand (widest footer hint ~104 cols + gutter 2 + panel 34 = ~140) -- both well above the old fixed 60, and above any 80/100-column terminal.
-    expect(MIN_SIDE_BY_SIDE_WIDTH).toBeGreaterThanOrEqual(100);
-    expect(MIN_SIDE_BY_SIDE_WIDTH).toBeLessThan(150);
+  it("しきい値は 80 より大きく 100 以下 (80 桁は縦積み、100 桁は横並びになる -- ink 版は 100 桁で横並びだった)", () => {
+    expect(MIN_SIDE_BY_SIDE_WIDTH).toBeGreaterThan(80);
+    expect(MIN_SIDE_BY_SIDE_WIDTH).toBeLessThanOrEqual(100);
   });
 });

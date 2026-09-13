@@ -149,12 +149,16 @@ const candidatePathLabel = (
 ): string =>
   candidate.kind === "worktree" ? shortenPath(candidate.worktree.path, homeDir, maxLength) : "";
 
-/** The branch/kind column width (in display columns): the longest label in the list, capped so one long name can't blow out the layout. */
+/** Longest branch label's display width, uncapped -- lets a wide terminal show branch names past MAX_BRANCH_COLUMN_WIDTH in full instead of clipping two long names sharing a prefix to the same text (Fable-reported). Used by picker.ts's terminal-aware constrainRowColumnWidths; branchColumnWidth (below) is for callers that don't know the terminal width. */
+export const rawBranchColumnWidth = (candidates: readonly PickCandidate[]): number =>
+  candidates.reduce(
+    (max, candidate) => Math.max(max, displayWidth(candidateBranchLabel(candidate))),
+    0,
+  );
+
+/** The branch/kind column width, capped at MAX_BRANCH_COLUMN_WIDTH. */
 export const branchColumnWidth = (candidates: readonly PickCandidate[]): number =>
-  candidates.reduce((max, candidate) => {
-    const width = displayWidth(candidateBranchLabel(candidate));
-    return Math.min(MAX_BRANCH_COLUMN_WIDTH, Math.max(max, width));
-  }, 0);
+  Math.min(MAX_BRANCH_COLUMN_WIDTH, rawBranchColumnWidth(candidates));
 
 /** Pads `label` to `width` *display columns* — a fullwidth branch name (CJK, emoji) still lines its column up with an ASCII one. */
 export const padBranchLabel = (label: string, width: number): string => padToWidth(label, width);
