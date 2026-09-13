@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""
+Minimal pty-driving harness for the picker's integration tests
+(picker-terminal.integration.test.ts). Not part of the published package
+(see AGENTS.md's dependency direction -- this only exists under src/testing/,
+which is test-only) -- it exists because Node has no built-in pty module, and
+this repo doesn't want a native node-pty dependency just for one test file.
+
+Protocol: takes the binary + args + cwd as argv, then a JSON "script" on
+stdin: a list of steps, each either
+  {"wait_ms": <int>}
+  {"wait_for": "<substring>", "timeout_ms": <int>}
+  {"send": "<string, python escapes ok>"}
+Runs them in order against the child's pty, then waits for the child to
+exit (or kills it after a timeout). Prints one JSON object to stdout:
+{"output": "<all bytes read, latin1-decoded>", "exit_code": <int|null>}
+"""
+
+import json
+import os
+import pty
+import select
+import signal
+import subprocess
+import sys
+import time
+
+
+def main() -> None:
+    binary = sys.argv[1]
+    cwd = sys.argv[2]
+    extra_args = sys.argv[3:]
+    script = json.loads(sys.stdin.read())
+
+    master, slave = pty.openpty()
+    env = dict(os.environ)
+    env["TERM"] = "xterm-256color"
+    proc = subprocess.Popen(
+        [binary, *extra_args],
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        cwd=cwd,
+        env=env,
+        close_fds=True,
+    )
+    os.close(slave)
+
+    output = b""
+
+    def pump(timeout_s: float) -> None:
+        nonlocal output
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            remaining = max(0.0, deadline - time.monotonic())
+            r, _, _ = select.select([master], [], [], min(0.02, remaining))
+            if master in r:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:
+                    return
+                if not chunk:
+                    return
+                output += chunk
+
+    for step in script:
+        if "wait_ms" in step:
+            pump(step["wait_ms"] / 1000)
+        elif "wait_for" in step:
+            needle = step["wait_for"].encode("latin1", errors="replace")
+            timeout_s = step.get("timeout_ms", 2000) / 1000
+            deadline = time.monotonic() + timeout_s
+            while needle not in output and time.monotonic() < deadline:
+                pump(0.05)
+        elif "send" in step:
+            data = step["send"].encode("latin1", errors="replace")
+            try:
+                os.write(master, data)
+            except OSError:
+                pass
+
+    # Keep draining the master fd while waiting for the child to exit,
+    # rather than blocking in proc.wait() with no reads in between: on this
+    # platform, a pty can drop output still queued in its buffer once the
+    # writer's last fd closes (process exit) if nothing has read it yet, so
+    # a read-then-wait ordering can lose a process's final bytes (its
+    # cleanup/teardown sequence) even though the write() call succeeded.
+    # Pumping continuously until the process is confirmed exited closes
+    # that race.
+    exit_deadline = time.monotonic() + 5
+    while proc.poll() is None and time.monotonic() < exit_deadline:
+        pump(0.05)
+    if proc.poll() is None:
+        proc.send_signal(signal.SIGKILL)
+        proc.wait(timeout=2)
+    pump(0.2)
+    try:
+        os.close(master)
+    except OSError:
+        pass
+
+    print(json.dumps({"output": output.decode("latin1"), "exit_code": proc.returncode}))
+
+
+if __name__ == "__main__":
+    main()
