@@ -14,7 +14,7 @@ export interface PickOptions {
 /**
  * Loads everything the interactive picker needs to render: every worktree
  * (with dirty status) plus every branch that doesn't have one yet. Does not
- * render anything — cli.ts hands this to ui/picker.tsx.
+ * render anything — cli.ts hands this to ui/picker.ts.
  */
 export const pick = async (
   git: GitPort,

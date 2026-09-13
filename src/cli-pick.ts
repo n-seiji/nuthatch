@@ -5,7 +5,12 @@ import { candidateBranchName } from "./domain/candidates.ts";
 import type { FsPort, GitPort } from "./domain/ports.ts";
 import { ok } from "./domain/result.ts";
 import { render } from "./render.ts";
-import type { ActionOutcome, PickerCallbacks, PickerResult } from "./ui/picker.tsx";
+import {
+  runPicker,
+  type ActionOutcome,
+  type PickerCallbacks,
+  type PickerResult,
+} from "./ui/picker.ts";
 
 /**
  * Loads the fresh candidate list for the picker (used both for the initial
@@ -60,9 +65,9 @@ export interface SwitchRootOutcome {
 
 /**
  * Wires the picker's action-panel mutations (delete / switch root here) to
- * commands/rm.ts and commands/root.ts here, rather than in ui/picker.tsx,
+ * commands/rm.ts and commands/root.ts here, rather than in ui/picker.ts,
  * because ui/ must not import commands/ (see AGENTS.md's dependency
- * direction) — picker.tsx only ever calls the callbacks it's handed.
+ * direction) — picker.ts only ever calls the callbacks it's handed.
  * `onSwitchedBranch` records the full outcome of a successful switchRoot
  * (branch, any detached holder, any warnings), so the caller can render its
  * `--json` output — and stderr warnings — afterwards with nothing lost.
@@ -109,28 +114,15 @@ export const createPickerCallbacks = (
 });
 
 /**
- * Runs the picker (ink, falling back to the plain readline picker) and
- * normalizes both to PickerResult. The readline fallback can't distinguish
- * Esc from Ctrl+C (no raw-mode key events), so its cancellation always
- * reports "esc" — the quieter of the two exit codes (see runInteractivePick
- * in cli.ts). A genuine Ctrl+C there hits Node's default SIGINT handling
- * instead, which already exits 130 on its own.
+ * Runs the picker. Kept as its own function (rather than calling
+ * ui/picker.ts's runPicker directly from cli.ts) so cli.ts never depends on
+ * ui/ at all — mirroring the rest of this module's job of being the one
+ * place that wires ui/ callbacks to commands/.
  */
-export const runInteractivePicker = async (
+export const runInteractivePicker = (
   candidates: readonly PickCandidate[],
   callbacks: PickerCallbacks,
-): Promise<PickerResult> => {
-  try {
-    const { runPicker } = await import("./ui/picker.tsx");
-    return await runPicker(candidates, callbacks);
-  } catch {
-    const { runSimplePicker } = await import("./ui/simple-picker.ts");
-    const selected = await runSimplePicker(candidates);
-    return selected === null
-      ? { type: "cancelled", reason: "esc" }
-      : { type: "cd", candidate: selected };
-  }
-};
+): Promise<PickerResult> => runPicker(candidates, callbacks);
 
 /**
  * Renders a completed switchRoot outcome (Ctrl+R / panel "switch root

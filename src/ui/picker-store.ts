@@ -129,7 +129,7 @@ export interface PickerStore {
  * version of this lived as a `useState`/`useMemo` React hook
  * (picker-controller.ts), which made the picker's rendering layer (ink)
  * mandatory just to exercise state transitions. Extracting it here lets
- * picker.tsx become a thin ink adapter (via useSyncExternalStore, see
+ * picker.ts become a thin ink adapter (via useSyncExternalStore, see
  * picker-controller.ts) and lets a future non-ink renderer subscribe the
  * same way.
  *

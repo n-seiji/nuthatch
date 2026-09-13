@@ -12,7 +12,7 @@ export interface ActionOutcome {
 }
 
 /**
- * Mutations the picker can trigger, injected by cli.ts. picker.tsx (ui/)
+ * Mutations the picker can trigger, injected by cli.ts. picker.ts (ui/)
  * must not import commands/ directly (see AGENTS.md's dependency direction),
  * so cli.ts wires these to commands/rm.ts and commands/root.ts and hands
  * them in — the picker only ever calls the callbacks it's given.

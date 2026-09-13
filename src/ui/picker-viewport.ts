@@ -3,7 +3,7 @@
  * list actually gets drawn, given the terminal's height.
  *
  * Bug this replaces (astra-reported): the picker always rendered the first
- * `MAX_VISIBLE_ROWS` candidates (picker.tsx used to do
+ * `MAX_VISIBLE_ROWS` candidates (picker.ts used to do
  * `filtered.slice(0, MAX_VISIBLE_ROWS)`), but the cursor could move across
  * the *entire* filtered list — `clampedIndex` in picker-store.ts is an
  * index into `filtered`, unbounded by what's on screen. Once the cursor

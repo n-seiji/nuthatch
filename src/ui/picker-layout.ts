@@ -1,7 +1,7 @@
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
 import { displayWidth, padToWidth, truncateToWidthKeepingTail } from "../domain/display-width.ts";
 
-// Re-exported so picker.tsx (already at its import-count budget) doesn't
+// Re-exported so picker.ts (already at its import-count budget) doesn't
 // Need a separate import source for viewport math — picker-viewport.ts
 // Stays its own module for testability, this is just a re-export.
 export { computeViewport, rowBudget } from "./picker-viewport.ts";
@@ -18,7 +18,7 @@ const MAX_BRANCH_COLUMN_WIDTH = 24;
 
 export const LEGEND_TEXT = "●=dirty ○=clean +=not created";
 
-/** Below this terminal width, the side-by-side action panel doesn't fit alongside the list; picker.tsx falls back to stacking the panel below the list instead. */
+/** Below this terminal width, the side-by-side action panel doesn't fit alongside the list; picker.ts falls back to stacking the panel below the list instead. */
 export const NARROW_TERMINAL_WIDTH_THRESHOLD = 60;
 
 export const isNarrowTerminal = (columns: number): boolean =>

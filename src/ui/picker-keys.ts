@@ -1,5 +1,5 @@
 /**
- * Pure key-handling logic for the picker, extracted from picker.tsx so it can
+ * Pure key-handling logic for the picker, extracted from picker.ts so it can
  * be unit tested without rendering ink. Ctrl+N/Ctrl+P and Ctrl+J/Ctrl+K mirror
  * the arrow keys (emacs and vim conventions, respectively — both coexist);
  * Ctrl+U clears the search query. Modifier keys (ctrl/meta) never leak into
