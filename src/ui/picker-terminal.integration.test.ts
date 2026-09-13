@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { displayWidth } from "../domain/display-width.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 
 /**
@@ -46,16 +47,18 @@ const runInPty = (repo: TestRepo, steps: readonly PtyStep[]): PtyResult => {
 
 let repo: TestRepo;
 
+/** Creates `branch` and adds a worktree for it under `.claude/worktrees/<dir ?? branch>` -- shared by beforeEach and the tests below that need extra worktrees. */
+const addWorktree = (branch: string, dir = branch): void => {
+  execFileSync("git", ["branch", branch], { cwd: repo.repoPath, env: repo.env });
+  execFileSync("git", ["worktree", "add", `.claude/worktrees/${dir}`, branch], {
+    cwd: repo.repoPath,
+    env: repo.env,
+  });
+};
+
 beforeEach(async () => {
   repo = await createTestRepo();
-  execFileSync("git", ["branch", "feature-a"], {
-    cwd: repo.repoPath,
-    env: repo.env,
-  });
-  execFileSync("git", ["worktree", "add", ".claude/worktrees/feature-a", "feature-a"], {
-    cwd: repo.repoPath,
-    env: repo.env,
-  });
+  addWorktree("feature-a");
 });
 
 afterEach(async () => {
@@ -195,20 +198,7 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
   }, 10_000);
 
   it("長い branch 名の削除確認パネルでも、末尾まで折り返して読める (途中で切れない)", () => {
-    execFileSync("git", ["branch", "feature-very-long-branch-name-testing"], {
-      cwd: repo.repoPath,
-      env: repo.env,
-    });
-    execFileSync(
-      "git",
-      [
-        "worktree",
-        "add",
-        ".claude/worktrees/feature-very-long-branch-name-testing",
-        "feature-very-long-branch-name-testing",
-      ],
-      { cwd: repo.repoPath, env: repo.env },
-    );
+    addWorktree("feature-very-long-branch-name-testing");
     const result = runInPty(repo, [
       { wait_for: "WORKTREES", timeout_ms: 5000 },
       { wait_ms: STARTUP_SETTLE_MS },
@@ -224,11 +214,7 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
   }, 10_000);
 
   it("末尾に改行の付いた貼り付けで選択がずれない (改行が Ctrl+J/down として解釈されない)", () => {
-    execFileSync("git", ["branch", "feature-a2"], { cwd: repo.repoPath, env: repo.env });
-    execFileSync("git", ["worktree", "add", ".claude/worktrees/feature-a2", "feature-a2"], {
-      cwd: repo.repoPath,
-      env: repo.env,
-    });
+    addWorktree("feature-a2");
     const result = runInPty(repo, [
       { wait_for: "WORKTREES", timeout_ms: 5000 },
       { wait_ms: STARTUP_SETTLE_MS },
@@ -266,4 +252,31 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
       firstLines.some((line) => line.includes("hop:") && line.includes(boxTopLeftMangled)),
     ).toBe(true);
   }, 10_000);
+
+  it.each([60, 80, 100, 140])(
+    "%i 桁端末では、branch 名が長い候補があっても描画される全行が端末幅に収まる",
+    (width) => {
+      addWorktree("feature/a-genuinely-very-long-branch-name-for-testing-overflow", "feature-long");
+      const result = runInPty(repo, [
+        { resize: { rows: 24, cols: width } },
+        { wait_for: "WORKTREES", timeout_ms: 5000 },
+        { wait_ms: STARTUP_SETTLE_MS },
+        { send: "" },
+      ]);
+      // The harness latin1-decodes raw pty bytes (see pty-harness.py's module comment), so multi-byte UTF-8 glyphs (❯, ○, box-drawing chars) come back mangled into several latin1 chars -- undo that before measuring display width, strip SGR color codes (which occupy no columns), and drop the trailing bare "\r" that's left over after splitting on "\r\n" (picker-frame.ts joins rows with "\r\n", and raw mode's own terminal driver echoes back an extra leading "\r" too).
+      const lines = Buffer.from(result.output, "latin1")
+        .toString("utf8")
+        .replaceAll(/\[[0-9;]*m/gu, "")
+        .split("\r\n")
+        .map((line) => line.replace(/\r$/u, ""));
+      for (const line of lines) {
+        expect(displayWidth(line)).toBeLessThanOrEqual(width);
+      }
+      const candidateLine = lines.find((line) => line.includes("feature/a-genuinely"));
+      expect(candidateLine).toBeDefined();
+      expect(candidateLine).toContain("○");
+      expect(lines.some((line) => line.includes("Esc"))).toBe(true);
+    },
+    10_000,
+  );
 });

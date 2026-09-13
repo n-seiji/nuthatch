@@ -1,7 +1,14 @@
 import { homedir } from "node:os";
 import type { PickCandidate } from "../domain/candidates.ts";
-import { buildFrame, type StyledLine, wrapInBox } from "./picker-frame.ts";
 import {
+  buildFrame,
+  GUTTER,
+  truncateLineToWidth,
+  type StyledLine,
+  wrapInBox,
+} from "./picker-frame.ts";
+import {
+  branchColumnWidth,
   buildDisplayRows,
   computeViewport,
   DEFAULT_TERMINAL_HEIGHT,
@@ -10,7 +17,11 @@ import {
   type DisplayRow,
 } from "./picker-layout.ts";
 import type { PickerKeyEvent } from "./picker-key-parser.ts";
-import { isNarrowTerminal, LIST_FOOTER_HINT, PANEL_FOOTER_HINT } from "./picker-side-by-side.ts";
+import {
+  constrainRowColumnWidths,
+  footerHintForWidth,
+  isNarrowTerminal,
+} from "./picker-side-by-side.ts";
 import { createPickerStore, type PickerSnapshot } from "./picker-store.ts";
 import type { PickerCallbacks, PickerMode, PickerResult } from "./picker-types.ts";
 import { buildActionPanelRows, buildConfirmPanelRows, SIDE_PANEL_WIDTH } from "./side-panel.ts";
@@ -25,6 +36,18 @@ export type {
 } from "./picker-types.ts";
 
 const DEFAULT_TERMINAL_WIDTH = 80;
+
+/**
+ * `stream.columns`/`stream.rows` is `undefined` when the stream isn't a
+ * TTY at all, but some pty implementations (notably the one this repo's own
+ * integration tests drive, before any resize) report a real `0` from
+ * `TIOCGWINSZ` instead -- `??`'s fallback never triggers on `0`, so a
+ * literal 0 used to flow all the way into truncateLineToWidth as the
+ * terminal width and collapse every line down to just an ellipsis. Treat
+ * anything not strictly positive as "unknown" too.
+ */
+const terminalDimension = (value: number | undefined, fallback: number): number =>
+  value !== undefined && value > 0 ? value : fallback;
 
 /** Whether SGR color codes should be emitted at all — NO_COLOR (any non-empty value, per the convention) or a non-TTY stderr both disable it; a picker running under `--json`-style piping should never leak escape codes into whatever's consuming stderr. */
 const colorEnabled = (stderr: NodeJS.WriteStream): boolean =>
@@ -148,10 +171,14 @@ export const renderPickerFrame = ({
   const right = buildSidePanelLines(mode, panelIndex, busy);
   // The panel only stacks below the list (consuming vertical rows the list would otherwise use) in narrow terminals; side-by-side it costs no rows.
   const stacked = right !== null && narrow;
+  // The list column's own available width: the full terminal width unless the panel sits beside it, in which case the gutter and panel width come out of it first -- rows/footer built wider than this would get line-wrapped by the terminal itself, throwing off rowBudget's row-count estimate (astra/Fable-reported).
+  const listColumnWidth =
+    right !== null && !stacked ? width - GUTTER.length - SIDE_PANEL_WIDTH : width;
   const budget = rowBudget({ terminalHeight: height, panelStacked: stacked });
   const viewport = computeViewport(filtered.length, clampedIndex, budget);
   const visible = filtered.slice(viewport.start, viewport.end);
-  const rows = buildDisplayRows(visible, homedir(), viewport.start);
+  const columnWidths = constrainRowColumnWidths(branchColumnWidth(visible), listColumnWidth);
+  const rows = buildDisplayRows(visible, homedir(), viewport.start, columnWidths);
 
   const left = buildListLines({
     query,
@@ -159,8 +186,8 @@ export const renderPickerFrame = ({
     clampedIndex,
     hiddenAbove: viewport.hiddenAbove,
     hiddenBelow: viewport.hiddenBelow,
-    footerHint: right === null ? LIST_FOOTER_HINT : PANEL_FOOTER_HINT,
-  });
+    footerHint: footerHintForWidth(right === null ? "list" : "panel", listColumnWidth),
+  }).map((line) => truncateLineToWidth(line, listColumnWidth));
 
   return buildFrame({ left, right, stacked, colorEnabled: color });
 };
@@ -199,8 +226,8 @@ export const runPicker = (
       buildFrame: () =>
         renderPickerFrame({
           snapshot: store.getSnapshot(),
-          width: process.stderr.columns ?? DEFAULT_TERMINAL_WIDTH,
-          height: process.stderr.rows ?? DEFAULT_TERMINAL_HEIGHT,
+          width: terminalDimension(process.stderr.columns, DEFAULT_TERMINAL_WIDTH),
+          height: terminalDimension(process.stderr.rows, DEFAULT_TERMINAL_HEIGHT),
           colorEnabled: colorEnabled(process.stderr),
         }),
     };

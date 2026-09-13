@@ -1,5 +1,10 @@
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
-import { displayWidth, padToWidth, truncateToWidthKeepingTail } from "../domain/display-width.ts";
+import {
+  displayWidth,
+  padToWidth,
+  truncateToWidth,
+  truncateToWidthKeepingTail,
+} from "../domain/display-width.ts";
 
 // Re-exported so picker.ts (already at its import-count budget) doesn't
 // Need a separate import source for viewport math — picker-viewport.ts
@@ -137,8 +142,12 @@ export const shortenPath = (
   return truncateToWidthKeepingTail(withTilde, maxLength);
 };
 
-const candidatePathLabel = (candidate: PickCandidate, homeDir: string): string =>
-  candidate.kind === "worktree" ? shortenPath(candidate.worktree.path, homeDir) : "";
+const candidatePathLabel = (
+  candidate: PickCandidate,
+  homeDir: string,
+  maxLength: number,
+): string =>
+  candidate.kind === "worktree" ? shortenPath(candidate.worktree.path, homeDir, maxLength) : "";
 
 /** The branch/kind column width (in display columns): the longest label in the list, capped so one long name can't blow out the layout. */
 export const branchColumnWidth = (candidates: readonly PickCandidate[]): number =>
@@ -183,6 +192,7 @@ interface ToCandidateRowOptions {
   readonly index: number;
   readonly section: "worktree" | "branch";
   readonly branchWidth: number;
+  readonly pathMaxLength: number;
   readonly homeDir: string;
 }
 
@@ -194,36 +204,38 @@ const toCandidateRow = (
   index: options.index,
   section: options.section,
   statusMarker: statusMarker(candidate),
-  branchLabel: padBranchLabel(candidateBranchLabel(candidate), options.branchWidth),
+  branchLabel: padBranchLabel(
+    truncateToWidth(candidateBranchLabel(candidate), options.branchWidth),
+    options.branchWidth,
+  ),
   kindLabel: candidateKindLabel(candidate).padEnd(KIND_COLUMN_WIDTH, " "),
-  pathLabel: candidatePathLabel(candidate, options.homeDir),
+  pathLabel: candidatePathLabel(candidate, options.homeDir, options.pathMaxLength),
 });
 
 /**
  * Builds the rows the picker renders: a WORKTREES section followed by a
- * BRANCHES section (not-yet-created branches). Groups by kind only —
- * ordering *within* each section (root first, local before remote, etc.)
- * is sortCandidatesForDisplay's job; callers should sort before calling
- * this (picker-controller.ts does, right after search filtering, so
- * narrowing never disturbs the order). A section with no members is
- * omitted entirely, header included — this naturally handles both "no
- * creatable branches at all" and "search query filtered a section empty".
- * `index` on each candidate row is its position in `candidates` plus
- * `indexOffset`, which the picker uses unchanged as its cursor position
- * (headers aren't selectable and never consume an index). `indexOffset`
- * matters when `candidates` is a scrolled *window* rather than the full
- * filtered list (see picker-viewport.ts) — without it, a windowed call
- * would number rows 0..N regardless of where the window starts, so a
- * selection past the first screenful could never line up with any row's
- * `index` (astra-reported bug this fixes; see picker-viewport.ts's
- * module comment for the full story).
+ * BRANCHES section. `index` on each candidate row is its position in
+ * `candidates` plus `indexOffset` (unchanged as the picker's cursor
+ * position) -- matters when `candidates` is a scrolled *window* rather
+ * than the full filtered list (see picker-viewport.ts). `columnWidths`
+ * overrides the natural (candidate-driven) branch/path column widths --
+ * used by picker.ts to keep every row within the terminal's actual width
+ * (see picker-side-by-side.ts's constrainRowColumnWidths); omitted, it
+ * defaults to the unconstrained widths every existing caller/test expects.
  */
 export const buildDisplayRows = (
   candidates: readonly PickCandidate[],
   homeDir: string,
   indexOffset = 0,
+  columnWidths?: {
+    readonly branchWidth: number;
+    readonly pathMaxLength: number;
+  },
 ): readonly DisplayRow[] => {
-  const branchWidth = branchColumnWidth(candidates);
+  const { branchWidth, pathMaxLength } = columnWidths ?? {
+    branchWidth: branchColumnWidth(candidates),
+    pathMaxLength: MAX_PATH_LENGTH,
+  };
   const indexed = candidates.map((candidate, index) => ({
     candidate,
     index: index + indexOffset,
@@ -240,6 +252,7 @@ export const buildDisplayRows = (
           index: entry.index,
           section: "worktree",
           branchWidth,
+          pathMaxLength,
           homeDir,
         }),
       );
@@ -253,6 +266,7 @@ export const buildDisplayRows = (
           index: entry.index,
           section: "branch",
           branchWidth,
+          pathMaxLength,
           homeDir,
         }),
       );

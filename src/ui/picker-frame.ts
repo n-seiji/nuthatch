@@ -187,6 +187,38 @@ export const wrapInBox = (content: readonly StyledLine[], width: number): Styled
   return [top, ...middle, bottom];
 };
 
+const ELLIPSIS = "…";
+
+/**
+ * Truncates one line to at most `width` display columns, replacing any cut
+ * content with an ellipsis -- never splitting a grapheme cluster.
+ * Exported as a last-resort safety net picker.ts applies to every rendered
+ * line: the row/footer builders already try to fit content within the
+ * known terminal width (picker-layout.ts's candidateRowPathMaxLength/
+ * candidateRowBranchWidth, picker-side-by-side.ts's footerHintForWidth),
+ * but this guarantees no line can ever exceed the terminal's actual width
+ * regardless of what produced it (astra/Fable-reported: an overflowing
+ * line gets wrapped by the terminal itself, which throws off
+ * picker-viewport.ts's rowBudget estimate and can scroll the screen).
+ */
+export const truncateLineToWidth = (line: StyledLine, width: number): StyledLine => {
+  if (lineWidth(line) <= width) {
+    return line;
+  }
+  const budget = Math.max(0, width - displayWidth(ELLIPSIS));
+  const kept: StyledGrapheme[] = [];
+  let usedWidth = 0;
+  for (const char of flattenToGraphemes(line)) {
+    const charWidth = displayWidth(char.text);
+    if (usedWidth + charWidth > budget) {
+      break;
+    }
+    kept.push(char);
+    usedWidth += charWidth;
+  }
+  return [...groupIntoSpans(kept), { text: ELLIPSIS }];
+};
+
 /** Builds one full frame (cursor-home + clear-to-end-of-screen + content), ready to write in a single call. */
 export const buildFrame = (input: FrameInput): string => {
   const { left, right, stacked, colorEnabled } = input;

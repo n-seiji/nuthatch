@@ -54,6 +54,91 @@ const buildSnapshotWithPanelOpen = (branch: string): PickerSnapshot => {
   };
 };
 
+const buildListSnapshot = (candidates: readonly PickCandidate[]): PickerSnapshot => ({
+  query: "",
+  filtered: candidates,
+  clampedIndex: 0,
+  mode: { kind: "list" },
+  panelIndex: 0,
+  busy: false,
+});
+
+/**
+ * Regression coverage for the second astra/Fable-reported overflow: even
+ * without a side panel, an unconstrained candidate row (long branch name +
+ * long path) or the full-length footer hint routinely exceeded a narrow
+ * terminal's actual width on their own, so the terminal itself wrapped
+ * them -- inflating the real row count past what picker-viewport.ts's
+ * rowBudget had estimated, which could scroll the screen.
+ */
+describe("renderPickerFrame (all rows fit the terminal width)", () => {
+  const longBranchCandidate = worktreeCandidate(
+    "feature/a-genuinely-very-long-branch-name-for-testing-overflow",
+    "/Users/example/ghq/github.com/some-org/some-very-long-repository-name/subdir",
+  );
+
+  it.each([60, 80, 100, 140])("%i 桁端末では、描画される全行が端末幅に収まる", (width) => {
+    const snapshot = buildListSnapshot([longBranchCandidate]);
+    const frame = renderPickerFrame({
+      snapshot,
+      width,
+      height: 24,
+      colorEnabled: false,
+    });
+    for (const line of frameLines(frame)) {
+      expect(displayWidth(line)).toBeLessThanOrEqual(width);
+    }
+  });
+
+  it.each([60, 80, 100, 140])(
+    "%i 桁端末でも候補行から branch 名と状態マーカーが消えない",
+    (width) => {
+      const snapshot = buildListSnapshot([longBranchCandidate]);
+      const frame = renderPickerFrame({
+        snapshot,
+        width,
+        height: 24,
+        colorEnabled: false,
+      });
+      const lines = frameLines(frame);
+      const candidateLine = lines.find((line) => line.includes("❯"));
+      expect(candidateLine).toBeDefined();
+      // The status marker ("○" clean) and at least the start of the branch name must survive -- only the path column is allowed to shrink first.
+      expect(candidateLine).toContain("○");
+      expect(candidateLine).toContain("feature/a-genuinely");
+    },
+  );
+
+  it.each([60, 80, 100, 140])("%i 桁端末でもフッターに終了方法 (Esc) が残る", (width) => {
+    const snapshot = buildListSnapshot([longBranchCandidate]);
+    const frame = renderPickerFrame({
+      snapshot,
+      width,
+      height: 24,
+      colorEnabled: false,
+    });
+    const lines = frameLines(frame);
+    expect(lines.some((line) => line.includes("Esc"))).toBe(true);
+  });
+
+  it("全角文字・絵文字を含む branch 名でも、60 桁端末で行が端末幅を超えない", () => {
+    const wideCandidate = worktreeCandidate(
+      "フィーチャー/日本語-ブランチ-🎉-very-long-name",
+      "/Users/example/ghq/github.com/some-org/repo",
+    );
+    const snapshot = buildListSnapshot([wideCandidate]);
+    const frame = renderPickerFrame({
+      snapshot,
+      width: 60,
+      height: 24,
+      colorEnabled: false,
+    });
+    for (const line of frameLines(frame)) {
+      expect(displayWidth(line)).toBeLessThanOrEqual(60);
+    }
+  });
+});
+
 describe("renderPickerFrame (side-by-side panel width)", () => {
   it.each([80, 100])("%i 桁端末で panel を開いても、どの行も端末幅を超えない", (width) => {
     const snapshot = buildSnapshotWithPanelOpen("feature/some-branch-name");
