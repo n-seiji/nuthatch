@@ -6,14 +6,16 @@ import { usePickerController } from "./picker-controller.ts";
 import type { PickerCancelReason } from "./picker-keys.ts";
 import {
   buildDisplayRows,
+  computeViewport,
   displayRowKey,
   isNarrowTerminal,
   LEGEND_TEXT,
+  rowBudget,
   type DisplayRow,
 } from "./picker-layout.ts";
 import type { PickerCallbacks, PickerMode, PickerResult } from "./picker-types.ts";
 import { ActionPanel, ConfirmPanel } from "./side-panel.tsx";
-import { useTerminalWidth } from "./use-terminal-width.ts";
+import { useTerminalHeight, useTerminalWidth } from "./use-terminal-width.ts";
 
 export type {
   ActionOutcome,
@@ -22,8 +24,6 @@ export type {
   PickerOutcome,
   PickerResult,
 } from "./picker-types.ts";
-
-const MAX_VISIBLE_ROWS = 15;
 
 const LIST_FOOTER_HINT =
   "Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K,J move · Enter cd · Esc cancel";
@@ -34,16 +34,33 @@ interface PickerListProps {
   readonly query: string;
   readonly rows: readonly DisplayRow[];
   readonly clampedIndex: number;
-  readonly hiddenCount: number;
+  readonly hiddenAbove: number;
+  readonly hiddenBelow: number;
   readonly footerHint: string;
   readonly marginRight: number;
 }
+
+/** The "N more" line above/below the window — reused for both directions, singular wording included since it can read either "1 more" or "12 more". */
+const HiddenCountLine = ({
+  count,
+  direction,
+}: {
+  readonly count: number;
+  readonly direction: "above" | "below";
+}) =>
+  count > 0 ? (
+    <Text dimColor>
+      {direction === "above" ? "↑ " : "↓ "}
+      {count} more {direction === "above" ? "above" : "below"} (keep typing to narrow down)
+    </Text>
+  ) : null;
 
 const PickerList = ({
   query,
   rows,
   clampedIndex,
-  hiddenCount,
+  hiddenAbove,
+  hiddenBelow,
   footerHint,
   marginRight,
 }: PickerListProps) => (
@@ -53,6 +70,7 @@ const PickerList = ({
       <Text dimColor>{query.length === 0 ? " (type to filter)" : ""}</Text>
     </Text>
     {rows.length === 0 && <Text dimColor>No matches.</Text>}
+    <HiddenCountLine count={hiddenAbove} direction="above" />
     {rows.map((row) => {
       if (row.kind === "header") {
         return (
@@ -72,9 +90,7 @@ const PickerList = ({
         </Text>
       );
     })}
-    {hiddenCount > 0 && (
-      <Text dimColor>... and {hiddenCount} more (keep typing to narrow down)</Text>
-    )}
+    <HiddenCountLine count={hiddenBelow} direction="below" />
     <Text dimColor>({LEGEND_TEXT})</Text>
     <Text dimColor>{footerHint}</Text>
   </Box>
@@ -112,19 +128,25 @@ const Picker = ({ candidates, callbacks, onExit, onCancel }: PickerProps) => {
   useInput(handleInput);
 
   const width = useTerminalWidth(process.stderr);
+  const height = useTerminalHeight(process.stderr);
   const narrow = isNarrowTerminal(width);
 
-  const visible = filtered.slice(0, MAX_VISIBLE_ROWS);
-  const hiddenCount = filtered.length - visible.length;
-  const rows = buildDisplayRows(visible, homedir());
   const sidePanel = renderSidePanel(mode, panelIndex, busy);
+  // The panel only stacks below the list (consuming vertical rows the list
+  // Would otherwise use) in narrow terminals; side-by-side it costs no rows.
+  const panelStacked = sidePanel !== null && narrow;
+  const budget = rowBudget({ terminalHeight: height, panelStacked });
+  const viewport = computeViewport(filtered.length, clampedIndex, budget);
+  const visible = filtered.slice(viewport.start, viewport.end);
+  const rows = buildDisplayRows(visible, homedir(), viewport.start);
 
   const list = (
     <PickerList
       query={query}
       rows={rows}
       clampedIndex={clampedIndex}
-      hiddenCount={hiddenCount}
+      hiddenAbove={viewport.hiddenAbove}
+      hiddenBelow={viewport.hiddenBelow}
       footerHint={sidePanel === null ? LIST_FOOTER_HINT : PANEL_FOOTER_HINT}
       marginRight={sidePanel === null || narrow ? 0 : 1}
     />

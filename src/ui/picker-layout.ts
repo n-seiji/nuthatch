@@ -1,6 +1,11 @@
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
 import { displayWidth, padToWidth, truncateToWidthKeepingTail } from "../domain/display-width.ts";
 
+// Re-exported so picker.tsx (already at its import-count budget) doesn't
+// Need a separate import source for viewport math — picker-viewport.ts
+// Stays its own module for testability, this is just a re-export.
+export { computeViewport, rowBudget } from "./picker-viewport.ts";
+
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
  * display the picker renders (WORKTREES / BRANCHES, status markers, padded
@@ -207,16 +212,26 @@ const toCandidateRow = (
  * narrowing never disturbs the order). A section with no members is
  * omitted entirely, header included — this naturally handles both "no
  * creatable branches at all" and "search query filtered a section empty".
- * `index` on each candidate row is its position in `candidates`, which the
- * picker uses unchanged as its cursor position (headers aren't selectable
- * and never consume an index).
+ * `index` on each candidate row is its position in `candidates` plus
+ * `indexOffset`, which the picker uses unchanged as its cursor position
+ * (headers aren't selectable and never consume an index). `indexOffset`
+ * matters when `candidates` is a scrolled *window* rather than the full
+ * filtered list (see picker-viewport.ts) — without it, a windowed call
+ * would number rows 0..N regardless of where the window starts, so a
+ * selection past the first screenful could never line up with any row's
+ * `index` (astra-reported bug this fixes; see picker-viewport.ts's
+ * module comment for the full story).
  */
 export const buildDisplayRows = (
   candidates: readonly PickCandidate[],
   homeDir: string,
+  indexOffset = 0,
 ): readonly DisplayRow[] => {
   const branchWidth = branchColumnWidth(candidates);
-  const indexed = candidates.map((candidate, index) => ({ candidate, index }));
+  const indexed = candidates.map((candidate, index) => ({
+    candidate,
+    index: index + indexOffset,
+  }));
   const worktreeEntries = indexed.filter((entry) => isWorktreeCandidate(entry.candidate));
   const branchEntries = indexed.filter((entry) => isCreatableCandidate(entry.candidate));
 
