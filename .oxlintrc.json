@@ -137,7 +137,7 @@
             "patterns": [
               {
                 "group": ["../commands/**", "../cli.ts", "../render.ts", "../testing/**"],
-                "message": "ui/ may use domain (candidate types), infra, ink/react, and node:* — but must not depend on commands/, cli.ts, render.ts, or testing/. cli.ts calls ui/, not the other way around. See AGENTS.md."
+                "message": "ui/ may use domain (candidate types), infra, and node:* — but must not depend on commands/, cli.ts, render.ts, or testing/. cli.ts calls ui/, not the other way around. See AGENTS.md."
               }
             ]
           }

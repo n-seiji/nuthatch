@@ -1,5 +1,4 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { parse } from "valibot";
 import { createFsPort } from "./infra/fs.ts";
@@ -82,27 +81,12 @@ describe("hop --json contract", () => {
 describe("bare `hop` (no target)", () => {
   it("非 TTY では ls 相当の一覧を返す (picker を起動しない)", () => {
     // ExecFileSync always pipes stdout/stderr, so this runs with isTTY()
-    // False end to end — if the picker path were taken instead, ink would
-    // Try to read from a non-interactive stdin and this would hang or
-    // Error instead of returning promptly.
+    // False end to end — if the picker path were taken instead, the
+    // Terminal session would try to read from a non-interactive stdin and
+    // This would hang or error instead of returning promptly.
     const output = runHop(["--json"]);
     const parsed = parse(LsEnvelopeSchema, output);
     expect(parsed.command).toBe("ls");
-  });
-
-  it("cli.ts / cli-pick.ts は ink の picker を動的 import のみで読み込む (静的 import しない)", async () => {
-    // Guarantees the "non-TTY never touches ink" contract can't regress
-    // Silently: if someone changes `await import("./ui/picker.tsx")` to a
-    // Static value import, ink/react would load unconditionally on every
-    // Invocation, including the fast non-interactive JSON paths above.
-    // The dynamic import lives in cli-pick.ts now (cli.ts only calls its
-    // Exported functions). `import type` is allowed — it's erased entirely
-    // At compile time and never touches ink/react at runtime.
-    const cliSource = await readFile(new URL("cli.ts", import.meta.url), "utf8");
-    const cliPickSource = await readFile(new URL("cli-pick.ts", import.meta.url), "utf8");
-    expect(cliSource).not.toMatch(/from ["']\.\/ui\/picker\.tsx["']/u);
-    expect(cliPickSource).toContain('await import("./ui/picker.tsx")');
-    expect(cliPickSource).not.toMatch(/^import (?!type\b).* from ["']\.\/ui\/picker\.tsx["'];?$/mu);
   });
 });
 

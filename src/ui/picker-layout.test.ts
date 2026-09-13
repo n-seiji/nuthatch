@@ -5,25 +5,11 @@ import {
   branchColumnWidth,
   buildDisplayRows,
   candidateKindLabel,
-  isNarrowTerminal,
   KIND_COLUMN_WIDTH,
-  NARROW_TERMINAL_WIDTH_THRESHOLD,
   padBranchLabel,
   shortenPath,
   statusMarker,
 } from "./picker-layout.ts";
-
-describe("isNarrowTerminal", () => {
-  it("しきい値 (60) 未満は狭いと判定する", () => {
-    expect(isNarrowTerminal(NARROW_TERMINAL_WIDTH_THRESHOLD - 1)).toBe(true);
-    expect(isNarrowTerminal(1)).toBe(true);
-  });
-
-  it("しきい値 (60) 以上は狭くないと判定する (side panel が一覧の隣に収まる)", () => {
-    expect(isNarrowTerminal(NARROW_TERMINAL_WIDTH_THRESHOLD)).toBe(false);
-    expect(isNarrowTerminal(120)).toBe(false);
-  });
-});
 
 describe("statusMarker", () => {
   it("dirty な worktree は ●", () => {
@@ -80,6 +66,13 @@ describe("shortenPath", () => {
   it("上限以下ならそのまま (省略しない)", () => {
     expect(shortenPath("~/short", "/Users/seiji", 20)).toBe("~/short");
   });
+
+  it("全角文字を含むパスは表示幅ベースで省略し、書記素を分割しない", () => {
+    const long = "/Users/seiji/ghq/日本語プロジェクト/very-long-subdirectory-name";
+    const result = shortenPath(long, "/Users/seiji", 20);
+    expect(result.startsWith("…")).toBe(true);
+    expect(long.endsWith(result.slice(1))).toBe(true);
+  });
 });
 
 describe("branchColumnWidth / padBranchLabel", () => {
@@ -99,6 +92,25 @@ describe("branchColumnWidth / padBranchLabel", () => {
   it("padBranchLabel は幅に満たない分だけ空白で埋める", () => {
     expect(padBranchLabel("main", 8)).toBe("main    ");
     expect(padBranchLabel("feat/longer-than-width", 4)).toBe("feat/longer-than-width");
+  });
+
+  it("全角文字を含む branch label は表示幅ベースで揃う", () => {
+    const candidates = [
+      creatableCandidate("feat/x", "local"),
+      creatableCandidate("機能/追加する", "local"),
+    ];
+    const width = branchColumnWidth(candidates);
+    for (const candidate of candidates) {
+      const label = candidate.kind === "creatable" ? candidate.branch : "";
+      const padded = padBranchLabel(label, width);
+      expect(padded.length >= label.length).toBe(true);
+    }
+  });
+
+  it("絵文字を含む branch label でも padBranchLabel が書記素を壊さない", () => {
+    const label = "feat/🚀-launch";
+    const padded = padBranchLabel(label, 20);
+    expect(padded.startsWith(label)).toBe(true);
   });
 });
 

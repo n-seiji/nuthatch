@@ -1,4 +1,15 @@
 import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
+import {
+  displayWidth,
+  padToWidth,
+  truncateToWidth,
+  truncateToWidthKeepingTail,
+} from "../domain/display-width.ts";
+
+// Re-exported so picker.ts (already at its import-count budget) doesn't
+// Need a separate import source for viewport math — picker-viewport.ts
+// Stays its own module for testability, this is just a re-export.
+export { computeViewport, DEFAULT_TERMINAL_HEIGHT, rowBudget } from "./picker-viewport.ts";
 
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
@@ -7,16 +18,12 @@ import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.t
  * without rendering — see picker-layout.test.ts.
  */
 
-const MAX_PATH_LENGTH = 40;
-const MAX_BRANCH_COLUMN_WIDTH = 24;
+/** Exported for picker-side-by-side.ts's MAX_CANDIDATE_ROW_WIDTH -- kept here since it's this module's own column-width budget. */
+export const MAX_PATH_LENGTH = 40;
+/** Exported for picker-side-by-side.ts's MAX_CANDIDATE_ROW_WIDTH -- see MAX_PATH_LENGTH above. */
+export const MAX_BRANCH_COLUMN_WIDTH = 24;
 
 export const LEGEND_TEXT = "●=dirty ○=clean +=not created";
-
-/** Below this terminal width, the side-by-side action panel doesn't fit alongside the list; picker.tsx falls back to stacking the panel below the list instead. */
-export const NARROW_TERMINAL_WIDTH_THRESHOLD = 60;
-
-export const isNarrowTerminal = (columns: number): boolean =>
-  columns < NARROW_TERMINAL_WIDTH_THRESHOLD;
 
 const WORKTREE_KIND_LABELS: Record<"root" | "managed" | "external", string> = {
   root: "root",
@@ -116,7 +123,13 @@ export const KIND_COLUMN_WIDTH = Math.max(
   ...Object.values(CREATABLE_SOURCE_LABELS).map((label) => label.length),
 );
 
-/** Replaces a leading `$HOME` with `~`, then truncates from the front (keeping the tail) past maxLength. */
+/**
+ * Replaces a leading `$HOME` with `~`, then truncates from the front
+ * (keeping the tail) past maxLength *display columns* — not
+ * `.length`/UTF-16 units, so a path containing wide characters (CJK
+ * directory names, emoji) truncates at the same visual width a plain
+ * ASCII path would, and never splits a grapheme cluster in half.
+ */
 export const shortenPath = (
   path: string,
   homeDir: string,
@@ -126,27 +139,29 @@ export const shortenPath = (
     homeDir.length > 0 && (path === homeDir || path.startsWith(`${homeDir}/`))
       ? `~${path.slice(homeDir.length)}`
       : path;
-  if (withTilde.length <= maxLength) {
-    return withTilde;
-  }
-  const ellipsis = "…";
-  const keepLength = maxLength - ellipsis.length;
-  return `${ellipsis}${withTilde.slice(withTilde.length - keepLength)}`;
+  return truncateToWidthKeepingTail(withTilde, maxLength);
 };
 
-const candidatePathLabel = (candidate: PickCandidate, homeDir: string): string =>
-  candidate.kind === "worktree" ? shortenPath(candidate.worktree.path, homeDir) : "";
+const candidatePathLabel = (
+  candidate: PickCandidate,
+  homeDir: string,
+  maxLength: number,
+): string =>
+  candidate.kind === "worktree" ? shortenPath(candidate.worktree.path, homeDir, maxLength) : "";
 
-/** The branch/kind column width: the longest label in the list, capped so one long name can't blow out the layout. */
-export const branchColumnWidth = (candidates: readonly PickCandidate[]): number =>
+/** Longest branch label's display width, uncapped -- lets a wide terminal show branch names past MAX_BRANCH_COLUMN_WIDTH in full instead of clipping two long names sharing a prefix to the same text (Fable-reported). Used by picker.ts's terminal-aware constrainRowColumnWidths; branchColumnWidth (below) is for callers that don't know the terminal width. */
+export const rawBranchColumnWidth = (candidates: readonly PickCandidate[]): number =>
   candidates.reduce(
-    (max, candidate) =>
-      Math.min(MAX_BRANCH_COLUMN_WIDTH, Math.max(max, candidateBranchLabel(candidate).length)),
+    (max, candidate) => Math.max(max, displayWidth(candidateBranchLabel(candidate))),
     0,
   );
 
-export const padBranchLabel = (label: string, width: number): string =>
-  label.length >= width ? label : label.padEnd(width, " ");
+/** The branch/kind column width, capped at MAX_BRANCH_COLUMN_WIDTH. */
+export const branchColumnWidth = (candidates: readonly PickCandidate[]): number =>
+  Math.min(MAX_BRANCH_COLUMN_WIDTH, rawBranchColumnWidth(candidates));
+
+/** Pads `label` to `width` *display columns* — a fullwidth branch name (CJK, emoji) still lines its column up with an ASCII one. */
+export const padBranchLabel = (label: string, width: number): string => padToWidth(label, width);
 
 export interface HeaderRow {
   readonly kind: "header";
@@ -181,6 +196,7 @@ interface ToCandidateRowOptions {
   readonly index: number;
   readonly section: "worktree" | "branch";
   readonly branchWidth: number;
+  readonly pathMaxLength: number;
   readonly homeDir: string;
 }
 
@@ -192,30 +208,42 @@ const toCandidateRow = (
   index: options.index,
   section: options.section,
   statusMarker: statusMarker(candidate),
-  branchLabel: padBranchLabel(candidateBranchLabel(candidate), options.branchWidth),
+  branchLabel: padBranchLabel(
+    truncateToWidth(candidateBranchLabel(candidate), options.branchWidth),
+    options.branchWidth,
+  ),
   kindLabel: candidateKindLabel(candidate).padEnd(KIND_COLUMN_WIDTH, " "),
-  pathLabel: candidatePathLabel(candidate, options.homeDir),
+  pathLabel: candidatePathLabel(candidate, options.homeDir, options.pathMaxLength),
 });
 
 /**
  * Builds the rows the picker renders: a WORKTREES section followed by a
- * BRANCHES section (not-yet-created branches). Groups by kind only —
- * ordering *within* each section (root first, local before remote, etc.)
- * is sortCandidatesForDisplay's job; callers should sort before calling
- * this (picker-controller.ts does, right after search filtering, so
- * narrowing never disturbs the order). A section with no members is
- * omitted entirely, header included — this naturally handles both "no
- * creatable branches at all" and "search query filtered a section empty".
- * `index` on each candidate row is its position in `candidates`, which the
- * picker uses unchanged as its cursor position (headers aren't selectable
- * and never consume an index).
+ * BRANCHES section. `index` on each candidate row is its position in
+ * `candidates` plus `indexOffset` (unchanged as the picker's cursor
+ * position) -- matters when `candidates` is a scrolled *window* rather
+ * than the full filtered list (see picker-viewport.ts). `columnWidths`
+ * overrides the natural (candidate-driven) branch/path column widths --
+ * used by picker.ts to keep every row within the terminal's actual width
+ * (see picker-side-by-side.ts's constrainRowColumnWidths); omitted, it
+ * defaults to the unconstrained widths every existing caller/test expects.
  */
 export const buildDisplayRows = (
   candidates: readonly PickCandidate[],
   homeDir: string,
+  indexOffset = 0,
+  columnWidths?: {
+    readonly branchWidth: number;
+    readonly pathMaxLength: number;
+  },
 ): readonly DisplayRow[] => {
-  const branchWidth = branchColumnWidth(candidates);
-  const indexed = candidates.map((candidate, index) => ({ candidate, index }));
+  const { branchWidth, pathMaxLength } = columnWidths ?? {
+    branchWidth: branchColumnWidth(candidates),
+    pathMaxLength: MAX_PATH_LENGTH,
+  };
+  const indexed = candidates.map((candidate, index) => ({
+    candidate,
+    index: index + indexOffset,
+  }));
   const worktreeEntries = indexed.filter((entry) => isWorktreeCandidate(entry.candidate));
   const branchEntries = indexed.filter((entry) => isCreatableCandidate(entry.candidate));
 
@@ -228,6 +256,7 @@ export const buildDisplayRows = (
           index: entry.index,
           section: "worktree",
           branchWidth,
+          pathMaxLength,
           homeDir,
         }),
       );
@@ -241,6 +270,7 @@ export const buildDisplayRows = (
           index: entry.index,
           section: "branch",
           branchWidth,
+          pathMaxLength,
           homeDir,
         }),
       );
