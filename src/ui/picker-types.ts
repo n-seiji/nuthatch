@@ -1,3 +1,4 @@
+import type { PickerActionKind } from "../domain/actions.ts";
 import type { PickCandidate } from "../domain/candidates.ts";
 import type { PickerCancelReason } from "./picker-keys.ts";
 
@@ -49,7 +50,9 @@ export type PickerMode =
       readonly error: string | null;
     }
   | {
-      readonly kind: "confirmDelete";
+      readonly kind: "confirm";
+      /** Which mutation the y/N overlay is gating — currently "delete" or "switchRoot". */
+      readonly action: Exclude<PickerActionKind, "cd">;
       readonly candidate: PickCandidate;
       readonly error: string | null;
     };

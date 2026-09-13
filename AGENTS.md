@@ -1,75 +1,111 @@
 # AGENTS.md
 
-この repo で作業する coding agent (Claude Code / Codex 等) 向けガイド。
+Guide for coding agents (Claude Code / Codex, etc.) working in this repo.
 
 ## Repository Overview
 
-`nuthatch` — git worktree manager。ユーザーが使うコマンド名は `hop`。
-設計の正本は [docs/design.md](docs/design.md)。実装前に必ず読むこと。
+`nuthatch` — a git worktree manager. The command users run is `hop`.
+The source of truth for design is [docs/design.md](docs/design.md). Read it
+before implementing anything.
 
-## ディレクトリ構成と責務
+## Directory Layout and Responsibilities
 
 ```
-src/                 # 実装 (TypeScript, bun)。テストは対象ファイルと同階層に置く (*.test.ts)
-src/testing/         # テスト専用の共有 helper (tmpdir 実 git repo 生成など)。テストからのみ import
-docs/design.md       # 設計書 (source of truth)
-skills/              # plugins/hop/skills へ の symlink (正本は plugin 側)
-plugins/hop/         # 公開 plugin (Claude Code / Codex 両対応)。skills へは symlink
-.claude/rules/       # 開発専用 rule (この repo の開発時のみ使う。配布しない)
+src/                 # Implementation (TypeScript, bun). Tests live next to the file under test (*.test.ts)
+src/testing/         # Test-only shared helpers (e.g. building a real tmpdir git repo). Imported only from tests
+docs/design.md       # Design document (source of truth)
+skills/              # Symlink to plugins/hop/skills (the plugin side is the source of truth)
+plugins/hop/         # Published plugin (supports both Claude Code and Codex). skills/ is a symlink into it
+.claude/rules/       # Development-only rules (used only while developing this repo, never distributed)
 .claude-plugin/      # Claude Code marketplace index
 .agents/plugins/     # Codex marketplace index
-shell/               # hop init zsh のテンプレート
+shell/               # Template for `hop init zsh`
 ```
 
-- **テストは実装ファイルと同じディレクトリに置く** (colocate)。例: `src/domain/porcelain.ts` の
-  テストは `src/domain/porcelain.test.ts`。複数コマンドをまたぐ integration test は
-  `<関心事>.integration.test.ts` のように命名し、対象コマンドが属するディレクトリに置く
-  (例: `src/commands/jump-ls-rm.integration.test.ts`)。共有 helper は `src/testing/`。
+- **Colocate tests with the implementation file.** For example, the test for
+  `src/domain/porcelain.ts` is `src/domain/porcelain.test.ts`. Integration
+  tests that span multiple commands are named `<concern>.integration.test.ts`
+  and live in the directory of the command they target (e.g.
+  `src/commands/jump-ls-rm.integration.test.ts`). Shared helpers go in
+  `src/testing/`.
 
-- **公開 skill の正本は `plugins/hop/skills/`** (Codex の plugin installer が symlink を展開しないため実体は plugin 側に置く)。repo ルートの `skills/` は発見用の symlink。Claude Code と Codex の両方から
-  install できる形式 (`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`) を保つ。
-- **開発専用 rule / skill** は `.claude/` 配下。配布物に含めない。
+- **The source of truth for the published skill is `plugins/hop/skills/`**
+  (the Codex plugin installer doesn't expand symlinks, so the real files live
+  on the plugin side). The `skills/` symlink at the repo root exists only for
+  discoverability. Keep the plugin installable from both Claude Code and
+  Codex (`.claude-plugin/plugin.json` + `.codex-plugin/plugin.json`).
+- **Development-only rules/skills** live under `.claude/`. Never include them
+  in distributed artifacts.
 
-## アーキテクチャ制約 (違反 PR は reject)
+## Architecture Constraints (violating PRs are rejected)
 
-依存方向はオニオン構造の一方向のみ: `cli.ts/render.ts → commands → infra → domain`
-(`commands` は `infra` と `domain` の両方に依存してよい)。domain が最内層で外部に一切依存しない
-のは、CLI の入出力やコマンド構成が変わっても判定ロジック (worktree 分類・sanitize・garbage 判定
-など) を単体でテストし続けられるようにするため。infra を subprocess/fs の唯一の窓口にしている
-のは、git や fs の呼び出し規約 (argv 配列で spawn、文字列連結禁止) を 1 箇所に閉じ込め、
-テスト時にはポート越しに差し替えられるようにするため。commands が描画しないのは、出力形式
-(plain/JSON) の変更が判定ロジックに波及しないようにするため。
+Dependencies flow in one direction only, onion-style:
+`cli.ts/render.ts → commands → infra → domain` (`commands` may depend on both
+`infra` and `domain`). `domain` is the innermost layer with zero external
+dependencies so that its decision logic (worktree classification, sanitizing,
+garbage detection, etc.) keeps being unit-testable on its own even as the
+CLI's I/O or command structure changes. `infra` is the sole gateway to
+subprocess/fs so that git/fs call conventions (spawn with an argv array,
+never string concatenation) stay confined to one place and can be swapped
+out behind ports in tests. `commands` never render so that changing the
+output format (plain/JSON) can never leak into the decision logic.
 
-- `domain/` は純関数のみ。外部依存 (subprocess / fs / TTY / clock / random / node 組み込み) を
-  import しない
-- `infra/` 以外で subprocess / fs を直接呼ばない。git は常に argv 配列で spawn (文字列連結禁止)。
-  subprocess は `node:child_process` (npm 版 Node / compile 版 Bun 両対応のため)
-- `commands/` は描画せず構造化 Result を返す
-- CLI 契約 (stdout / JSON schema / exit code) は docs/design.md の定義に従い、変更は設計書の更新とセットで行う
+- `domain/` contains only pure functions. It must not import external
+  dependencies (subprocess / fs / TTY / clock / random / Node built-ins).
+- Never call subprocess/fs directly outside `infra/`. git is always spawned
+  with an argv array (never string concatenation). Subprocess calls use
+  `node:child_process` (so both the npm/Node build and the compiled Bun
+  binary work).
+- `commands/` never render; they return a structured `Result`.
+- The CLI contract (stdout / JSON schema / exit codes) follows the
+  definitions in docs/design.md — any change must come with a matching
+  update to the design document.
 
-上記の依存方向・`any` 禁止・console 直書き禁止・循環 import・`commands/` 相互 import は
-`.oxlintrc.json` (層ごとの `no-restricted-imports` + `import/no-nodejs-modules`) で機械的に
-強制する。ここに書いているのは lint では表現できない「なぜそう設計したか」の意図のみ。
+The dependency direction above, the ban on `any`, the ban on calling
+`console` directly, circular imports, and cross-imports between `commands/`
+are all mechanically enforced by `.oxlintrc.json` (`no-restricted-imports`
+per layer + `import/no-nodejs-modules`). What's written here is only the
+"why" behind the design that lint can't express.
 
-## 開発ワークフロー
+## Development Workflow
 
-- テスト先行 (TDD)。domain は unit、commands は tmpdir 実 git repo での integration
-- integration test は GIT_CONFIG_NOSYSTEM=1 / GIT_CONFIG_GLOBAL=/dev/null / HOME 隔離 / hooks 無効 / LC_ALL=C
-- 検証コマンド:
+- Test-first (TDD). `domain` gets unit tests; `commands` get integration
+  tests against a real git repo in a tmpdir.
+- Integration tests run with `GIT_CONFIG_NOSYSTEM=1` /
+  `GIT_CONFIG_GLOBAL=/dev/null` / an isolated `HOME` / hooks disabled /
+  `LC_ALL=C`.
+- Verification commands:
 
 ```bash
-bun test              # 全テスト
+bun test              # all tests
 bun run typecheck     # tsc --noEmit
 bun run lint          # oxlint
 bun run format:check  # oxfmt --check
 ```
 
-- external worktree (agent が作ったもの) を mutation の対象にしない、が最重要の安全規則。
-  破壊操作に関わる変更では必ず docs/design.md の「worktree の 3 分類」「CLI 契約」を再読すること。
+- `hop` treats every worktree it can see — managed or external, regardless
+  of who created it — as a valid target for moving, deleting, or swapping
+  out of root. Being `external` is not by itself a reason to refuse
+  mutation. The safety net that makes this workable is the most important
+  safety rule:
+  - Refuse a dirty worktree (overridable with `--force`).
+  - Always refuse a worktree git itself reports as locked, `--force` or not
+    (hop never removes a lock itself).
+  - Deleting an external worktree from the picker or via Ctrl+X always
+    requires a y/N confirmation.
+  - `hop clean`'s automatic candidates are managed worktrees only (external
+    ones are never auto-deleted).
+  - Every mutation acquires the repo lock, then re-validates before acting.
+  Any change touching destructive operations must re-read "The 3 worktree
+  categories" and "CLI contract" in docs/design.md.
 
 ## Working Rules
 
-- 複数段階の作業は、実装前に変更対象と検証方法を明確にする
-- 変更後は触った範囲に対応する検証コマンドを実行し、結果を共有する
-- commit 前に secrets、権限、入力境界の扱いを見直す
-- コミットメッセージは conventional commits (feat/fix/refactor/docs/test/chore/ci)
+- For multi-step work, clarify what's changing and how it will be verified
+  before touching code.
+- After making a change, run the verification commands relevant to what you
+  touched and share the results.
+- Before committing, review how secrets, permissions, and input boundaries
+  are handled.
+- Commit messages follow Conventional Commits
+  (feat/fix/refactor/docs/test/chore/ci).

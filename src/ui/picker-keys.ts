@@ -118,8 +118,8 @@ export type PanelKeyAction =
 
 /**
  * Key handling for the action panel (now a side column, not an overlay).
- * Enter always runs the currently-highlighted action ("全アクション Enter
- * で完結できる" in the design); c/d/r are shortcuts that run that action
+ * Enter always runs the currently-highlighted action ("every action can be
+ * completed with Enter" in the design); c/d/r are shortcuts that run that action
  * immediately regardless of highlight. Esc, Tab, ←, Ctrl+H, and physical
  * Backspace (see the module comment — ink can't tell it apart from Ctrl+H)
  * all close the panel back to the list — ← and Ctrl+H mirror the → and

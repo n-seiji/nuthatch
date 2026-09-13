@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { availableActions } from "./actions.ts";
+import { availableActions, requiresDeleteConfirmation } from "./actions.ts";
 import type { PickCandidate } from "./candidates.ts";
 import type { Worktree } from "./model.ts";
 
@@ -36,9 +36,10 @@ describe("availableActions", () => {
     ]);
   });
 
-  it("external worktree は cd / switchRoot のみ (delete は出さない)", () => {
+  it("external worktree も cd / delete / switchRoot すべて出す (hop は今や external も rm できる)", () => {
     expect(availableActions(worktreeCandidate({ kind: "external", branch: "feat/b" }))).toEqual([
       "cd",
+      "delete",
       "switchRoot",
     ]);
   });
@@ -56,5 +57,28 @@ describe("availableActions", () => {
       source: "local",
     };
     expect(availableActions(candidate)).toEqual(["cd", "switchRoot"]);
+  });
+});
+
+describe("requiresDeleteConfirmation", () => {
+  it("external worktree は常に確認が必要", () => {
+    expect(
+      requiresDeleteConfirmation(worktreeCandidate({ kind: "external", branch: "feat/b" })),
+    ).toBe(true);
+  });
+
+  it("managed worktree は (picker の既存挙動どおり) ここでは確認不要", () => {
+    expect(
+      requiresDeleteConfirmation(worktreeCandidate({ kind: "managed", branch: "feat/a" })),
+    ).toBe(false);
+  });
+
+  it("creatable candidate は worktree ではないので確認不要", () => {
+    const candidate: PickCandidate = {
+      kind: "creatable",
+      branch: "feat/c",
+      source: "local",
+    };
+    expect(requiresDeleteConfirmation(candidate)).toBe(false);
   });
 });

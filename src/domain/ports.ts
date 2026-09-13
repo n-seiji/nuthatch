@@ -8,8 +8,14 @@ export interface GitPort {
   listWorktreesPorcelain: (cwd: string) => Promise<string>;
   /** Absolute path to the git common dir (shared across worktrees). */
   commonDir: (cwd: string) => Promise<string>;
-  /** True if the worktree at `path` has uncommitted changes or untracked files. */
-  isDirty: (path: string) => Promise<boolean>;
+  /**
+   * True if the worktree at `path` has uncommitted changes or untracked
+   * files. `otherWorktreePaths` (other registered worktrees' realpath'd
+   * paths) are excluded from the check: a worktree nested inside `path`
+   * (e.g. Claude Code's EnterWorktree under `.claude/worktrees/`) must not
+   * make `path` itself look dirty.
+   */
+  isDirty: (path: string, otherWorktreePaths: readonly string[]) => Promise<boolean>;
   /** Creates a new worktree at `path` for `branch`, creating the branch if needed. */
   addWorktree: (
     cwd: string,
@@ -29,6 +35,8 @@ export interface GitPort {
   listRemoteBranches: (cwd: string) => Promise<string[]>;
   /** Switches the worktree at `cwd` to `ref` (a branch name or "-" for the previous branch). */
   switchBranch: (cwd: string, ref: string, options?: SwitchBranchOptions) => Promise<void>;
+  /** Detaches HEAD at `cwd` (`git switch --detach`), freeing up whatever branch it held. */
+  detachHead: (cwd: string) => Promise<void>;
   /** The repo's default branch ref: origin/HEAD if set, else local main/master. Null if none found. */
   resolveDefaultBranchRef: (cwd: string) => Promise<string | null>;
   /** Whether every commit on `branch` is also reachable from `ref` ("unknown" if undeterminable). */

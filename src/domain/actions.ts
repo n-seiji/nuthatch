@@ -13,11 +13,12 @@ export type PickerActionKind = (typeof PICKER_ACTIONS)[number];
  * unit tested without ink or git:
  *
  * - `cd`: every candidate.
- * - `delete`: only an already-created worktree that nuthatch manages
- *   (`kind: "managed"`). Root and external worktrees never offer delete —
- *   root because it isn't a worktree to remove, external because mutation
- *   must not default onto an agent's worktree (docs/design.md's "worktree
- *   の 3 分類").
+ * - `delete`: any already-created worktree except root (`kind: "managed"` or
+ *   `"external"`). External worktrees still offer delete — hop can now
+ *   manage worktrees it didn't create — but the picker always gates deleting
+ *   one behind an explicit y/N confirmation (see requiresDeleteConfirmation
+ *   below), since it may be another agent's in-use working copy. Root never
+ *   offers delete — it isn't a worktree to remove.
  * - `switchRoot`: every candidate except the root worktree itself (switching
  *   root "here" is meaningless when "here" already is root).
  * - Detached-HEAD worktrees (no branch name) only offer `cd` — `rm`/`root`
@@ -35,7 +36,7 @@ export const availableActions = (candidate: PickCandidate): readonly PickerActio
     return actions;
   }
 
-  if (candidate.worktree.kind === "managed") {
+  if (candidate.worktree.kind === "managed" || candidate.worktree.kind === "external") {
     actions.push("delete");
   }
   if (candidate.worktree.kind !== "root") {
@@ -44,3 +45,23 @@ export const availableActions = (candidate: PickCandidate): readonly PickerActio
 
   return actions;
 };
+
+/**
+ * Whether deleting this candidate must go through an explicit y/N
+ * confirmation regardless of entry point (Ctrl+X shortcut or the action
+ * panel's "delete" entry). Managed worktrees keep the picker's existing
+ * behavior (Ctrl+X confirms, the panel entry does not); external worktrees
+ * always require it, since they may be another agent's in-use working copy.
+ */
+export const requiresDeleteConfirmation = (candidate: PickCandidate): boolean =>
+  candidate.kind === "worktree" && candidate.worktree.kind === "external";
+
+/**
+ * Whether switching root "here" for this candidate must go through an
+ * explicit y/N confirmation. Switching root can detach whatever worktree
+ * currently holds the target branch (see commands/root.ts's holder swap) —
+ * for an external worktree that's someone else's in-use working copy, so
+ * this mirrors requiresDeleteConfirmation rather than running immediately.
+ */
+export const requiresSwitchRootConfirmation = (candidate: PickCandidate): boolean =>
+  candidate.kind === "worktree" && candidate.worktree.kind === "external";

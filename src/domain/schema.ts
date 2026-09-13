@@ -105,10 +105,14 @@ export type JumpEnvelope = InferOutput<typeof JumpEnvelopeSchema>;
 export const RmEnvelopeSchema = jsonEnvelopeSchema(RmDataSchema);
 export type RmEnvelope = InferOutput<typeof RmEnvelopeSchema>;
 
+const NullableStringSchema = nullable(string());
+
 /** `hop root [<branch>|-]` data shape. */
 export const RootDataSchema = object({
-  branch: nullable(string()),
+  branch: NullableStringSchema,
   switched: boolean(),
+  /** Path of a worktree this switch detached HEAD on to free up the branch, if any. */
+  detachedHolder: optional(NullableStringSchema),
 });
 export type RootData = InferOutput<typeof RootDataSchema>;
 

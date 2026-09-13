@@ -30,7 +30,8 @@ Options:
   --create               Create the worktree when jumping to a branch without one (required outside a TTY)
   --json                 Output JSON instead of plain text
   --force                Force removal even if the worktree is dirty (hop rm)
-  --ext                  Allow operating on external worktrees (hop rm / hop clean)
+  --ext                  [deprecated, no-op for hop rm] hop rm no longer requires it to
+                         remove external worktrees; still gates hop clean's auto-cleanup scope
   --yes                  Skip confirmation and execute (hop clean)
   --dry-run              Only report candidates as JSON, without deleting (hop clean)
   --with-branch          Also delete the branch when cleaning (hop clean)

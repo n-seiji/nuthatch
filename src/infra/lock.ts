@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { canReclaimLock } from "../domain/lock-policy.ts";
+import { type CommandResult, EXIT_SAFE_REJECTION, fail } from "../domain/result.ts";
 
 const LOCK_DIR_NAME = "nuthatch-lock";
 const LOCK_INFO_FILE = "info.json";
@@ -125,4 +126,33 @@ export const acquireRepoLock = async (
       await rm(lockDir, { recursive: true, force: true });
     },
   };
+};
+
+export type RepoLockAcquisition<T> =
+  | { readonly ok: true; readonly lock: RepoLock }
+  | { readonly ok: false; readonly rejection: CommandResult<T> };
+
+/**
+ * Same as acquireRepoLock, but turns a LockHeldError into a normal
+ * CommandResult rejection (exit 3, safe rejection) instead of a thrown
+ * exception. Another process holding the repo lock is a safe, expected
+ * outcome — not an internal error — so it must surface through the
+ * command's usual structured-error path (intact `--json` envelope) rather
+ * than as an uncaught exception with a bare stack trace. Any other error
+ * (e.g. an unreadable lock dir permission failure) still throws, since
+ * that's a genuine unexpected failure.
+ */
+export const acquireRepoLockOrRejection = async <T>(
+  commonDir: string,
+  ttlMs?: number,
+): Promise<RepoLockAcquisition<T>> => {
+  try {
+    const lock = await acquireRepoLock(commonDir, ttlMs);
+    return { ok: true, lock };
+  } catch (error) {
+    if (error instanceof LockHeldError) {
+      return { ok: false, rejection: fail(EXIT_SAFE_REJECTION, error.message) };
+    }
+    throw error;
+  }
 };

@@ -1,7 +1,7 @@
 {
   "name": "hop",
   "version": "0.1.2",
-  "description": "git worktree manager「hop」(nuthatch) の使い方 skill",
+  "description": "Usage skill for the git worktree manager \"hop\" (nuthatch)",
   "author": {
     "name": "n-seiji"
   },
@@ -9,11 +9,11 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "hop (nuthatch)",
-    "shortDescription": "git worktree manager hop の使い方 skill",
-    "longDescription": "branch ごとの git worktree への移動・作成・削除・一覧を非対話で行う hop (nuthatch) を、coding agent から安全に使うための skill を配布する plugin。",
+    "shortDescription": "Usage skill for the git worktree manager hop",
+    "longDescription": "A plugin distributing a skill for safely using hop (nuthatch) — which moves, creates, deletes, and lists per-branch git worktrees non-interactively — from a coding agent.",
     "developerName": "n-seiji",
     "category": "Productivity",
-    "defaultPrompt": "hop を使って worktree を管理してください。root clone では編集せず、作業は branch ごとの worktree で行ってください。",
+    "defaultPrompt": "Use hop to manage worktrees. Don't edit in the root clone — do your work in the per-branch worktree.",
     "capabilities": ["Read"]
   }
 }

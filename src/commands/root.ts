@@ -7,8 +7,9 @@ import {
   ok,
 } from "../domain/result.ts";
 import type { RootData } from "../domain/schema.ts";
-import { acquireRepoLock } from "../infra/lock.ts";
-import { loadRepoContext } from "../infra/repo.ts";
+import { acquireRepoLockOrRejection } from "../infra/lock.ts";
+import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
+import { type DetachedHolder, resolveHolderSwap } from "./root-holder-swap.ts";
 
 export type { RootData } from "../domain/schema.ts";
 
@@ -17,14 +18,21 @@ export interface RootOptions {
   /** Undefined: bare `hop root` (just navigate). "-": switch back (@{-1}). Otherwise a branch name. */
   readonly target?: string;
   readonly track?: string;
+  /** False for picker actions that have not confirmed mutating a freshly discovered external holder. */
+  readonly allowExternalHolderSwap?: boolean;
+  /** Picker-selected holder path, used to reject a different holder discovered under the repo lock. */
+  readonly expectedHolderPath?: string;
 }
 
 /**
  * `hop root` — bare form just reports the root clone's path (like `hop
  * root` navigation). With a branch (or "-"), temporarily switches the root
  * clone's checked-out branch for verification purposes (docs/design.md's
- * "hop root — 動作確認セッション"), refusing if root is dirty or the target
- * branch is already checked out elsewhere.
+ * "hop root — verification session"), refusing if root is dirty. If the target
+ * branch is already checked out on another (managed or external) worktree —
+ * the "holder" — and that holder is clean and not locked by git, its HEAD is
+ * detached to free up the branch (see swapHolderAndReport below); a dirty or
+ * git-locked holder still refuses the switch entirely, as before.
  */
 export const root = async (
   git: GitPort,
@@ -37,19 +45,24 @@ export const root = async (
   if (options.target === undefined) {
     return ok({
       path: context.rootPath,
-      data: { branch: rootWorktree?.branch ?? null, switched: false },
+      data: {
+        branch: rootWorktree?.branch ?? null,
+        switched: false,
+        detachedHolder: null,
+      },
     });
   }
 
-  const dirty = await git.isDirty(context.rootPath);
+  const dirty = await git.isDirty(
+    context.rootPath,
+    otherWorktreePaths(context.worktrees, context.rootPath),
+  );
   if (dirty) {
     return fail(
       EXIT_SAFE_REJECTION,
       "Root clone has uncommitted or untracked changes. Commit, stash, or discard them before switching.",
     );
   }
-
-  const previousBranch = rootWorktree?.branch ?? null;
 
   if (options.target === "-") {
     return switchAndReport({
@@ -58,16 +71,8 @@ export const root = async (
       context,
       target: "-",
       switchOptions: {},
-      previousBranch,
+      holderPolicy: { allowExternal: true },
     });
-  }
-
-  const holder = context.worktrees.find((wt) => wt.branch === options.target && wt.kind !== "root");
-  if (holder !== undefined) {
-    return fail(
-      EXIT_SAFE_REJECTION,
-      `Branch "${options.target}" is already checked out at ${holder.path}. Not swapping — cd there instead of using hop root.`,
-    );
   }
 
   const localBranches = await git.listBranches(context.rootPath);
@@ -99,7 +104,12 @@ export const root = async (
       createBranch: !branchExistsLocally,
       ...(track === undefined ? {} : { track }),
     },
-    previousBranch,
+    holderPolicy: {
+      allowExternal: options.allowExternalHolderSwap ?? true,
+      ...(options.expectedHolderPath === undefined
+        ? {}
+        : { expectedPath: options.expectedHolderPath }),
+    },
   });
 };
 
@@ -109,7 +119,7 @@ interface SwitchAndReportOptions {
   readonly context: Awaited<ReturnType<typeof loadRepoContext>>;
   readonly target: string;
   readonly switchOptions: { createBranch?: boolean; track?: string };
-  readonly previousBranch: string | null;
+  readonly holderPolicy: { readonly allowExternal: boolean; readonly expectedPath?: string };
 }
 
 const switchAndReport = async ({
@@ -118,49 +128,104 @@ const switchAndReport = async ({
   context,
   target,
   switchOptions,
-  previousBranch,
+  holderPolicy,
 }: SwitchAndReportOptions): Promise<CommandResult<RootData>> => {
-  const lock = await acquireRepoLock(context.commonDir);
+  const acquisition = await acquireRepoLockOrRejection<RootData>(context.commonDir);
+  if (!acquisition.ok) {
+    return acquisition.rejection;
+  }
+  const { lock } = acquisition;
+  // Set only if this run detaches a holder's HEAD, so a failed root switch
+  // Can roll the holder back to the branch it actually had checked out.
+  let detachedHolder: DetachedHolder | null = null;
+  // The branch to roll root back to if the switch below fails. Read from
+  // The lock-guarded `fresh` context (not the pre-lock `context`), so a
+  // Branch change by another process while we waited for the lock doesn't
+  // Send us rolling back to a stale branch.
+  let previousBranch: string | null = null;
   try {
     // Re-validate under lock: root may have gone dirty, or another process
     // May have started checking out the target branch, since the checks above.
     const fresh = await loadRepoContext(git, fs, context.rootPath);
-    const stillDirty = await git.isDirty(fresh.rootPath);
+    previousBranch = fresh.worktrees.find((wt) => wt.kind === "root")?.branch ?? null;
+    const stillDirty = await git.isDirty(
+      fresh.rootPath,
+      otherWorktreePaths(fresh.worktrees, fresh.rootPath),
+    );
     if (stillDirty) {
       return fail(
         EXIT_SAFE_REJECTION,
         "Root clone has uncommitted or untracked changes. Commit, stash, or discard them before switching.",
       );
     }
-    if (target !== "-") {
-      const freshHolder = fresh.worktrees.find((wt) => wt.branch === target && wt.kind !== "root");
-      if (freshHolder !== undefined) {
-        return fail(
-          EXIT_SAFE_REJECTION,
-          `Branch "${target}" is already checked out at ${freshHolder.path}. Not swapping — cd there instead of using hop root.`,
-        );
-      }
+
+    const holderSwap = await resolveHolderSwap({
+      git,
+      fresh,
+      target,
+      switchOptions,
+      policy: holderPolicy,
+    });
+    if ("rejection" in holderSwap) {
+      return holderSwap.rejection;
     }
+    ({ detachedHolder } = holderSwap);
 
     await git.switchBranch(fresh.rootPath, target, switchOptions);
+    // For target === "-", git resolves the destination itself (@{-1}), so we
+    // Don't know the branch name up front — read it back from the worktree
+    // List rather than guessing.
+    let resolvedBranch: string | null = target;
+    if (target === "-") {
+      const afterSwitch = await loadRepoContext(git, fs, fresh.rootPath);
+      resolvedBranch = afterSwitch.worktrees.find((wt) => wt.kind === "root")?.branch ?? null;
+    }
     return ok({
       path: fresh.rootPath,
-      data: { branch: target === "-" ? null : target, switched: true },
+      data: {
+        branch: resolvedBranch,
+        switched: true,
+        detachedHolder: detachedHolder?.path ?? null,
+      },
+      warnings: detachedHolder === null ? [] : [`Put ${detachedHolder.path} into detached HEAD`],
     });
   } catch (error) {
     // Best-effort rollback: try to restore the branch root was on before this
     // Call, in case the switch partially applied (e.g. created a new local
-    // Branch via -c and then failed setting it up). Failure here is swallowed
-    // — We're already reporting the original error, and there is nothing more
-    // Useful to do than leave root on whatever branch it ended up on.
+    // Branch via -c and then failed setting it up). A rollback failure here
+    // Does not change the exit code (the original failure is still what's
+    // Reported) but is surfaced as a warning — otherwise root or holder could
+    // Be left in detached HEAD with no way for the caller to know.
+    const rollbackWarnings: string[] = [];
     if (previousBranch !== null) {
       try {
         await git.switchBranch(context.rootPath, previousBranch, {});
       } catch {
-        // Ignore: see comment above.
+        // Unlike the holder below, root was never detached by this command —
+        // It's just still sitting on whatever branch the failed switch left
+        // It on, so "detached HEAD" would be a misleading claim here.
+        rollbackWarnings.push(
+          `Could not restore ${context.rootPath} to its original branch (${previousBranch})`,
+        );
       }
     }
-    return fail(EXIT_SAFE_REJECTION, `Failed to switch root: ${(error as Error).message}`);
+    // Same best-effort rollback for a holder we detached: if the root switch
+    // Failed after we freed up the branch, put the holder back exactly where
+    // It was rather than leaving it stranded in detached HEAD for no reason.
+    if (detachedHolder !== null) {
+      try {
+        await git.switchBranch(detachedHolder.path, detachedHolder.branch, {});
+      } catch {
+        rollbackWarnings.push(
+          `Could not restore ${detachedHolder.path} to its original branch (${detachedHolder.branch}); it remains in detached HEAD`,
+        );
+      }
+    }
+    return fail(
+      EXIT_SAFE_REJECTION,
+      `Failed to switch root: ${(error as Error).message}`,
+      rollbackWarnings,
+    );
   } finally {
     await lock.release();
   }

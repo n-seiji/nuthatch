@@ -106,6 +106,80 @@ describe("bare `hop` (no target)", () => {
   });
 });
 
+describe("hop root <branch> → hop root - (real CLI, holder swap)", () => {
+  // Regression test for a bug citty-level `root -` parsing had: citty's
+  // Positional-arg parser silently drops a bare "-" token, so calling
+  // `root()` directly (as root.integration.test.ts does) never exercises the
+  // Actual argv → citty → root() path and can't catch this. Only spawning
+  // The real CLI binary reproduces it.
+  it("holder swap 後の `hop root -` は root の branch を元に戻す", () => {
+    execFileSync("git", ["branch", "swap-clean"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+    });
+    execFileSync("git", ["worktree", "add", ".claude/worktrees/swap-clean", "swap-clean"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+    });
+
+    const swapped = runHop(["root", "swap-clean", "--json"]) as {
+      data: { branch: string | null };
+    };
+    expect(swapped.data.branch).toBe("swap-clean");
+    const branchAfterSwap = execFileSync("git", ["branch", "--show-current"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+      encoding: "utf8",
+    }).trim();
+    expect(branchAfterSwap).toBe("swap-clean");
+
+    const back = runHop(["root", "-", "--json"]) as {
+      data: { branch: string | null };
+    };
+    // The resolved branch name after switching back, not null — the caller
+    // Has no other way to learn what "-" actually landed on.
+    expect(back.data.branch).toBe("main");
+    const branchAfterBack = execFileSync("git", ["branch", "--show-current"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+      encoding: "utf8",
+    }).trim();
+    expect(branchAfterBack).toBe("main");
+  });
+
+  it("フラグが '-' より前でも `hop root --json -` は元の branch に戻す", () => {
+    execFileSync("git", ["branch", "plain"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+    });
+    execFileSync("bun", ["run", CLI_ENTRY, "root", "plain"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+    });
+    const branchAfterSwitch = execFileSync("git", ["branch", "--show-current"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+      encoding: "utf8",
+    }).trim();
+    expect(branchAfterSwitch).toBe("plain");
+
+    // Regression test: rewriteRootPreviousToken used to only look at
+    // Args[0], so a flag placed before "-" (like --json here) shadowed it
+    // And citty silently dropped the "-" token entirely.
+    const back = runHop(["root", "--json", "-"]) as {
+      data: { branch: string | null; switched: boolean };
+    };
+    expect(back.data.switched).toBe(true);
+    expect(back.data.branch).toBe("main");
+    const branchAfterBack = execFileSync("git", ["branch", "--show-current"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+      encoding: "utf8",
+    }).trim();
+    expect(branchAfterBack).toBe("main");
+  });
+});
+
 describe("hop --help / -h / help", () => {
   const runHelp = (args: readonly string[]) =>
     spawnSync("bun", ["run", CLI_ENTRY, ...args], {

@@ -9,13 +9,32 @@ export type CliDispatch =
       readonly args: readonly string[];
     };
 
-/** Drops Bun's synthesized argv0 only for the compiled TTY invocation case. */
+/**
+ * Drops Bun's synthesized argv0 for compiled-binary invocations only.
+ *
+ * `bun build --compile` binaries append the invocation name (matching
+ * `process.argv0`) to `process.argv` whenever they're started with no
+ * arguments — regardless of whether stdout is a TTY. The shell wrapper
+ * (`hop init zsh`) always captures stdout via `$(command hop "$@")`, so
+ * stdout is a pipe in the exact real-world path this needs to handle; a
+ * check on stdout-is-TTY would never strip the synthesized token there.
+ */
 export const normalizeCliArgs = (
   rawArgs: readonly string[],
   argv0: string,
-  stdoutIsTTY: boolean,
+  isCompiledBinary: boolean,
 ): readonly string[] =>
-  stdoutIsTTY && rawArgs.length === 1 && rawArgs[0] === argv0 ? [] : rawArgs;
+  isCompiledBinary && rawArgs.length === 1 && rawArgs[0] === argv0 ? [] : rawArgs;
+
+/**
+ * True when running as a `bun build --compile` binary (as opposed to
+ * `bun run src/cli.ts`, the npm/Node build, or a plain Node process).
+ * Compiled binaries embed sources under a synthetic `/$bunfs/` root, which
+ * `Bun.main` reflects; source runs report a real file path, and Node
+ * doesn't have a `Bun` global at all.
+ */
+export const isRunningAsCompiledBinary = (): boolean =>
+  typeof Bun !== "undefined" && Bun.main.startsWith("/$bunfs/");
 
 const HELP_FLAGS: ReadonlySet<string> = new Set(["--help", "-h", "help"]);
 

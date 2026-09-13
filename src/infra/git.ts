@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import { isDirtyFromStatus } from "../domain/dirty.ts";
 import type { AddWorktreeOptions, GitPort, SwitchBranchOptions } from "../domain/ports.ts";
 
 const execFile = promisify(execFileCb);
@@ -48,9 +49,11 @@ const createWorktreeMethods = () => ({
     return out.trim();
   },
 
-  async isDirty(path: string) {
-    const status = await run(path, ["status", "--porcelain", "--untracked-files=all"]);
-    return status.trim().length > 0;
+  async isDirty(path: string, otherWorktreePaths: readonly string[]) {
+    // -z is required, not just convenient: see dirty.ts's parseStatusPaths
+    // Doc comment for why the non -z, quoted form can't be parsed reliably.
+    const status = await run(path, ["status", "--porcelain", "-z", "--untracked-files=all"]);
+    return isDirtyFromStatus(status, path, otherWorktreePaths);
   },
 
   async addWorktree(cwd: string, path: string, branch: string, options: AddWorktreeOptions) {
@@ -149,6 +152,10 @@ const createBranchMethods = () => ({
 
   async deleteBranch(cwd: string, branch: string) {
     await run(cwd, ["branch", "-D", branch]);
+  },
+
+  async detachHead(cwd: string) {
+    await run(cwd, ["switch", "--detach", "HEAD"]);
   },
 });
 

@@ -1,3 +1,5 @@
+[日本語](README.ja.md)
+
 <p align="center">
   <img src="docs/assets/logo.png" alt="nuthatch — hop between git worktrees" width="560">
 </p>
@@ -29,14 +31,21 @@ hop root           # cd into the root clone
 hop -              # cd back to the previous worktree
 
 hop ls [--json]    # list worktrees (dirty, ahead/behind, kind)
-hop rm <branch>    # remove a worktree (branch is kept)
-hop clean          # auto-detect and remove garbage worktrees
-hop root <branch>  # temporarily switch the root clone (for verification)
-hop root -         # switch the root clone back
+hop rm <branch>    # remove a worktree (branch is kept) — managed or external, dirty needs --force
+hop clean          # auto-detect and remove garbage worktrees (managed only)
+hop root <branch>  # temporarily switch the root clone (for verification) —
+                   # swaps out a clean, unlocked holder if the branch is checked out elsewhere
+hop root -         # switch the root clone back (only root's branch; a swapped-out holder stays detached)
 
 hop -- <branch>    # escape a branch name that collides with a reserved command
+                   # (also required for a branch named the same as your `hop` binary/alias, e.g. `hop -- hop`)
 hop --help         # print usage (also -h / hop help)
 ```
+
+If Git reports the same branch checked out in multiple worktrees, the
+branch-only `hop rm` command refuses rather than guessing which path to
+remove. The interactive picker keeps the selected path through the final
+lock-protected safety check.
 
 ### Interactive picker
 
@@ -50,11 +59,11 @@ shortened paths:
   ○ feat/picker   managed  …/_worktree/feat__picker
   ● codex/fix-x   ext      …/.claude/worktrees/x
 
-  BRANCHES — Enter で worktree 作成
+  BRANCHES — Enter creates a worktree
   + feat/idea     local
   + origin/hotfix remote
 
-  (●=dirty ○=clean +=未作成)
+  (●=dirty ○=clean +=not created)
 ```
 
 A section (header included) disappears entirely when it has no candidates —
@@ -85,8 +94,8 @@ since the two can't fit side by side.
 |---|---|
 | `Enter` | cd into the selected candidate |
 | `Tab`, `→`, `Ctrl+L`, `Ctrl+F` | Open the action panel for the selected candidate (cd / delete / switch root here) |
-| `Ctrl+X` | Delete the selected worktree (asks y/N first) |
-| `Ctrl+R` | Switch the root clone to the selected branch, immediately |
+| `Ctrl+X` | Delete the selected worktree (asks y/N first for an `external` worktree) |
+| `Ctrl+R` | Switch the root clone to the selected branch (asks y/N first for an `external` worktree) |
 | `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K`/`Ctrl+J` | Move the selection (arrow, emacs, and vim keys all work side by side) |
 | `Esc` | Cancel quietly — exit 0, stdout stays empty (the shell wrapper just doesn't cd) |
 | `Ctrl+C` | Cancel like an interrupt — exit 130, same as a real SIGINT |
@@ -97,8 +106,11 @@ highlighted action, `c`/`d`/`r` to run cd/delete/switch-root directly, and
 `Esc`, `Tab`, `←`, or `Ctrl+H` to close it back to the list (`←`/`Ctrl+H`
 mirror the `→`/`Ctrl+L`/`Ctrl+F` that open it; `Tab` toggles either way —
 handy on terminals like Ghostty that remap a chord such as Cmd+K to Tab). `delete`
-only appears for a worktree nuthatch manages (`managed`); `switch root
-here` doesn't appear on the root worktree itself. Deleting reloads the
+appears for any already-created worktree (`managed` or `external` — deleting
+an `external` one always asks y/N, whether from the panel or Ctrl+X); `switch
+root here` doesn't appear on the root worktree itself, and also asks y/N
+first for an `external` worktree, since it can detach that worktree's HEAD.
+Deleting reloads the
 candidate list so you can keep deleting without leaving the picker; cd and
 switch-root exit and print the resulting path, per hop's stdout contract.
 
@@ -114,12 +126,19 @@ eval "$(hop init zsh)"
 > Not released yet — no version has been published or tagged. Once the first
 > `v*` tag ships, the options below will work as described.
 
-```sh
-npm i -g @n-seiji/nuthatch        # or: bunx @n-seiji/nuthatch
-mise use -g npm:@n-seiji/nuthatch # mise
+Recommended: the GitHub Release binary (built with bun; via mise,
+`mise use github:n-seiji/nuthatch`). The npm version runs on Node, so its git
+calls are slower (hop ls ~400ms vs ~60ms) — prefer the binary for CI or
+frequent invocations.
 
-# Prebuilt binary (macOS arm64/x64, Linux x64) — no Node.js required:
+```sh
+# Prebuilt binary (macOS arm64/x64, Linux x64) — no Node.js required, fastest:
 curl -fsSL https://raw.githubusercontent.com/n-seiji/nuthatch/main/install.sh | sh
+mise use github:n-seiji/nuthatch # mise, via the GitHub Release binary
+
+# npm (slower: shells out to git via Node — hop ls ~400ms vs ~60ms for the binary)
+npm i -g @n-seiji/nuthatch        # or: bunx @n-seiji/nuthatch
+mise use -g npm:@n-seiji/nuthatch # mise, via npm
 ```
 
 The install script places `hop` in `~/.local/bin` (override with
@@ -145,7 +164,7 @@ codex plugin install hop
 
 ## Docs
 
-- [docs/design.md](docs/design.md) — full design document (Japanese)
+- [docs/design.md](docs/design.md) — full design document
 - [AGENTS.md](AGENTS.md) — guide for coding agents working on this repo
 
 ## License
