@@ -27,6 +27,10 @@ const DISABLE_BRACKETED_PASTE = `${ESC}[?2004l`;
 /** How long to wait after a lone ESC byte before treating it as an actual Escape keypress, rather than the start of a not-yet-complete sequence. Real terminals send a full CSI/SS3 sequence effectively atomically (well under this), so this only ever delays a genuine Escape press, never a recognized combo. */
 const PENDING_ESCAPE_TIMEOUT_MS = 25;
 
+/** Conventional shell exit codes for death-by-signal (128 + signal number), used so a closed terminal (SIGHUP) or a killed parent (SIGTERM) still restores the real terminal before the process exits. Mirrors SIGINT's existing EXIT_CANCELLED (130) handling below. */
+const EXIT_SIGTERM = 143;
+const EXIT_SIGHUP = 129;
+
 export interface TerminalSessionApi<T> {
   /** Schedules a repaint (coalesced — safe to call many times per tick). */
   readonly requestRender: () => void;
@@ -50,6 +54,83 @@ const defaultStreams = (): TerminalSessionStreams => ({
   stdin: process.stdin,
   stderr: process.stderr,
 });
+
+/** Runs one teardown step in isolation: a step throwing (e.g. a write failing because the fd is already gone) must not stop the remaining steps from running, nor block `finish`'s Promise resolution. Best-effort, so failures are swallowed rather than surfaced -- there's no one left to report them to once we're tearing down. */
+const runSafely = (step: () => void): void => {
+  try {
+    step();
+  } catch {
+    // Ignored -- see comment above.
+  }
+};
+
+interface TeardownDeps {
+  readonly stdin: NodeJS.ReadStream;
+  readonly stderr: NodeJS.WriteStream;
+  readonly altScreenTarget: AltScreenTarget;
+  readonly isInteractive: boolean;
+  readonly handleData: (chunk: Buffer) => void;
+  readonly handleResize: () => void;
+  readonly clearPendingEscapeTimer: () => void;
+}
+
+/** Builds the idempotent teardown routine shared by every exit path (`finish`, SIGINT/SIGTERM/SIGHUP, and the process `exit` event). Each step runs via runSafely so one throwing can't stop the rest, or stop `finish` from resolving. */
+const createCleanup = (deps: TeardownDeps): (() => void) => {
+  let hasCleanedUp = false;
+  return () => {
+    if (hasCleanedUp) {
+      return;
+    }
+    hasCleanedUp = true;
+    runSafely(deps.clearPendingEscapeTimer);
+    if (deps.isInteractive) {
+      runSafely(() => {
+        deps.stdin.off("data", deps.handleData);
+      });
+      runSafely(() => {
+        deps.stdin.setRawMode?.(false);
+      });
+      runSafely(() => {
+        deps.stdin.pause();
+      });
+      runSafely(() => {
+        deps.altScreenTarget.write(DISABLE_BRACKETED_PASTE);
+      });
+    }
+    runSafely(() => {
+      deps.stderr.off("resize", deps.handleResize);
+    });
+    runSafely(() => {
+      leaveAltScreen(deps.altScreenTarget);
+    });
+  };
+};
+
+/**
+ * Registers a signal handler that tears the terminal down before exiting
+ * with `code` -- registering a handler at all suppresses Node's default
+ * terminate-on-signal behavior, so each signal we care about (SIGINT
+ * already did this; SIGTERM/SIGHUP need the same) must restore the
+ * terminal itself and then exit explicitly. `code` follows the shell's
+ * conventional 128+signal numbering (except SIGINT's pre-existing 130,
+ * passed in as EXIT_CANCELLED) so hop's exit code stays meaningful.
+ * Returns a function that removes the listener again.
+ */
+const installExitSignalHandler = (
+  signal: NodeJS.Signals,
+  code: number,
+  cleanup: () => void,
+): (() => void) => {
+  const handleSignal = (): void => {
+    cleanup();
+    process.exitCode = code;
+    process.exit(code);
+  };
+  process.once(signal, handleSignal);
+  return () => {
+    process.removeListener(signal, handleSignal);
+  };
+};
 
 /**
  * Runs one picker session. `createHandlers` receives the session API
@@ -101,30 +182,13 @@ export const runTerminalSession = <T>(
       queueMicrotask(paint);
     };
 
-    let hasCleanedUp = false;
-    const cleanup = (): void => {
-      if (hasCleanedUp) {
-        return;
-      }
-      hasCleanedUp = true;
-      clearPendingEscapeTimer();
-      if (isInteractive) {
-        stdin.off("data", handleData);
-        stdin.setRawMode?.(false);
-        stdin.pause();
-        altScreenTarget.write(DISABLE_BRACKETED_PASTE);
-      }
-      stderr.off("resize", handleResize);
-      leaveAltScreen(altScreenTarget);
-    };
-
     const finish = (result: T): void => {
       if (finished) {
         return;
       }
       finished = true;
       cleanup();
-      process.removeListener("SIGINT", handleSigint);
+      removeSignalListeners();
       resolve(result);
     };
 
@@ -154,12 +218,23 @@ export const runTerminalSession = <T>(
       requestRender();
     };
 
-    const handleSigint = (): void => {
-      cleanup();
-      process.exitCode = EXIT_CANCELLED;
-      process.exit(EXIT_CANCELLED);
+    const cleanup = createCleanup({
+      stdin,
+      stderr,
+      altScreenTarget,
+      isInteractive,
+      handleData,
+      handleResize,
+      clearPendingEscapeTimer,
+    });
+    const removeSigint = installExitSignalHandler("SIGINT", EXIT_CANCELLED, cleanup);
+    const removeSigterm = installExitSignalHandler("SIGTERM", EXIT_SIGTERM, cleanup);
+    const removeSighup = installExitSignalHandler("SIGHUP", EXIT_SIGHUP, cleanup);
+    const removeSignalListeners = (): void => {
+      removeSigint();
+      removeSigterm();
+      removeSighup();
     };
-    process.once("SIGINT", handleSigint);
     process.once("exit", cleanup);
 
     enterAltScreen(altScreenTarget);

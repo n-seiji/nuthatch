@@ -43,6 +43,9 @@ const CSI_FINAL_BYTE_MAX = 0x7e;
 const isCsiFinalByte = (byte: number): boolean =>
   byte >= CSI_FINAL_BYTE_MIN && byte <= CSI_FINAL_BYTE_MAX;
 
+/** Ctrl+C's byte. No legitimate CSI parameter byte is this low (params are digits/`;`/intermediate bytes, all >= 0x20), so seeing it mid-sequence can only mean the terminal sent a real Ctrl+C press while a CSI/SS3 sequence was still (incompletely) buffered -- see the "interrupted" SequenceResult below. */
+const CTRL_C_BYTE = 0x03;
+
 export const BRACKETED_PASTE_START = "200~";
 export const BRACKETED_PASTE_END = "201~";
 
@@ -55,6 +58,12 @@ export type SequenceResult =
       readonly event: PickerKeyEvent | null;
       readonly pasteStarted?: true;
       readonly pasteEnded?: true;
+    }
+  | {
+      /** A Ctrl+C byte turned up before the sequence's final byte -- the incomplete prefix is discarded and Ctrl+C is reported immediately, rather than swallowing it into a sequence that has no final byte to complete it. */
+      readonly kind: "interrupted";
+      readonly consumed: number;
+      readonly event: PickerKeyEvent;
     };
 
 const modifiedArrowOrDelete = (paramText: string, finalByte: string): PickerKeyEvent | null => {
@@ -81,7 +90,15 @@ export const parseCsi = (buf: Buffer): SequenceResult => {
   let index = CSI_PREFIX_LENGTH;
   let paramText = "";
   while (index < buf.length && !isCsiFinalByte(buf[index] as number)) {
-    paramText += String.fromCodePoint(buf[index] as number);
+    const paramByte = buf[index] as number;
+    if (paramByte === CTRL_C_BYTE) {
+      return {
+        kind: "interrupted",
+        consumed: index + 1,
+        event: event("c", { ctrl: true }),
+      };
+    }
+    paramText += String.fromCodePoint(paramByte);
     index += 1;
   }
   if (index >= buf.length) {

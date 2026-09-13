@@ -11,9 +11,16 @@ stdin: a list of steps, each either
   {"wait_ms": <int>}
   {"wait_for": "<substring>", "timeout_ms": <int>}
   {"send": "<string, python escapes ok>"}
+  {"signal": "TERM"|"HUP"}
 Runs them in order against the child's pty, then waits for the child to
 exit (or kills it after a timeout). Prints one JSON object to stdout:
 {"output": "<all bytes read, latin1-decoded>", "exit_code": <int|null>}
+
+The pty's slave fd is deliberately kept open (by this parent process) until
+after the child has exited and been drained, rather than closed right
+after Popen -- closing it early can make the OS discard bytes the child
+writes in its very last instants (e.g. a signal handler's terminal-restore
+sequence) if nothing has read them from the master side yet.
 """
 
 import json
@@ -44,7 +51,6 @@ def main() -> None:
         env=env,
         close_fds=True,
     )
-    os.close(slave)
 
     output = b""
 
@@ -78,6 +84,12 @@ def main() -> None:
                 os.write(master, data)
             except OSError:
                 pass
+        elif "signal" in step:
+            sig = getattr(signal, f"SIG{step['signal']}")
+            try:
+                proc.send_signal(sig)
+            except OSError:
+                pass
 
     # Keep draining the master fd while waiting for the child to exit,
     # rather than blocking in proc.wait() with no reads in between: on this
@@ -94,6 +106,10 @@ def main() -> None:
         proc.send_signal(signal.SIGKILL)
         proc.wait(timeout=2)
     pump(0.2)
+    try:
+        os.close(slave)
+    except OSError:
+        pass
     try:
         os.close(master)
     except OSError:

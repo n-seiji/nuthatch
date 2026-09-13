@@ -159,4 +159,40 @@ describe("PickerKeyParser", () => {
       key: expect.objectContaining({ ctrl: true }),
     });
   });
+
+  it("paste 終端マーカーが単独 ESC で分割されても hasPendingEscape は立たない (誤って escape 扱いされ paste モードが解除されないままになるのを防ぐ)", () => {
+    const parser = new PickerKeyParser();
+    // "\u001B[201~" (paste end marker) split right after the leading ESC.
+    const events = feed(parser, "\u001B[200~x\u001B");
+    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["x"]);
+    expect(parser.hasPendingEscape()).toBe(false);
+    expect(parser.flushPendingEscape()).toBeNull();
+    const rest = feed(parser, "[201~y");
+    expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["y"]);
+    expect(rest[0]?.key.ctrl).toBe(false);
+  });
+
+  it("未完了の CSI 途中に来た Ctrl+C (0x03) を即座に ctrl+c として通知し、途中まで溜めたバイトは破棄する", () => {
+    const parser = new PickerKeyParser();
+    // "\u001B[" followed directly by Ctrl+C, with no final byte ever arriving.
+    const events = feed(parser, "\u001B[\u0003");
+    expect(events).toEqual([{ input: "c", key: expect.objectContaining({ ctrl: true }) }]);
+    // The parser must not be stuck waiting for a final byte afterwards.
+    const rest = feed(parser, "a");
+    expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["a"]);
+  });
+
+  it("未完了の CSI にパラメータバイトを挟んで Ctrl+C が来ても取りこぼさない", () => {
+    const parser = new PickerKeyParser();
+    const events = feed(parser, "\u001B[1;5\u0003");
+    expect(events).toEqual([{ input: "c", key: expect.objectContaining({ ctrl: true }) }]);
+  });
+
+  it("未完了のエスケープ列が上限を超えて溜まり続けたら破棄し、通常入力に戻る", () => {
+    const parser = new PickerKeyParser();
+    const garbage = `\u001B[${"9".repeat(64)}`;
+    expect(feed(parser, garbage)).toEqual([]);
+    const rest = feed(parser, "a");
+    expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["a"]);
+  });
 });

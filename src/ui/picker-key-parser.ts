@@ -77,6 +77,9 @@ const decodeUtf8 = (bytes: Buffer): string =>
 const CSI_INTRODUCER_CODE = "[".codePointAt(0) as number;
 const SS3_INTRODUCER_CODE = "O".codePointAt(0) as number;
 
+/** Ceiling on how many buffered bytes an incomplete CSI/SS3 sequence may reach before it's discarded outright. Real sequences (arrow keys, modified arrows, delete, bracketed-paste markers) are all well under this; a buffer growing past it means we're not actually looking at a real sequence (e.g. framing got out of sync), so holding it forever waiting for a final byte that will never come would leave the parser stuck. */
+const MAX_PENDING_SEQUENCE_BYTES = 32;
+
 /**
  * Byte-level stdin parser feeding the picker's key resolvers. Not
  * thread-safe/re-entrant — one instance per picker session, fed serially
@@ -86,9 +89,9 @@ export class PickerKeyParser {
   private buffer: Buffer = Buffer.alloc(0);
   private inPaste = false;
 
-  /** Whether a trailing, still-ambiguous ESC byte is buffered — the caller should start/refresh a short timer while true. */
+  /** Whether a trailing, still-ambiguous ESC byte is buffered — the caller should start/refresh a short timer while true. False during a paste even when the buffer holds a single trailing ESC byte: stepPaste's overlap handling holds that byte back as a possible prefix of the `ESC[201~` end marker, not a candidate Escape keypress, so the caller's pending-escape timer must never fire on it (doing so would flush a fake Escape and drop the marker's remaining bytes, leaving the parser stuck in paste mode -- see picker-key-parser.test.ts). */
   hasPendingEscape(): boolean {
-    return this.buffer.length === 1 && this.buffer[0] === ESC;
+    return !this.inPaste && this.buffer.length === 1 && this.buffer[0] === ESC;
   }
 
   /** Called after the caller's grace period elapses with no further bytes: resolves the buffered lone ESC as an actual Escape keypress. */
@@ -203,7 +206,15 @@ export class PickerKeyParser {
 
   private applySequence(result: ReturnType<typeof parseCsi>): PickerKeyEvent[] | null {
     if (result.kind === "incomplete") {
+      /* A sequence that never reaches its final byte (garbled framing, or a key that isn't one we recognize) would otherwise hold the buffer forever, absorbing every later byte -- including a real Ctrl+C -- as more "parameters". Cap how long we'll wait for one. */
+      if (this.buffer.length > MAX_PENDING_SEQUENCE_BYTES) {
+        this.buffer = Buffer.alloc(0);
+      }
       return null;
+    }
+    if (result.kind === "interrupted") {
+      this.buffer = this.buffer.subarray(result.consumed);
+      return [result.event];
     }
     this.buffer = this.buffer.subarray(result.consumed);
     if (result.pasteStarted === true) {

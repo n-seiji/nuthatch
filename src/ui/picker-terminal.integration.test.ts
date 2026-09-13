@@ -25,6 +25,7 @@ interface PtyStep {
   readonly wait_for?: string;
   readonly timeout_ms?: number;
   readonly send?: string;
+  readonly signal?: "TERM" | "HUP";
 }
 
 interface PtyResult {
@@ -127,5 +128,41 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
     ]);
     expect(result.output).toContain("Actions for");
     expect(result.exit_code).toBe(0);
+  }, 10_000);
+
+  it("SIGTERM でも端末が復元され、exit code は 143 になる", () => {
+    const result = runInPty(repo, [
+      { wait_for: "WORKTREES", timeout_ms: 5000 },
+      { wait_ms: STARTUP_SETTLE_MS },
+      { signal: "TERM" },
+    ]);
+    // Same restore sequence as a normal exit (alt-screen.ts / bracketed paste off) must have been written before the process dies.
+    expect(result.output).toContain("[?25h");
+    expect(result.output).toContain("[?1049l");
+    expect(result.output).toContain("[?2004l");
+    expect(result.exit_code).toBe(143);
+  }, 10_000);
+
+  it("SIGHUP でも端末が復元され、exit code は 129 になる", () => {
+    const result = runInPty(repo, [
+      { wait_for: "WORKTREES", timeout_ms: 5000 },
+      { wait_ms: STARTUP_SETTLE_MS },
+      { signal: "HUP" },
+    ]);
+    expect(result.output).toContain("[?25h");
+    expect(result.output).toContain("[?1049l");
+    expect(result.output).toContain("[?2004l");
+    expect(result.exit_code).toBe(129);
+  }, 10_000);
+
+  it("ESC の直後に未完了の CSI ([) を送っても、続く Ctrl+C で exit 130 になる (Ctrl+C が飲み込まれて操作不能にならない)", () => {
+    const result = runInPty(repo, [
+      { wait_for: "WORKTREES", timeout_ms: 5000 },
+      { wait_ms: STARTUP_SETTLE_MS },
+      { send: "[" },
+      { wait_ms: 50 },
+      { send: "" },
+    ]);
+    expect(result.exit_code).toBe(130);
   }, 10_000);
 });
