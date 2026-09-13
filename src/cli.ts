@@ -166,12 +166,10 @@ const jumpArgsSchema = {
 } as const;
 
 /**
- * Runs the interactive picker (TTY only). Loads ink lazily via a literal
- * dynamic import path (in cli-pick.ts) so non-TTY runs never touch
- * ink/react at all; falls back to the plain readline-based picker if ink
- * fails to load or render (e.g. a `bun build --compile` binary where ink's
- * native pieces don't work). Mutation wiring (delete / switch root here)
- * lives in cli-pick.ts — see its module comment for why.
+ * Runs the interactive picker (TTY only; ui/picker.ts's own terminal-session
+ * checks stdin/stderr isTTY-ness and skips raw mode when not interactive).
+ * Mutation wiring (delete / switch root here) lives in cli-pick.ts — see its
+ * module comment for why.
  */
 const runInteractivePick = async (json: boolean): Promise<void> => {
   const candidates = await loadPickCandidates(git, fs, json);
