@@ -41,6 +41,11 @@ hop -- <branch>    # escape a branch name that collides with a reserved command
 hop --help         # print usage (also -h / hop help)
 ```
 
+If Git reports the same branch checked out in multiple worktrees, the
+branch-only `hop rm` command refuses rather than guessing which path to
+remove. The interactive picker keeps the selected path through the final
+lock-protected safety check.
+
 ### Interactive picker
 
 The picker groups candidates into sections — existing worktrees (root first)

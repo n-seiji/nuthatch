@@ -39,6 +39,10 @@ hop -- <branch>    # 予約コマンドと被る branch 名をエスケープ
 hop --help         # usage を表示 (-h / hop help でも同じ)
 ```
 
+同じ branch が複数の worktree で checkout されている場合、branch だけを指定する
+`hop rm` は削除対象を推測せず拒否する。対話的 picker は選択した path を、lock 内の
+最終安全確認まで保持する。
+
 ### 対話的 picker
 
 picker は候補を section に分けて表示する — 既存の worktree (root が先頭) と

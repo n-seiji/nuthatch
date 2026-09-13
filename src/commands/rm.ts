@@ -10,13 +10,20 @@ import {
 } from "../domain/result.ts";
 import type { RmData } from "../domain/schema.ts";
 import { acquireRepoLockOrRejection } from "../infra/lock.ts";
-import { loadRepoContext, nestedWorktrees, otherWorktreePaths } from "../infra/repo.ts";
+import {
+  loadRepoContext,
+  nestedWorktrees,
+  otherWorktreePaths,
+  type RepoContext,
+} from "../infra/repo.ts";
 
 export type { RmData } from "../domain/schema.ts";
 
 export interface RmOptions {
   readonly cwd: string;
   readonly branch: string;
+  /** Picker-selected path. When present, never remove another worktree that happens to share the branch. */
+  readonly expectedPath?: string;
   readonly force: boolean;
   readonly ext: boolean;
 }
@@ -29,6 +36,35 @@ const lockedRejection = <T>(branch: string, lockReason: string | null): CommandR
     EXIT_SAFE_REJECTION,
     `Worktree for "${branch}" is locked by git${lockReason === null ? "" : ` (${lockReason})`}. hop never unlocks worktrees automatically — run "git worktree unlock" yourself first if you're sure.`,
   );
+
+const resolveTarget = (
+  worktrees: readonly Worktree[],
+  branch: string,
+  expectedPath?: string,
+): { readonly target?: Worktree; readonly rejection?: CommandResult<RmData> } => {
+  const matches = worktrees.filter((wt) => wt.branch === branch);
+  if (expectedPath !== undefined) {
+    const target = matches.find((wt) => wt.path === expectedPath);
+    return target === undefined
+      ? {
+          rejection: fail(
+            EXIT_SAFE_REJECTION,
+            `The selected worktree for "${branch}" changed before removal. Refresh the picker and retry.`,
+          ),
+        }
+      : { target };
+  }
+  if (matches.length > 1) {
+    return {
+      rejection: fail(
+        EXIT_SAFE_REJECTION,
+        `Branch "${branch}" is checked out at ${matches.length} worktrees (${matches.map((wt) => wt.path).join(", ")}). Refusing to guess which one to remove.`,
+      ),
+    };
+  }
+  const [target] = matches;
+  return target === undefined ? {} : { target };
+};
 
 /**
  * Rejects removing `target` when it still contains one or more registered
@@ -58,6 +94,35 @@ const nestedWorktreeRejection = <T>(
   );
 };
 
+const targetSafetyRejection = async (
+  git: GitPort,
+  context: RepoContext,
+  target: Worktree,
+  options: RmOptions,
+): Promise<CommandResult<RmData> | null> => {
+  const nestedRejection = nestedWorktreeRejection<RmData>(
+    options.branch,
+    target.path,
+    context.worktrees,
+  );
+  if (nestedRejection !== null) {
+    return nestedRejection;
+  }
+  if (target.locked) {
+    return lockedRejection(options.branch, target.lockReason);
+  }
+  if (
+    !options.force &&
+    (await git.isDirty(target.path, otherWorktreePaths(context.worktrees, target.path)))
+  ) {
+    return fail(
+      EXIT_SAFE_REJECTION,
+      `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
+    );
+  }
+  return null;
+};
+
 export const rm = async (
   git: GitPort,
   fs: FsPort,
@@ -75,7 +140,11 @@ export const rm = async (
       : result;
 
   const context = await loadRepoContext(git, fs, options.cwd);
-  const target = context.worktrees.find((wt) => wt.branch === options.branch);
+  const resolved = resolveTarget(context.worktrees, options.branch, options.expectedPath);
+  if (resolved.rejection !== undefined) {
+    return finish(resolved.rejection);
+  }
+  const { target } = resolved;
 
   if (target === undefined) {
     return finish(fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`));
@@ -85,34 +154,9 @@ export const rm = async (
     return finish(fail(EXIT_USAGE_ERROR, "Cannot remove the root clone."));
   }
 
-  const nestedRejection = nestedWorktreeRejection<RmData>(
-    options.branch,
-    target.path,
-    context.worktrees,
-  );
-  if (nestedRejection !== null) {
-    return finish(nestedRejection);
-  }
-
-  // A worktree git itself reports as locked is always rejected, even with
-  // --force — hop must never call `git worktree unlock` on a caller's behalf.
-  if (target.locked) {
-    return finish(lockedRejection(options.branch, target.lockReason));
-  }
-
-  if (!options.force) {
-    const dirty = await git.isDirty(
-      target.path,
-      otherWorktreePaths(context.worktrees, target.path),
-    );
-    if (dirty) {
-      return finish(
-        fail(
-          EXIT_SAFE_REJECTION,
-          `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
-        ),
-      );
-    }
+  const safetyRejection = await targetSafetyRejection(git, context, target, options);
+  if (safetyRejection !== null) {
+    return finish(safetyRejection);
   }
 
   const acquisition = await acquireRepoLockOrRejection<RmData>(context.commonDir);
@@ -123,34 +167,17 @@ export const rm = async (
   try {
     // Re-validate under lock: the worktree may have changed since the check above.
     const fresh = await loadRepoContext(git, fs, options.cwd);
-    const freshTarget = fresh.worktrees.find((wt) => wt.branch === options.branch);
+    const freshResolved = resolveTarget(fresh.worktrees, options.branch, options.expectedPath);
+    if (freshResolved.rejection !== undefined) {
+      return finish(freshResolved.rejection);
+    }
+    const freshTarget = freshResolved.target;
     if (freshTarget === undefined) {
       return finish(fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`));
     }
-    const freshNestedRejection = nestedWorktreeRejection<RmData>(
-      options.branch,
-      freshTarget.path,
-      fresh.worktrees,
-    );
-    if (freshNestedRejection !== null) {
-      return finish(freshNestedRejection);
-    }
-    if (freshTarget.locked) {
-      return finish(lockedRejection(options.branch, freshTarget.lockReason));
-    }
-    if (!options.force) {
-      const stillDirty = await git.isDirty(
-        freshTarget.path,
-        otherWorktreePaths(fresh.worktrees, freshTarget.path),
-      );
-      if (stillDirty) {
-        return finish(
-          fail(
-            EXIT_SAFE_REJECTION,
-            `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
-          ),
-        );
-      }
+    const freshSafetyRejection = await targetSafetyRejection(git, fresh, freshTarget, options);
+    if (freshSafetyRejection !== null) {
+      return finish(freshSafetyRejection);
     }
 
     await git.removeWorktree(context.rootPath, freshTarget.path, options.force);

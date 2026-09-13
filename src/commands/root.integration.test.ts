@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
 import { createTermPort } from "../infra/term.ts";
+import { acquireRepoLock } from "../infra/lock.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 import { jump } from "./jump.ts";
 import { root } from "./root.ts";
@@ -150,6 +151,69 @@ describe("root (integration)", () => {
     const holderBranchOutput = await repo.git(["branch", "--show-current"], held.path);
     const holderBranch = holderBranchOutput.trim();
     expect(holderBranch).toBe("feat/held-locked");
+  });
+
+  it("picker が external holder を確認していなければ lock 内で detach を拒否する", async () => {
+    await repo.git(["branch", "feat/unconfirmed-external"]);
+    const externalPath = `${repo.rootDir}/agent-worktrees/unconfirmed-external`;
+    await repo.git(["worktree", "add", externalPath, "feat/unconfirmed-external"]);
+    const externalRealPath = await fs.realpath(externalPath);
+
+    const result = await root(git, fs, {
+      cwd: repo.repoPath,
+      target: "feat/unconfirmed-external",
+      allowExternalHolderSwap: false,
+      expectedHolderPath: externalRealPath,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(3);
+    expect(result.errorMessage).toContain("confirmation");
+    const rootBranch = await repo.git(["branch", "--show-current"]);
+    const holderBranch = await repo.git(["branch", "--show-current"], externalPath);
+    expect(rootBranch.trim()).toBe("main");
+    expect(holderBranch.trim()).toBe("feat/unconfirmed-external");
+  });
+
+  it("picker で確認した holder の path が変わっていれば別 worktree を detach しない", async () => {
+    await repo.git(["branch", "feat/moved-holder"]);
+    const originalPath = `${repo.rootDir}/agent-worktrees/original-holder`;
+    const movedPath = `${repo.rootDir}/agent-worktrees/moved-holder`;
+    await repo.git(["worktree", "add", originalPath, "feat/moved-holder"]);
+    const originalRealPath = await fs.realpath(originalPath);
+    await repo.git(["worktree", "move", originalPath, movedPath]);
+
+    const result = await root(git, fs, {
+      cwd: repo.repoPath,
+      target: "feat/moved-holder",
+      allowExternalHolderSwap: true,
+      expectedHolderPath: originalRealPath,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(3);
+    expect(result.errorMessage).toContain("changed");
+    const rootBranch = await repo.git(["branch", "--show-current"]);
+    const holderBranch = await repo.git(["branch", "--show-current"], movedPath);
+    expect(rootBranch.trim()).toBe("main");
+    expect(holderBranch.trim()).toBe("feat/moved-holder");
+  });
+
+  it("repository lock の競合を構造化された安全拒否として返す", async () => {
+    await repo.git(["branch", "feat/lock-contention"]);
+    const commonDir = await git.commonDir(repo.repoPath);
+    const heldLock = await acquireRepoLock(commonDir);
+    try {
+      const result = await root(git, fs, {
+        cwd: repo.repoPath,
+        target: "feat/lock-contention",
+      });
+      expect(result.ok).toBe(false);
+      expect(result.exitCode).toBe(3);
+      expect(result.errorMessage).toContain("locked by another nuthatch process");
+    } finally {
+      await heldLock.release();
+    }
   });
 
   it("holder を detach した後に root の switch が失敗したら holder を元の branch に rollback する", async () => {

@@ -7,7 +7,7 @@ import {
   ok,
 } from "../domain/result.ts";
 import type { RootData } from "../domain/schema.ts";
-import { acquireRepoLock } from "../infra/lock.ts";
+import { acquireRepoLockOrRejection } from "../infra/lock.ts";
 import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
 import { type DetachedHolder, resolveHolderSwap } from "./root-holder-swap.ts";
 
@@ -18,6 +18,10 @@ export interface RootOptions {
   /** Undefined: bare `hop root` (just navigate). "-": switch back (@{-1}). Otherwise a branch name. */
   readonly target?: string;
   readonly track?: string;
+  /** False for picker actions that have not confirmed mutating a freshly discovered external holder. */
+  readonly allowExternalHolderSwap?: boolean;
+  /** Picker-selected holder path, used to reject a different holder discovered under the repo lock. */
+  readonly expectedHolderPath?: string;
 }
 
 /**
@@ -67,6 +71,7 @@ export const root = async (
       context,
       target: "-",
       switchOptions: {},
+      holderPolicy: { allowExternal: true },
     });
   }
 
@@ -99,6 +104,12 @@ export const root = async (
       createBranch: !branchExistsLocally,
       ...(track === undefined ? {} : { track }),
     },
+    holderPolicy: {
+      allowExternal: options.allowExternalHolderSwap ?? true,
+      ...(options.expectedHolderPath === undefined
+        ? {}
+        : { expectedPath: options.expectedHolderPath }),
+    },
   });
 };
 
@@ -108,6 +119,7 @@ interface SwitchAndReportOptions {
   readonly context: Awaited<ReturnType<typeof loadRepoContext>>;
   readonly target: string;
   readonly switchOptions: { createBranch?: boolean; track?: string };
+  readonly holderPolicy: { readonly allowExternal: boolean; readonly expectedPath?: string };
 }
 
 const switchAndReport = async ({
@@ -116,8 +128,13 @@ const switchAndReport = async ({
   context,
   target,
   switchOptions,
+  holderPolicy,
 }: SwitchAndReportOptions): Promise<CommandResult<RootData>> => {
-  const lock = await acquireRepoLock(context.commonDir);
+  const acquisition = await acquireRepoLockOrRejection<RootData>(context.commonDir);
+  if (!acquisition.ok) {
+    return acquisition.rejection;
+  }
+  const { lock } = acquisition;
   // Set only if this run detaches a holder's HEAD, so a failed root switch
   // Can roll the holder back to the branch it actually had checked out.
   let detachedHolder: DetachedHolder | null = null;
@@ -142,7 +159,13 @@ const switchAndReport = async ({
       );
     }
 
-    const holderSwap = await resolveHolderSwap(git, fresh, target, switchOptions);
+    const holderSwap = await resolveHolderSwap({
+      git,
+      fresh,
+      target,
+      switchOptions,
+      policy: holderPolicy,
+    });
     if ("rejection" in holderSwap) {
       return holderSwap.rejection;
     }

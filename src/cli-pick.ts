@@ -38,6 +38,7 @@ const deleteWorktree = async (
   const result = await rm(git, fs, {
     cwd: process.cwd(),
     branch,
+    ...(candidate.kind === "worktree" ? { expectedPath: candidate.worktree.path } : {}),
     force: false,
     ext: false,
   });
@@ -81,7 +82,13 @@ export const createPickerCallbacks = (
         message: "This candidate has no branch to switch to.",
       };
     }
-    const result = await root(git, fs, { cwd: process.cwd(), target: branch });
+    const result = await root(git, fs, {
+      cwd: process.cwd(),
+      target: branch,
+      allowExternalHolderSwap:
+        candidate.kind === "worktree" && candidate.worktree.kind === "external",
+      ...(candidate.kind === "worktree" ? { expectedHolderPath: candidate.worktree.path } : {}),
+    });
     if (!result.ok) {
       return {
         ok: false,

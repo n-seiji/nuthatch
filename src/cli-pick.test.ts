@@ -1,5 +1,12 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import { renderSwitchRootOutcome, type SwitchRootOutcome } from "./cli-pick.ts";
+import { createFsPort } from "./infra/fs.ts";
+import { createGitPort } from "./infra/git.ts";
+import { createTestRepo } from "./testing/repo.ts";
+import {
+  createPickerCallbacks,
+  renderSwitchRootOutcome,
+  type SwitchRootOutcome,
+} from "./cli-pick.ts";
 
 describe("renderSwitchRootOutcome", () => {
   it("--json: detachedHolder と warnings を envelope に含める", () => {
@@ -76,6 +83,36 @@ describe("renderSwitchRootOutcome", () => {
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
+    }
+  });
+});
+
+describe("createPickerCallbacks — fresh external-holder safety", () => {
+  it("picker 表示後に external holder が作られても未確認のまま detach しない", async () => {
+    const repo = await createTestRepo();
+    const cwd = spyOn(process, "cwd").mockReturnValue(repo.repoPath);
+    try {
+      const staleCandidate = {
+        kind: "creatable" as const,
+        branch: "feat/raced-external",
+        source: "local" as const,
+      };
+      await repo.git(["branch", staleCandidate.branch]);
+      const externalPath = `${repo.rootDir}/agent-worktrees/raced-external`;
+      await repo.git(["worktree", "add", externalPath, staleCandidate.branch]);
+
+      const callbacks = createPickerCallbacks(createGitPort(), createFsPort(), false, () => {});
+      const result = await callbacks.switchRootHere(staleCandidate);
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("confirmation");
+      const rootBranch = await repo.git(["branch", "--show-current"]);
+      const holderBranch = await repo.git(["branch", "--show-current"], externalPath);
+      expect(rootBranch.trim()).toBe("main");
+      expect(holderBranch.trim()).toBe(staleCandidate.branch);
+    } finally {
+      cwd.mockRestore();
+      await repo.cleanup();
     }
   });
 });

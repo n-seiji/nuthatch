@@ -19,6 +19,11 @@ export interface HolderSwitchOptions {
   track?: string;
 }
 
+export interface HolderSwapPolicy {
+  readonly allowExternal: boolean;
+  readonly expectedPath?: string;
+}
+
 const holderRejection = (
   branch: string,
   holderPath: string,
@@ -51,18 +56,27 @@ export type HolderSwapResult =
   | { readonly rejection: CommandResult<RootData> }
   | { readonly detachedHolder: DetachedHolder | null };
 
+interface ResolveHolderSwapOptions {
+  readonly git: GitPort;
+  readonly fresh: RepoContext;
+  readonly target: string;
+  readonly switchOptions: HolderSwitchOptions;
+  readonly policy: HolderSwapPolicy;
+}
+
 /**
  * Resolves the holder situation for `target` (any other worktree that
  * already has it checked out) before root's own switch runs: rejects on
  * multiple holders or an unswappable single holder, detaches a swappable
  * single holder and reports it, or reports no holder at all.
  */
-export const resolveHolderSwap = async (
-  git: GitPort,
-  fresh: RepoContext,
-  target: string,
-  switchOptions: HolderSwitchOptions,
-): Promise<HolderSwapResult> => {
+export const resolveHolderSwap = async ({
+  git,
+  fresh,
+  target,
+  switchOptions,
+  policy,
+}: ResolveHolderSwapOptions): Promise<HolderSwapResult> => {
   if (target === "-") {
     return { detachedHolder: null };
   }
@@ -78,6 +92,25 @@ export const resolveHolderSwap = async (
   const [freshHolder] = freshHolders;
   if (freshHolder === undefined) {
     return { detachedHolder: null };
+  }
+
+  if (policy.expectedPath !== undefined && freshHolder.path !== policy.expectedPath) {
+    return {
+      rejection: holderRejection(
+        target,
+        freshHolder.path,
+        `changed from the picker selection at ${policy.expectedPath}`,
+      ),
+    };
+  }
+  if (freshHolder.kind === "external" && !policy.allowExternal) {
+    return {
+      rejection: holderRejection(
+        target,
+        freshHolder.path,
+        "is external and requires confirmation before it can be put into detached HEAD",
+      ),
+    };
   }
 
   if (switchOptions.createBranch === true) {

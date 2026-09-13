@@ -51,7 +51,7 @@ auto-`cd`.
 | Command | Behavior |
 |---|---|
 | `hop ls [--json]` | Listing: branch / path / category / dirty / ahead-behind |
-| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
+| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). If multiple worktrees hold the same branch, the branch-only CLI refuses rather than guessing; the picker carries the selected path through the lock-protected re-validation. `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
 | `hop clean [--yes\|--dry-run]` | Auto-detects and removes garbage worktrees (below). Targets managed worktrees only by default (`--ext` extends the target to external ones as well, unchanged from before) |
 | `hop root <branch>` | Temporarily switches root for verification purposes. Even if the target branch is already checked out on another worktree (the "holder"), swaps it out as long as the holder is clean and not git-locked — the holder is set to detached HEAD to free up the branch. Refuses if the holder is dirty/locked. `hop root -` returns (using git's `@{-1}`, no state file needed — this restores only root's branch; a holder detached by the swap is not re-attached) |
 
@@ -74,6 +74,10 @@ worktree git itself reports as locked is always refused — for `rm` as well
 as for the holder swap in `hop root` — regardless of `--force`; hop never
 calls `git worktree unlock` automatically. `hop clean`'s automatic targets
 remain managed-only (external can be added explicitly with `--ext`).
+Picker-triggered mutations carry the selected worktree path into the
+lock-protected re-validation. If the holder/target changed, or an external
+holder appeared after an unconfirmed picker selection, the mutation is
+refused instead of acting on the newly discovered worktree.
 Category classification uses realpath plus path-boundary comparison, never
 a string-prefix comparison.
 
@@ -111,7 +115,9 @@ clone.
   the switch is refused as before, and its path is reported.
 - All checks are re-validated inside the repo lock (the holder's
   dirty/lock/branch state is re-read after acquiring the lock, then
-  detached — a TOCTOU guard).
+  detached — a TOCTOU guard). Picker-triggered swaps also re-validate the
+  selected holder path and whether a newly discovered external holder was
+  explicitly confirmed; a mismatch is refused without detaching anything.
 - If root's switch fails after the holder has been detached, the holder is
   rolled back to its pre-detach branch before returning the failure (never
   leaving the holder in a half-finished state).
@@ -141,7 +147,7 @@ clone.
   start time, and a token, and is refreshed with a heartbeat while held.
   Reclaiming it requires both confirming the process is dead and the TTL
   having expired. If that can't be confirmed, the safe default is to
-  refuse.
+  refuse with the normal structured result and exit code 3.
 - **git execution**: always spawned with an argv array (never string
   concatenation). A git failure maps to exit 3.
 - **creating from a remote branch**: if origin has a branch of the same
