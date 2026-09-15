@@ -3,7 +3,8 @@
 A plugin that distributes the usage skill for the git worktree manager "hop"
 (nuthatch). Installable from both Claude Code and Codex.
 
-- `skills/using-hop/` — the hop operating skill for coding agents
+- `skills/using-hop/SKILL.md` — common non-interactive workflow and invariants
+- `skills/using-hop/references/destructive-operations.md` — safety guidance loaded only for remove, clean, and root-switch operations
 
 ## Install
 

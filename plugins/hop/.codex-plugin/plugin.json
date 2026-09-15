@@ -1,7 +1,7 @@
 {
   "name": "hop",
-  "version": "0.1.3",
-  "description": "Usage skill for the git worktree manager \"hop\" (nuthatch)",
+  "version": "0.1.4",
+  "description": "Safe worktree operations with the hop CLI",
   "author": {
     "name": "n-seiji"
   },
@@ -9,11 +9,11 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "hop (nuthatch)",
-    "shortDescription": "Usage skill for the git worktree manager hop",
-    "longDescription": "A plugin distributing a skill for safely using hop (nuthatch) — which moves, creates, deletes, and lists per-branch git worktrees non-interactively — from a coding agent.",
+    "shortDescription": "Safe worktree operations with the hop CLI",
+    "longDescription": "Teaches coding agents to create and select hop worktrees non-interactively, while loading destructive-operation guidance only when it is needed.",
     "developerName": "n-seiji",
     "category": "Productivity",
-    "defaultPrompt": "Use hop to manage worktrees. Don't edit in the root clone — do your work in the per-branch worktree.",
+    "defaultPrompt": "Use $using-hop to create a worktree for this task and work from the returned path.",
     "capabilities": ["Read"]
   }
 }
