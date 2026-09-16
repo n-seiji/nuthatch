@@ -8,7 +8,7 @@
     {
       "name": "hop",
       "source": "./plugins/hop",
-      "description": "Usage skill for the git worktree manager \"hop\" (for agents and humans)"
+      "description": "Safe worktree operations with the hop CLI for coding agents"
     }
   ]
 }
