@@ -2,15 +2,23 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { isDirtyFromStatus } from "../domain/dirty.ts";
 import type { AddWorktreeOptions, GitPort, SwitchBranchOptions } from "../domain/ports.ts";
+import { createGitExecutableResolver } from "./git-executable.ts";
 
 const execFile = promisify(execFileCb);
+
+/**
+ * Spawns git by absolute path, resolved once per process: handing the bare
+ * name "git" to the spawn implementation is what produced issue #9's
+ * `ENOENT ... posix_spawn 'git'` crash. See git-executable.ts.
+ */
+const gitExecutable = createGitExecutableResolver();
 
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const GIT_ANCESTOR_EXIT_CODE = 1;
 
 /** Thin wrapper around the git CLI. Always spawns with an argv array — never string concatenation. */
 const run = async (cwd: string, args: readonly string[]): Promise<string> => {
-  const { stdout } = await execFile("git", [...args], {
+  const { stdout } = await execFile(await gitExecutable(), [...args], {
     cwd,
     maxBuffer: MAX_BUFFER_BYTES,
   });

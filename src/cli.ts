@@ -19,6 +19,7 @@ import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
 import { rm } from "./commands/rm.ts";
+import { describeFatalError } from "./domain/fatal-error.ts";
 import {
   type CommandResult,
   EXIT_CANCELLED,
@@ -239,16 +240,20 @@ const runJumpFromArgs = async (rawArgs: readonly string[]): Promise<void> => {
 // Non-reserved first token must fall through to `jump` as a branch name.
 // Process.argv is [node, script, ...userArgs]; drop the first two.
 const ARGV_USER_ARGS_START = 2;
-const rawArgs = normalizeCliArgs(
-  process.argv.slice(ARGV_USER_ARGS_START),
-  process.argv0,
-  isRunningAsCompiledBinary(),
-);
 
-if (isHelpRequest(rawArgs)) {
-  process.stderr.write(USAGE);
-  process.exitCode = 0;
-} else {
+const main = async (): Promise<void> => {
+  const rawArgs = normalizeCliArgs(
+    process.argv.slice(ARGV_USER_ARGS_START),
+    process.argv0,
+    isRunningAsCompiledBinary(),
+  );
+
+  if (isHelpRequest(rawArgs)) {
+    process.stderr.write(USAGE);
+    process.exitCode = 0;
+    return;
+  }
+
   const dispatch = dispatchCliArgs(rawArgs, Object.keys(RESERVED_COMMANDS));
   if (dispatch.kind === "reserved") {
     const command = RESERVED_COMMANDS[dispatch.name as keyof typeof RESERVED_COMMANDS];
@@ -261,7 +266,20 @@ if (isHelpRequest(rawArgs)) {
     await runCommand(command as unknown as CommandDef<ArgsDef>, {
       rawArgs: commandArgs,
     });
-  } else {
-    await runJumpFromArgs(dispatch.args);
+    return;
   }
+
+  await runJumpFromArgs(dispatch.args);
+};
+
+// Last line of defence: anything a command let escape (a git failure, a
+// Missing git binary) becomes one line on stderr with the contract's exit
+// Code, never the runtime's raw stack trace (issue #9). stdout stays empty,
+// So the shell wrapper never cd's on a crash.
+try {
+  await main();
+} catch (error) {
+  const fatal = describeFatalError(error);
+  process.stderr.write(`hop: ${fatal.message}\n`);
+  process.exitCode = fatal.exitCode;
 }
