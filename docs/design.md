@@ -211,14 +211,14 @@ test/                    # domain gets unit tests; commands get integration test
 - The arg parser is **citty**. Parser-specific types never flow into
   commands.
 - Subprocess calls use **node:child_process** — this works for both the npm
-  build (Node 20+) and the compiled build (Bun).
+  build (Node 22+) and the compiled build (Bun).
 
 ## Implementation stack
 
 | Item | Choice | Notes |
 |---|---|---|
 | Language | TypeScript | Development runtime is bun |
-| Minimum versions | git >= 2.36 / node >= 20 / bun >= 1.1 | Range supporting porcelain -z and compilation |
+| Minimum versions | git >= 2.36 / node >= 22 / bun >= 1.1 | Range supporting porcelain -z and compilation |
 | TUI | ink | Dynamic-imported only on TTY. Verified compiling to work with the binary; falls back to a numbered selection if not |
 | arg parser | citty | Rolling our own is forbidden |
 | lint/format | oxlint / oxfmt | |
