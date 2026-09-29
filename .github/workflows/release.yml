@@ -11,7 +11,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -47,7 +47,7 @@ jobs:
           mkdir -p /tmp/pack
           npm pack --pack-destination /tmp/pack
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: npm-tarball
           path: /tmp/pack/*.tgz
@@ -58,13 +58,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: ["20", "22", "24"]
+        node-version: ["22", "24", "26"]
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: npm-tarball
           path: /tmp/pack
@@ -93,7 +93,7 @@ jobs:
           - target: linux-x64
             bun-target: bun-linux-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -125,7 +125,7 @@ jobs:
           git -c user.email=ci@example.com -c user.name=ci commit --allow-empty -m init
           "$bin" ls --json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.target }}
           path: out/hop-${{ matrix.target }}*
@@ -135,7 +135,7 @@ jobs:
     needs: build-binaries
     runs-on: macos-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: binary-darwin-arm64
           path: /tmp/binary
@@ -164,18 +164,18 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: npm-tarball
           path: /tmp/pack
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: binary-*
           path: /tmp/binaries
           merge-multiple: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Trusted Publishing (OIDC) requires Node >= 22.14 / npm >= 11.5.1. Use current LTS.
           node-version: "24"
@@ -200,7 +200,7 @@ jobs:
           npm stage publish /tmp/pack/*.tgz --access public --provenance
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: /tmp/binaries/hop-*
           generate_release_notes: true
