@@ -149,7 +149,23 @@ clone.
   having expired. If that can't be confirmed, the safe default is to
   refuse with the normal structured result and exit code 3.
 - **git execution**: always spawned with an argv array (never string
-  concatenation). A git failure maps to exit 3.
+  concatenation), and always by **absolute path**: hop resolves the git
+  binary itself — every absolute `PATH` entry in order, then a small
+  best-effort list of conventional install dirs (see
+  `src/domain/git-executable.ts`) — so a PATH that never went through the
+  user's shell profile still finds git. Relative `PATH` entries are skipped
+  (a repo-local `git` must never be what hop runs). `HOP_GIT` overrides the
+  search with an absolute path and is then the only candidate. If no
+  candidate is an executable file, hop exits 1 with `git executable not
+  found. Looked in: …` naming every place it looked. A git failure maps to
+  exit 3.
+- **fatal errors**: anything that escapes the command dispatch is reported
+  through the same path as a rejection the command returned itself — a
+  single `hop: <message>` line on stderr (a git failure shows git's own
+  stderr), the intact JSON envelope on stdout when `--json` was requested,
+  and the exit code from the list above — never a JS stack trace. Plain
+  (non-JSON) runs keep stdout empty, so the shell wrapper never `cd`s after
+  a crash.
 - **creating from a remote branch**: if origin has a branch of the same
   name, origin always wins. If origin doesn't have it but multiple other
   remotes do, this is an ambiguity error. The created branch uses
@@ -169,11 +185,15 @@ src/
 │   ├── porcelain.ts     #   worktree list --porcelain parser
 │   ├── sanitize.ts      #   branch name → dir name
 │   ├── classify.ts      #   root/managed/external classification
-│   └── garbage.ts       #   garbage detection for clean (clock is injected)
+│   ├── garbage.ts       #   garbage detection for clean (clock is injected)
+│   ├── git-executable.ts #  where the git binary may live (candidate list)
+│   └── fatal-error.ts   #   escaped error → message + exit code
 ├── infra/               # The only place with external dependencies. Implements domain's ports
 │   ├── git.ts           #   node:child_process execFile (argv array only)
+│   ├── git-executable.ts #  probes the candidates, caches the absolute path
 │   ├── fs.ts            #   exists / realpath
 │   └── term.ts          #   TTY detection, stderr logging
+├── cli-fatal.ts         # cli.ts only: renders an escaped error (hop: … + envelope)
 ├── commands/             # 1 command = 1 component. Cross-imports forbidden
 │   ├── jump.ts / ls.ts / rm.ts / clean.ts / root.ts / init.ts
 │   │                    #   ★ Never renders. Only returns a structured Result

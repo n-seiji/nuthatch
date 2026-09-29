@@ -67,3 +67,19 @@ describe("コンパイル済みバイナリでの `hop` (引数なし) 起動", 
     expect(stdout + stderr).not.toContain("Re-run with --create");
   });
 });
+
+describe("コンパイル済みバイナリでの git 解決", () => {
+  it("PATH が空でも git を見つけて動く (issue #9 の環境に最も近い形)", async () => {
+    // Issue #9 の報告は compile 済みバイナリでの `posix_spawn 'git'` ENOENT。
+    // シェルのプロファイルを通っていない PATH でも git に届くことを、実際の
+    // バイナリで確かめる (PATH="" なので、動けば候補リストからの解決が効いて
+    // いる)。バイナリ自身は絶対パスで起動するため PATH は不要。
+    const { stdout, stderr } = await execFile(binaryPath, ["ls", "--json"], {
+      cwd: repo.repoPath,
+      env: { ...repo.env, PATH: "" },
+    });
+
+    expect(stderr).not.toContain("git executable not found");
+    expect(JSON.parse(stdout)).toMatchObject({ command: "ls" });
+  });
+});

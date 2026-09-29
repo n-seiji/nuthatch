@@ -146,6 +146,17 @@ The install script places `hop` in `~/.local/bin` (override with
 specific version with `HOP_VERSION=vX.Y.Z`. Linux arm64 has no prebuilt
 binary yet — use the npm install instead.
 
+## Troubleshooting
+
+`hop: git executable not found. Looked in: …` means hop could not find a git
+binary. hop searches every absolute entry in `PATH`, then `/opt/homebrew/bin`,
+`/usr/local/bin`, `/usr/bin` and `/bin`. If your git lives somewhere else,
+point hop straight at it:
+
+```sh
+export HOP_GIT=/path/to/git
+```
+
 ## Agent skill (Claude Code / Codex plugin)
 
 This repo doubles as a plugin marketplace that ships the

@@ -137,6 +137,17 @@ install script は `hop` を `~/.local/bin` に置き (`HOP_INSTALL_DIR` で
 には `HOP_VERSION=vX.Y.Z` を使う。Linux arm64 はビルド済みバイナリが
 まだないため、npm install を使う。
 
+## トラブルシューティング
+
+`hop: git executable not found. Looked in: …` は git のバイナリを見つけられ
+なかったという意味。hop は `PATH` の絶対パスエントリを順に探し、その後
+`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/bin` を見る。git が
+それ以外の場所にある場合は、直接指定する:
+
+```sh
+export HOP_GIT=/path/to/git
+```
+
 ## Agent skill (Claude Code / Codex plugin)
 
 このリポジトリは plugin marketplace も兼ねており、
