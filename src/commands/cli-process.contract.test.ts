@@ -1,7 +1,7 @@
 import { execFile as execFileCb } from "node:child_process";
-import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { runHop } from "../testing/cli.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 
 const execFile = promisify(execFileCb);
@@ -15,31 +15,6 @@ const execFile = promisify(execFileCb);
  * rather than replaces, the in-process integration tests in
  * jump-ls-rm.integration.test.ts and root.integration.test.ts.
  */
-
-const CLI_ENTRYPOINT = join(import.meta.dir, "..", "cli.ts");
-
-interface CliRunResult {
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-const runHop = async (args: readonly string[], cwd: string, env: NodeJS.ProcessEnv) => {
-  try {
-    const { stdout, stderr } = await execFile("bun", ["run", CLI_ENTRYPOINT, ...args], {
-      cwd,
-      env,
-    });
-    return { exitCode: 0, stdout, stderr } satisfies CliRunResult;
-  } catch (error) {
-    const { code, stdout, stderr } = error as {
-      code?: number;
-      stdout: string;
-      stderr: string;
-    };
-    return { exitCode: code ?? 1, stdout, stderr } satisfies CliRunResult;
-  }
-};
 
 let repo: TestRepo;
 

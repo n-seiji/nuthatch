@@ -28,23 +28,29 @@ const isExecutableFile = async (path: string): Promise<boolean> => {
 };
 
 /** Throws an Error whose `code` is GIT_NOT_FOUND_ERROR_CODE when nothing matched. */
-export const resolveGitExecutable = async (env: NodeJS.ProcessEnv): Promise<string> => {
+const resolveGitExecutable = async (env: NodeJS.ProcessEnv): Promise<string> => {
   const candidates = gitExecutableCandidates({
     override: env[GIT_EXECUTABLE_OVERRIDE_ENV],
     path: env.PATH,
   });
   /*
-   * Probed in parallel (a handful of stat calls), then picked in candidate
-   * order so the first entry on PATH still wins.
+   * Every probe is launched at once (a handful of stat calls, and awaiting
+   * them one by one serialises the fs threadpool), then awaited in candidate
+   * order so the first entry on PATH wins and nothing waits past it.
    */
-  const executable = await Promise.all(candidates.map((candidate) => isExecutableFile(candidate)));
-  const found = candidates[executable.indexOf(true)];
-  if (found === undefined) {
-    throw Object.assign(new Error(gitNotFoundMessage(candidates)), {
-      code: GIT_NOT_FOUND_ERROR_CODE,
-    });
+  const probes = candidates.map(async (candidate) =>
+    (await isExecutableFile(candidate)) ? candidate : undefined,
+  );
+  for (const probe of probes) {
+    // oxlint-disable-next-line no-await-in-loop
+    const found = await probe;
+    if (found !== undefined) {
+      return found;
+    }
   }
-  return found;
+  throw Object.assign(new Error(gitNotFoundMessage(candidates)), {
+    code: GIT_NOT_FOUND_ERROR_CODE,
+  });
 };
 
 /**
@@ -52,9 +58,7 @@ export const resolveGitExecutable = async (env: NodeJS.ProcessEnv): Promise<stri
  * lifetime of the port: one hop invocation runs many git calls, and the
  * candidate list can't change under it mid-run.
  */
-export const createGitExecutableResolver = (
-  env: NodeJS.ProcessEnv = process.env,
-): (() => Promise<string>) => {
+export const createGitExecutableResolver = (env: NodeJS.ProcessEnv): (() => Promise<string>) => {
   let cached: Promise<string> | null = null;
   return () => {
     cached ??= resolveGitExecutable(env);

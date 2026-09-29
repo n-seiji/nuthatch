@@ -5,25 +5,24 @@
  * raw JS stack trace (issue #9) — unreadable, and exit 1 even for a git
  * failure the contract pins at 3.
  */
-import { GIT_EXECUTABLE_OVERRIDE_ENV, GIT_NOT_FOUND_ERROR_CODE } from "./git-executable.ts";
-import { EXIT_GENERAL_ERROR, EXIT_SAFE_REJECTION, type ExitCode } from "./result.ts";
+import { GIT_NOT_FOUND_HINT } from "./git-executable.ts";
+import {
+  EXIT_GENERAL_ERROR,
+  EXIT_SAFE_REJECTION,
+  type EXIT_SUCCESS,
+  type ExitCode,
+} from "./result.ts";
 
 export interface FatalErrorReport {
   readonly message: string;
-  readonly exitCode: ExitCode;
+  /** Never EXIT_SUCCESS: a fatal error always leaves a non-zero exit code. */
+  readonly exitCode: Exclude<ExitCode, typeof EXIT_SUCCESS>;
 }
 
-interface ErrorLikeFields {
-  readonly code?: unknown;
-  readonly signal?: unknown;
-  readonly stderr?: unknown;
-  readonly path?: unknown;
-  readonly syscall?: unknown;
-  readonly message?: unknown;
-}
+type ErrorFields = Record<string, unknown>;
 
-const fieldsOf = (error: unknown): ErrorLikeFields =>
-  typeof error === "object" && error !== null ? (error as ErrorLikeFields) : {};
+const fieldsOf = (error: unknown): ErrorFields =>
+  typeof error === "object" && error !== null ? (error as ErrorFields) : {};
 
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -31,26 +30,22 @@ const messageOf = (error: unknown): string =>
 const trimmedStringOf = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 
 /** A spawn that never reached the program: the binary itself wasn't there. */
-const isSpawnFailure = (fields: ErrorLikeFields): boolean =>
-  fields.code === "ENOENT" && trimmedStringOf(fields.syscall).startsWith("spawn");
+const isSpawnFailure = (fields: ErrorFields): boolean =>
+  fields.code === "ENOENT" &&
+  typeof fields.syscall === "string" &&
+  fields.syscall.startsWith("spawn");
 
 /** The git process ran and exited non-zero, or was killed by a signal. */
-const isGitFailure = (fields: ErrorLikeFields): boolean =>
-  typeof fields.code === "number" || trimmedStringOf(fields.signal).length > 0;
+const isGitFailure = (fields: ErrorFields): boolean =>
+  typeof fields.code === "number" || (typeof fields.signal === "string" && fields.signal !== "");
 
 export const describeFatalError = (error: unknown): FatalErrorReport => {
   const fields = fieldsOf(error);
 
-  if (fields.code === GIT_NOT_FOUND_ERROR_CODE) {
-    return { message: messageOf(error), exitCode: EXIT_GENERAL_ERROR };
-  }
-
   if (isSpawnFailure(fields)) {
     const binary = trimmedStringOf(fields.path) || "git";
     return {
-      message:
-        `failed to run ${binary}: no such executable. ` +
-        `Install git, or set ${GIT_EXECUTABLE_OVERRIDE_ENV} to its absolute path.`,
+      message: `failed to run ${binary}: no such executable. ${GIT_NOT_FOUND_HINT}`,
       exitCode: EXIT_GENERAL_ERROR,
     };
   }
@@ -63,5 +58,10 @@ export const describeFatalError = (error: unknown): FatalErrorReport => {
     };
   }
 
+  /*
+   * Everything else, including the GIT_NOT_FOUND_ERROR_CODE error from
+   * infra/git-executable.ts: its message already names every candidate and
+   * the remediation, so it is shown as-is with the contract's generic code.
+   */
   return { message: messageOf(error), exitCode: EXIT_GENERAL_ERROR };
 };

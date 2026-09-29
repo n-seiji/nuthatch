@@ -11,7 +11,7 @@ const execFile = promisify(execFileCb);
  * name "git" to the spawn implementation is what produced issue #9's
  * `ENOENT ... posix_spawn 'git'` crash. See git-executable.ts.
  */
-const gitExecutable = createGitExecutableResolver();
+const gitExecutable = createGitExecutableResolver(process.env);
 
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const GIT_ANCESTOR_EXIT_CODE = 1;

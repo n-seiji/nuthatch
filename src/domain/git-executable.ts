@@ -18,6 +18,10 @@ export const GIT_EXECUTABLE_OVERRIDE_ENV = "HOP_GIT";
 /** `code` on the error thrown when no candidate turned out to be executable. */
 export const GIT_NOT_FOUND_ERROR_CODE = "HOP_GIT_NOT_FOUND";
 
+/** The remediation every "hop cannot run git" message ends with. */
+export const GIT_NOT_FOUND_HINT =
+  `Install git, or set ${GIT_EXECUTABLE_OVERRIDE_ENV} to its absolute path.` as const;
+
 /**
  * Searched after PATH, so hop keeps working when it is launched with a PATH
  * that never went through the user's shell profile (Homebrew first, since
@@ -30,7 +34,7 @@ export const GIT_FALLBACK_BIN_DIRS = [
   "/bin",
 ] as const;
 
-export interface GitExecutableCandidatesInput {
+interface GitExecutableCandidatesInput {
   /** Value of HOP_GIT, if set. */
   readonly override?: string | undefined;
   /** Value of PATH, if set. */
@@ -66,5 +70,4 @@ export const gitExecutableCandidates = (input: GitExecutableCandidatesInput): re
 
 /** Error text for "git is nowhere to be found" — names every place hop looked. */
 export const gitNotFoundMessage = (candidates: readonly string[]): string =>
-  `git executable not found. Looked in: ${candidates.join(", ")}. ` +
-  `Install git, or set ${GIT_EXECUTABLE_OVERRIDE_ENV} to its absolute path.`;
+  `git executable not found. Looked in: ${candidates.join(", ")}. ${GIT_NOT_FOUND_HINT}`;

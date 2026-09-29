@@ -6,6 +6,7 @@ import {
   isRunningAsCompiledBinary,
   normalizeCliArgs,
 } from "./cli-dispatch.ts";
+import { reportFatalError, wantsJson } from "./cli-fatal.ts";
 import { createRootCommand, rewriteRootPreviousToken } from "./cli-root-command.ts";
 import {
   createPickerCallbacks,
@@ -241,20 +242,7 @@ const runJumpFromArgs = async (rawArgs: readonly string[]): Promise<void> => {
 // Process.argv is [node, script, ...userArgs]; drop the first two.
 const ARGV_USER_ARGS_START = 2;
 
-const main = async (): Promise<void> => {
-  const rawArgs = normalizeCliArgs(
-    process.argv.slice(ARGV_USER_ARGS_START),
-    process.argv0,
-    isRunningAsCompiledBinary(),
-  );
-
-  if (isHelpRequest(rawArgs)) {
-    process.stderr.write(USAGE);
-    process.exitCode = 0;
-    return;
-  }
-
-  const dispatch = dispatchCliArgs(rawArgs, Object.keys(RESERVED_COMMANDS));
+const dispatchAndRun = async (dispatch: ReturnType<typeof dispatchCliArgs>): Promise<void> => {
   if (dispatch.kind === "reserved") {
     const command = RESERVED_COMMANDS[dispatch.name as keyof typeof RESERVED_COMMANDS];
     // For `root`, rewrite a leading bare "-" before citty ever parses it —
@@ -272,13 +260,40 @@ const main = async (): Promise<void> => {
   await runJumpFromArgs(dispatch.args);
 };
 
-// Last line of defence: anything a command let escape (a git failure, a
-// Missing git binary) becomes one line on stderr with the contract's exit
-// Code, never the runtime's raw stack trace (issue #9). stdout stays empty,
-// So the shell wrapper never cd's on a crash.
+const main = async (): Promise<void> => {
+  const rawArgs = normalizeCliArgs(
+    process.argv.slice(ARGV_USER_ARGS_START),
+    process.argv0,
+    isRunningAsCompiledBinary(),
+  );
+
+  if (isHelpRequest(rawArgs)) {
+    process.stderr.write(USAGE);
+    process.exitCode = 0;
+    return;
+  }
+
+  const dispatch = dispatchCliArgs(rawArgs, Object.keys(RESERVED_COMMANDS));
+  try {
+    await dispatchAndRun(dispatch);
+  } catch (error) {
+    /*
+     * A bare `hop` falls through to jump/ls/pick; "jump" is the closest name
+     * the envelope can carry for it.
+     */
+    const command = dispatch.kind === "reserved" ? dispatch.name : "jump";
+    reportFatalError(command, wantsJson(rawArgs), error);
+  }
+};
+
 try {
   await main();
 } catch (error) {
+  /*
+   * Backstop for a throw before dispatch, where no command name or --json
+   * flag is known yet: stderr only, and stdout stays empty so the shell
+   * wrapper never cd's on a crash.
+   */
   const fatal = describeFatalError(error);
   process.stderr.write(`hop: ${fatal.message}\n`);
   process.exitCode = fatal.exitCode;

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { GIT_NOT_FOUND_ERROR_CODE } from "../domain/git-executable.ts";
-import { createGitExecutableResolver, resolveGitExecutable } from "./git-executable.ts";
+import { createGitExecutableResolver } from "./git-executable.ts";
 
 const EXECUTABLE_MODE = 0o755;
 const NON_EXECUTABLE_MODE = 0o644;
@@ -27,14 +27,14 @@ afterEach(async () => {
   await rm(sandbox, { recursive: true, force: true });
 });
 
-describe("resolveGitExecutable", () => {
+describe("createGitExecutableResolver", () => {
   it("PATH 上で最初に見つかった実行可能な git の絶対パスを返す", async () => {
     const first = await makeBin("first", EXECUTABLE_MODE);
     await makeBin("second", EXECUTABLE_MODE);
 
-    const resolved = await resolveGitExecutable({
+    const resolved = await createGitExecutableResolver({
       PATH: `${join(sandbox, "first")}:${join(sandbox, "second")}`,
-    });
+    })();
 
     expect(resolved).toBe(first);
   });
@@ -44,13 +44,13 @@ describe("resolveGitExecutable", () => {
     await mkdir(join(sandbox, "a-directory", "git"), { recursive: true });
     const real = await makeBin("real", EXECUTABLE_MODE);
 
-    const resolved = await resolveGitExecutable({
+    const resolved = await createGitExecutableResolver({
       PATH: [
         join(sandbox, "not-executable"),
         join(sandbox, "a-directory"),
         join(sandbox, "real"),
       ].join(":"),
-    });
+    })();
 
     expect(resolved).toBe(real);
   });
@@ -59,10 +59,10 @@ describe("resolveGitExecutable", () => {
     const override = await makeBin("override", EXECUTABLE_MODE);
     await makeBin("on-path", EXECUTABLE_MODE);
 
-    const resolved = await resolveGitExecutable({
+    const resolved = await createGitExecutableResolver({
       HOP_GIT: override,
       PATH: join(sandbox, "on-path"),
-    });
+    })();
 
     expect(resolved).toBe(override);
   });
@@ -72,7 +72,7 @@ describe("resolveGitExecutable", () => {
 
     let thrown: unknown;
     try {
-      await resolveGitExecutable({ HOP_GIT: missing });
+      await createGitExecutableResolver({ HOP_GIT: missing })();
     } catch (error) {
       thrown = error;
     }
@@ -82,9 +82,7 @@ describe("resolveGitExecutable", () => {
     expect((thrown as Error).message).toContain(missing);
     expect((thrown as Error).message).toContain("HOP_GIT");
   });
-});
 
-describe("createGitExecutableResolver", () => {
   it("解決結果をキャッシュし、git 呼び出しごとに探索し直さない", async () => {
     const resolver = createGitExecutableResolver({ PATH: join(sandbox, "cached") });
     const path = await makeBin("cached", EXECUTABLE_MODE);
