@@ -31,7 +31,7 @@ const createUnmergedTrackedWorktree = async (
   await repo.git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
   await repo.git(["push", "-u", "origin", branch]);
 
-  const created = await jump(git, fs, term, {
+  const created = await jump(git, fs, {
     cwd: repo.repoPath,
     target: branch,
     create: true,
@@ -51,7 +51,7 @@ const createOuterWithNestedWorktree = async (): Promise<{
   readonly innerPath: string;
 }> => {
   await repo.git(["branch", "feat/outer"]);
-  const outer = await jump(git, fs, term, {
+  const outer = await jump(git, fs, {
     cwd: repo.repoPath,
     target: "feat/outer",
     create: true,
@@ -159,7 +159,7 @@ describe("clean safety (integration)", () => {
 
   it("hop root によって detach された holder (branch なし) は clean 候補にしない", async () => {
     await repo.git(["branch", "feat/held-for-clean"]);
-    const held = await jump(git, fs, term, {
+    const held = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/held-for-clean",
       create: true,

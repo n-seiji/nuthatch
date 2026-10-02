@@ -3,14 +3,12 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import type { CommandResult } from "../domain/result.ts";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
-import { createTermPort } from "../infra/term.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 import { jump } from "./jump.ts";
 import { root } from "./root.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
-const term = createTermPort();
 
 let repo: TestRepo;
 let savedEnv: NodeJS.ProcessEnv;
@@ -52,7 +50,7 @@ const publishToTwoNonOriginRemotes = async (branch: string): Promise<void> => {
 };
 
 const jumpCreate = (target: string, track?: string) =>
-  jump(git, fs, term, {
+  jump(git, fs, {
     cwd: repo.repoPath,
     target,
     create: true,

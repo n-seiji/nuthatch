@@ -11,9 +11,9 @@ import {
 import type { RmData } from "../domain/schema.ts";
 import { acquireRepoLockOrRejection } from "../infra/lock.ts";
 import {
+  isWorktreeDirty,
   loadRepoContext,
   nestedWorktrees,
-  otherWorktreePaths,
   type RepoContext,
 } from "../infra/repo.ts";
 
@@ -111,10 +111,7 @@ const targetSafetyRejection = async (
   if (target.locked) {
     return lockedRejection(options.branch, target.lockReason);
   }
-  if (
-    !options.force &&
-    (await git.isDirty(target.path, otherWorktreePaths(context.worktrees, target.path)))
-  ) {
+  if (!options.force && (await isWorktreeDirty(git, context.worktrees, target.path))) {
     return fail(
       EXIT_SAFE_REJECTION,
       `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,

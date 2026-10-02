@@ -132,7 +132,7 @@ const runJump = async (
   target: string,
   options: { create: boolean; track?: string; json: boolean },
 ): Promise<void> => {
-  const result = await jump(git, fs, term, {
+  const result = await jump(git, fs, {
     cwd: process.cwd(),
     target,
     create: options.create,

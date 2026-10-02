@@ -1,7 +1,7 @@
 import { classifyGarbage, type GarbageInput } from "../domain/garbage.ts";
 import type { GitPort } from "../domain/ports.ts";
 import type { CleanCandidate, Worktree } from "../domain/schema.ts";
-import { otherWorktreePaths, type RepoContext } from "../infra/repo.ts";
+import { type RepoContext, worktreeDirtyState } from "../infra/repo.ts";
 
 /** Finds worktrees safe for `hop clean` to remove (see clean.ts for the policy). */
 export const buildCleanCandidates = async (
@@ -54,10 +54,8 @@ const classifyWorktree = async (
   }
 
   const { rootPath, worktrees } = context;
-  const [isClean, upstreamGone] = await Promise.all([
-    wt.bare
-      ? Promise.resolve(false)
-      : (async () => !(await git.isDirty(wt.path, otherWorktreePaths(worktrees, wt.path))))(),
+  const [dirtyState, upstreamGone] = await Promise.all([
+    worktreeDirtyState(git, worktrees, wt),
     git.isUpstreamGone(rootPath, wt.branch),
   ]);
 
@@ -72,7 +70,7 @@ const classifyWorktree = async (
 
   const input: GarbageInput = {
     prunable: false,
-    clean: isClean,
+    clean: dirtyState === false,
     mergedIntoDefault,
     upstreamGone,
     allCommitsReachableFromDefault,

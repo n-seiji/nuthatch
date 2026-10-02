@@ -1,14 +1,8 @@
 import type { FsPort, GitPort } from "../domain/ports.ts";
-import {
-  type CommandResult,
-  EXIT_SAFE_REJECTION,
-  EXIT_USAGE_ERROR,
-  fail,
-  ok,
-} from "../domain/result.ts";
+import { type CommandResult, EXIT_SAFE_REJECTION, fail, ok } from "../domain/result.ts";
 import type { RootData } from "../domain/schema.ts";
 import { acquireRepoLockOrRejection } from "../infra/lock.ts";
-import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
+import { isWorktreeDirty, loadRepoContext, resolveBranchCheckout } from "../infra/repo.ts";
 import { type DetachedHolder, resolveHolderSwap } from "./root-holder-swap.ts";
 
 export type { RootData } from "../domain/schema.ts";
@@ -53,10 +47,7 @@ export const root = async (
     });
   }
 
-  const dirty = await git.isDirty(
-    context.rootPath,
-    otherWorktreePaths(context.worktrees, context.rootPath),
-  );
+  const dirty = await isWorktreeDirty(git, context.worktrees, context.rootPath);
   if (dirty) {
     return fail(
       EXIT_SAFE_REJECTION,
@@ -75,24 +66,14 @@ export const root = async (
     });
   }
 
-  const localBranches = await git.listBranches(context.rootPath);
-  const branchExistsLocally = localBranches.includes(options.target);
-
-  const { track: initialTrack } = options;
-  let track = initialTrack;
-  if (!branchExistsLocally && track === undefined) {
-    const remotes = await git.remotesWithBranch(context.rootPath, options.target);
-    const [firstRemote] = remotes;
-    if (remotes.includes("origin")) {
-      track = `origin/${options.target}`;
-    } else if (remotes.length === 1 && firstRemote !== undefined) {
-      track = `${firstRemote}/${options.target}`;
-    } else if (remotes.length > 1) {
-      return fail(
-        EXIT_USAGE_ERROR,
-        `Branch "${options.target}" exists on multiple remotes (${remotes.join(", ")}). Use --track to disambiguate.`,
-      );
-    }
+  const checkout = await resolveBranchCheckout<RootData>(
+    git,
+    context.rootPath,
+    options.target,
+    options.track,
+  );
+  if (!checkout.ok) {
+    return checkout.rejection;
   }
 
   return switchAndReport({
@@ -100,10 +81,7 @@ export const root = async (
     fs,
     context,
     target: options.target,
-    switchOptions: {
-      createBranch: !branchExistsLocally,
-      ...(track === undefined ? {} : { track }),
-    },
+    switchOptions: checkout.options,
     holderPolicy: {
       allowExternal: options.allowExternalHolderSwap ?? true,
       ...(options.expectedHolderPath === undefined
@@ -148,10 +126,7 @@ const switchAndReport = async ({
     // May have started checking out the target branch, since the checks above.
     const fresh = await loadRepoContext(git, fs, context.rootPath);
     previousBranch = fresh.worktrees.find((wt) => wt.kind === "root")?.branch ?? null;
-    const stillDirty = await git.isDirty(
-      fresh.rootPath,
-      otherWorktreePaths(fresh.worktrees, fresh.rootPath),
-    );
+    const stillDirty = await isWorktreeDirty(git, fresh.worktrees, fresh.rootPath);
     if (stillDirty) {
       return fail(
         EXIT_SAFE_REJECTION,

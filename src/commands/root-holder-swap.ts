@@ -1,7 +1,7 @@
 import type { GitPort } from "../domain/ports.ts";
 import { type CommandResult, EXIT_SAFE_REJECTION, fail } from "../domain/result.ts";
 import type { RootData } from "../domain/schema.ts";
-import { otherWorktreePaths, type RepoContext } from "../infra/repo.ts";
+import { isWorktreeDirty, type RepoContext } from "../infra/repo.ts";
 
 /**
  * Split out of root.ts purely to keep that file and switchAndReport under
@@ -139,10 +139,7 @@ export const resolveHolderSwap = async ({
       ),
     };
   }
-  const holderDirty = await git.isDirty(
-    freshHolder.path,
-    otherWorktreePaths(fresh.worktrees, freshHolder.path),
-  );
+  const holderDirty = await isWorktreeDirty(git, fresh.worktrees, freshHolder.path);
   if (holderDirty) {
     return {
       rejection: holderRejection(target, freshHolder.path, "has uncommitted or untracked changes"),

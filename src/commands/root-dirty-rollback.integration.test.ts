@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
-import { createTermPort } from "../infra/term.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 import { jump } from "./jump.ts";
 import { rm } from "./rm.ts";
@@ -9,7 +8,6 @@ import { root } from "./root.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
-const term = createTermPort();
 
 let repo: TestRepo;
 let savedEnv: NodeJS.ProcessEnv;
@@ -60,7 +58,7 @@ describe("root (integration) — nested worktree dirty exclusion / rollback warn
 
   it("root と holder 両方の rollback が失敗したら、両方の警告を残しつつ元の失敗の exit code を保つ", async () => {
     await repo.git(["branch", "feat/held-rollback-fail"]);
-    const held = await jump(git, fs, term, {
+    const held = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/held-rollback-fail",
       create: true,
@@ -107,7 +105,7 @@ describe("root (integration) — nested worktree dirty exclusion / rollback warn
   });
 
   it("root 配下にネストした worktree 自身に真の変更があれば、その worktree 自身は dirty と判定する (exclusion は自分の祖先に対してではなく自分の内側にのみ効く)", async () => {
-    const held = await jump(git, fs, term, {
+    const held = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "swap-dirty",
       create: true,

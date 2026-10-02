@@ -2,7 +2,9 @@ import { basename, dirname, join } from "node:path";
 import { classifyWorktreePath, isWithin } from "../domain/classify.ts";
 import type { Worktree } from "../domain/model.ts";
 import { parsePorcelain } from "../domain/porcelain.ts";
-import type { FsPort, GitPort } from "../domain/ports.ts";
+import type { AddWorktreeOptions, FsPort, GitPort } from "../domain/ports.ts";
+import { type CommandResult, EXIT_USAGE_ERROR, fail } from "../domain/result.ts";
+import { resolveTrackingRef } from "../domain/tracking.ts";
 
 export interface RepoContext {
   readonly rootPath: string;
@@ -73,11 +75,11 @@ export const loadRepoContext = async (
  * real untracked files that later reappear at that same path from a dirty
  * check — making the containing worktree look clean when it isn't.
  */
-export const otherWorktreePaths = (worktrees: readonly Worktree[], path: string): string[] =>
+export const nestedWorktreePaths = (worktrees: readonly Worktree[], path: string): string[] =>
   nestedWorktrees(worktrees, path).map((wt) => wt.path);
 
 /**
- * Registered worktrees nested *inside* `path` (see otherWorktreePaths'
+ * Registered worktrees nested *inside* `path` (see nestedWorktreePaths'
  * doc for the descendants-only / prunable-excluded rules — this returns
  * the same set, but as full Worktree records rather than bare paths, for
  * callers that need to report what's inside (see commands/rm.ts and
@@ -87,6 +89,64 @@ export const otherWorktreePaths = (worktrees: readonly Worktree[], path: string)
  */
 export const nestedWorktrees = (worktrees: readonly Worktree[], path: string): Worktree[] =>
   worktrees.filter((wt) => wt.path !== path && !wt.prunable && isWithin(path, wt.path));
+
+/** True if the worktree at `path` is dirty, ignoring worktrees nested inside it. */
+export const isWorktreeDirty = (
+  git: GitPort,
+  worktrees: readonly Worktree[],
+  path: string,
+): Promise<boolean> => git.isDirty(path, nestedWorktreePaths(worktrees, path));
+
+/**
+ * Dirty state of `wt`, or null for a bare entry: there is no working tree to
+ * inspect, so "not applicable" stays distinguishable from "clean".
+ */
+export const worktreeDirtyState = (
+  git: GitPort,
+  worktrees: readonly Worktree[],
+  wt: Worktree,
+): Promise<boolean | null> =>
+  wt.bare ? Promise.resolve(null) : isWorktreeDirty(git, worktrees, wt.path);
+
+export type BranchCheckoutResolution<T> =
+  | { readonly ok: true; readonly options: AddWorktreeOptions }
+  | { readonly ok: false; readonly rejection: CommandResult<T> };
+
+/**
+ * How to check out `branch` for a command that may have to create it
+ * (`jump --create`, `root`). `explicitTrack` always wins; otherwise a branch
+ * with no local copy tracks the remote branch of the same name. A branch on
+ * several remotes, none of them origin, is a usage error rather than a guess.
+ */
+export const resolveBranchCheckout = async <T>(
+  git: GitPort,
+  rootPath: string,
+  branch: string,
+  explicitTrack: string | undefined,
+): Promise<BranchCheckoutResolution<T>> => {
+  const localBranches = await git.listBranches(rootPath);
+  const createBranch = !localBranches.includes(branch);
+
+  let track = explicitTrack;
+  if (createBranch && track === undefined) {
+    const remotes = await git.remotesWithBranch(rootPath, branch);
+    const resolution = resolveTrackingRef(branch, remotes);
+    if (resolution.kind === "ambiguous") {
+      return {
+        ok: false,
+        rejection: fail(
+          EXIT_USAGE_ERROR,
+          `Branch "${branch}" exists on multiple remotes (${remotes.join(", ")}). Use --track to disambiguate.`,
+        ),
+      };
+    }
+    if (resolution.kind === "track") {
+      track = resolution.ref;
+    }
+  }
+
+  return { ok: true, options: { createBranch, ...(track === undefined ? {} : { track }) } };
+};
 
 const realpathOrRaw = async (fs: FsPort, path: string): Promise<string> => {
   try {
