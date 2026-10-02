@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { messageOf } from "../domain/fatal-error.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import {
   type CommandResult,
@@ -83,7 +84,7 @@ export const jump = async (
     await fs.mkdir(context.managedRoot);
     await git.addWorktree(context.rootPath, targetPath, options.target, checkout.options);
   } catch (error) {
-    return fail(EXIT_SAFE_REJECTION, `Failed to create worktree: ${(error as Error).message}`);
+    return fail(EXIT_SAFE_REJECTION, `Failed to create worktree: ${messageOf(error)}`);
   } finally {
     await lock.release();
   }

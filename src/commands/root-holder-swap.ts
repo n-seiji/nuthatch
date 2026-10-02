@@ -1,22 +1,16 @@
-import type { GitPort } from "../domain/ports.ts";
+import type { GitPort, SwitchBranchOptions } from "../domain/ports.ts";
 import { type CommandResult, EXIT_SAFE_REJECTION, fail } from "../domain/result.ts";
 import type { RootData } from "../domain/schema.ts";
 import { isWorktreeDirty, type RepoContext } from "../infra/repo.ts";
 
 /**
- * Split out of root.ts purely to keep that file and switchAndReport under
- * the lint's line/statement limits — see root.ts's module comment for the
- * feature this implements (`hop root`'s holder swap).
+ * The holder swap behind `hop root <branch>`: resolves which other worktree
+ * holds the target branch and detaches it when that is safe.
  */
 
 export interface DetachedHolder {
   readonly path: string;
   readonly branch: string;
-}
-
-export interface HolderSwitchOptions {
-  createBranch?: boolean;
-  track?: string;
 }
 
 export interface HolderSwapPolicy {
@@ -60,7 +54,7 @@ interface ResolveHolderSwapOptions {
   readonly git: GitPort;
   readonly fresh: RepoContext;
   readonly target: string;
-  readonly switchOptions: HolderSwitchOptions;
+  readonly switchOptions: SwitchBranchOptions;
   readonly policy: HolderSwapPolicy;
 }
 
