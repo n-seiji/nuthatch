@@ -42,6 +42,62 @@ const createUnmergedTrackedWorktree = async (
   return created.path;
 };
 
+/**
+ * A managed worktree for `feat/outer` (a clean `merged` candidate) with a
+ * registered worktree for `feat/inner` nested inside its directory.
+ */
+const createOuterWithNestedWorktree = async (): Promise<{
+  readonly outerPath: string;
+  readonly innerPath: string;
+}> => {
+  await repo.git(["branch", "feat/outer"]);
+  const outer = await jump(git, fs, term, {
+    cwd: repo.repoPath,
+    target: "feat/outer",
+    create: true,
+  });
+  if (outer.path === undefined) {
+    throw new Error("expected jump to report a path");
+  }
+  // The inner branch carries its own unmerged commit, so that it is not a
+  // Clean candidate itself.
+  const innerPath = `${outer.path}/.claude/worktrees/inner`;
+  await repo.git(["worktree", "add", innerPath, "-b", "feat/inner"]);
+  await Bun.write(`${innerPath}/inner.txt`, "unmerged");
+  await repo.git(["add", "inner.txt"], innerPath);
+  await repo.git(["commit", "-m", "unmerged change"], innerPath);
+  return { outerPath: outer.path, innerPath };
+};
+
+/**
+ * Dry-runs `clean` (the outer worktree must be the only candidate), then runs
+ * it for real and checks that the outer worktree was skipped with a warning
+ * and that neither worktree was touched.
+ */
+const expectOuterSkipped = async (outerPath: string, innerPath: string): Promise<void> => {
+  const options = {
+    cwd: repo.repoPath,
+    ext: false,
+    withBranch: false,
+    yes: true,
+  };
+  const dryRun = await clean(git, fs, term, { ...options, dryRun: true });
+  expect(dryRun.data?.candidates).toEqual([
+    { branch: "feat/outer", path: outerPath, reason: "merged" },
+  ]);
+
+  const result = await clean(git, fs, term, { ...options, dryRun: false });
+
+  expect(result.ok).toBe(true);
+  expect(result.data?.removed).toEqual([]);
+  expect(result.warnings).toContain(`Skipped ${outerPath}: still contains a registered worktree.`);
+  expect(await fs.exists(outerPath)).toBe(true);
+  expect(await fs.exists(innerPath)).toBe(true);
+  const worktrees = await repo.git(["worktree", "list", "--porcelain"]);
+  expect(worktrees).toContain(outerPath);
+  expect(worktrees).toContain(innerPath);
+};
+
 beforeEach(async () => {
   repo = await createTestRepo();
   savedEnv = { ...process.env };
@@ -128,5 +184,20 @@ describe("clean safety (integration)", () => {
 
     expect(result.ok).toBe(true);
     expect(result.data?.candidates.some((candidate) => candidate.path === held.path)).toBe(false);
+  });
+
+  it("merge 済みでも登録済みの worktree を内側に含む候補は、削除されず警告つきで skip される", async () => {
+    const { outerPath, innerPath } = await createOuterWithNestedWorktree();
+
+    await expectOuterSkipped(outerPath, innerPath);
+  });
+
+  it("内側の worktree の path が ignore され git 単体なら消せる場合も、skip して内側を壊さない", async () => {
+    const { outerPath, innerPath } = await createOuterWithNestedWorktree();
+    // Ignored, the nested worktree no longer makes `git worktree remove` refuse
+    // On its own, so only hop's own guard stands between clean and its files.
+    await Bun.write(`${repo.repoPath}/.git/info/exclude`, ".claude/\n");
+
+    await expectOuterSkipped(outerPath, innerPath);
   });
 });
