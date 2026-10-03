@@ -98,15 +98,21 @@ export const isWorktreeDirty = (
 ): Promise<boolean> => git.isDirty(path, nestedWorktreePaths(worktrees, path));
 
 /**
- * Dirty state of `wt`, or null for a bare entry: there is no working tree to
- * inspect, so "not applicable" stays distinguishable from "clean".
+ * Dirty state of `wt`, or null when there is no working tree on disk to
+ * inspect (bare, prunable, or its directory is gone): spawning git in a missing
+ * directory fails, and "not applicable" must stay distinguishable from "clean".
  */
-export const worktreeDirtyState = (
+export const worktreeDirtyState = async (
   git: GitPort,
+  fs: FsPort,
   worktrees: readonly Worktree[],
   wt: Worktree,
-): Promise<boolean | null> =>
-  wt.bare ? Promise.resolve(null) : isWorktreeDirty(git, worktrees, wt.path);
+): Promise<boolean | null> => {
+  if (wt.bare || wt.prunable || !(await fs.exists(wt.path))) {
+    return null;
+  }
+  return isWorktreeDirty(git, worktrees, wt.path);
+};
 
 export type BranchCheckoutResolution<T> =
   | { readonly ok: true; readonly options: AddWorktreeOptions }

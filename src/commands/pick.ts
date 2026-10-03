@@ -29,7 +29,7 @@ export const pick = async (
     Promise.all(
       context.worktrees.map(async (worktree): Promise<readonly [string, boolean | null]> => [
         worktree.path,
-        await worktreeDirtyState(git, context.worktrees, worktree),
+        await worktreeDirtyState(git, fs, context.worktrees, worktree),
       ]),
     ),
   ]);

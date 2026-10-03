@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { Worktree } from "../domain/model.ts";
-import type { GitPort } from "../domain/ports.ts";
+import type { FsPort, GitPort } from "../domain/ports.ts";
 import { nestedWorktreePaths, resolveBranchCheckout, worktreeDirtyState } from "./repo.ts";
 
 const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
@@ -28,6 +28,10 @@ const gitWithDirty = (dirty: boolean) => {
   } as unknown as GitPort;
   return { git, dirtyChecks };
 };
+
+/** An FsPort that only answers `exists`: the listed paths are on disk, nothing else is. */
+const fsWithExisting = (existing: readonly string[]) =>
+  ({ exists: (path: string) => Promise.resolve(existing.includes(path)) }) as unknown as FsPort;
 
 /** A GitPort that only answers the branch/remote lookups, recording the remote lookups. */
 const gitWithBranches = (localBranches: readonly string[], remotes: readonly string[]) => {
@@ -82,8 +86,21 @@ describe("worktreeDirtyState", () => {
   it("bare な worktree の場合、git に問い合わせず null になる", async () => {
     const { git, dirtyChecks } = gitWithDirty(true);
     const bare = worktree({ path: "/repo.git", bare: true });
+    const fs = fsWithExisting([bare.path]);
 
-    expect(await worktreeDirtyState(git, [bare], bare)).toBeNull();
+    expect(await worktreeDirtyState(git, fs, [bare], bare)).toBeNull();
+    expect(dirtyChecks).toEqual([]);
+  });
+
+  it("prunable な worktree の場合、git に問い合わせず null になる", async () => {
+    const { git, dirtyChecks } = gitWithDirty(true);
+    const prunable = worktree({
+      prunable: true,
+      prunableReason: "gitdir file points to non-existent location",
+    });
+    const fs = fsWithExisting([prunable.path]);
+
+    expect(await worktreeDirtyState(git, fs, [prunable], prunable)).toBeNull();
     expect(dirtyChecks).toEqual([]);
   });
 
@@ -92,8 +109,9 @@ describe("worktreeDirtyState", () => {
     const target = worktree({ path: "/repo" });
     const nested = worktree({ path: "/repo/.claude/worktrees/x", branch: "x" });
     const sibling = worktree({ path: "/other-repo-wt", branch: "y" });
+    const fs = fsWithExisting([target.path]);
 
-    expect(await worktreeDirtyState(git, [target, nested, sibling], target)).toBe(false);
+    expect(await worktreeDirtyState(git, fs, [target, nested, sibling], target)).toBe(false);
     expect(dirtyChecks).toEqual([{ path: "/repo", nestedPaths: ["/repo/.claude/worktrees/x"] }]);
   });
 });

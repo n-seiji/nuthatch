@@ -12,10 +12,10 @@ import {
 import type { RmData } from "../domain/schema.ts";
 import { withRepoLock } from "../infra/lock.ts";
 import {
-  isWorktreeDirty,
   loadRepoContext,
   nestedWorktrees,
   type RepoContext,
+  worktreeDirtyState,
 } from "../infra/repo.ts";
 
 export type { RmData } from "../domain/schema.ts";
@@ -95,11 +95,16 @@ const nestedWorktreeRejection = <T>(
   );
 };
 
+interface RemovalCheck {
+  readonly git: GitPort;
+  readonly fs: FsPort;
+  readonly context: RepoContext;
+  readonly options: RmOptions;
+}
+
 const targetSafetyRejection = async (
-  git: GitPort,
-  context: RepoContext,
+  { git, fs, context, options }: RemovalCheck,
   target: Worktree,
-  options: RmOptions,
 ): Promise<CommandResult<RmData> | null> => {
   const nestedRejection = nestedWorktreeRejection<RmData>(
     options.branch,
@@ -112,7 +117,8 @@ const targetSafetyRejection = async (
   if (target.locked) {
     return lockedRejection(options.branch, target.lockReason);
   }
-  if (!options.force && (await isWorktreeDirty(git, context.worktrees, target.path))) {
+  // Only a definite "dirty" refuses: null (no working tree on disk) leaves removal to git.
+  if (!options.force && (await worktreeDirtyState(git, fs, context.worktrees, target)) === true) {
     return fail(
       EXIT_SAFE_REJECTION,
       `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
@@ -125,11 +131,8 @@ type RemovalValidation =
   | { readonly ok: true; readonly target: Worktree }
   | { readonly ok: false; readonly rejection: CommandResult<RmData> };
 
-const validateRemoval = async (
-  git: GitPort,
-  context: RepoContext,
-  options: RmOptions,
-): Promise<RemovalValidation> => {
+const validateRemoval = async (check: RemovalCheck): Promise<RemovalValidation> => {
+  const { context, options } = check;
   const resolved = resolveTarget(context.worktrees, options.branch, options.expectedPath);
   if (resolved.rejection !== undefined) {
     return { ok: false, rejection: resolved.rejection };
@@ -144,7 +147,7 @@ const validateRemoval = async (
   if (target.kind === "root") {
     return { ok: false, rejection: fail(EXIT_USAGE_ERROR, "Cannot remove the root clone.") };
   }
-  const rejection = await targetSafetyRejection(git, context, target, options);
+  const rejection = await targetSafetyRejection(check, target);
   return rejection === null ? { ok: true, target } : { ok: false, rejection };
 };
 
@@ -167,7 +170,7 @@ const removeWorktree = async (
   options: RmOptions,
 ): Promise<CommandResult<RmData>> => {
   const context = await loadRepoContext(git, fs, options.cwd);
-  const validation = await validateRemoval(git, context, options);
+  const validation = await validateRemoval({ git, fs, context, options });
   if (!validation.ok) {
     return validation.rejection;
   }
@@ -176,7 +179,7 @@ const removeWorktree = async (
     try {
       // Re-validate under lock: the worktree may have changed since the check above.
       const fresh = await loadRepoContext(git, fs, options.cwd);
-      const freshValidation = await validateRemoval(git, fresh, options);
+      const freshValidation = await validateRemoval({ git, fs, context: fresh, options });
       if (!freshValidation.ok) {
         return freshValidation.rejection;
       }

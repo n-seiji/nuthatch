@@ -36,7 +36,7 @@ export const clean = async (
   options: CleanOptions,
 ): Promise<CommandResult<CleanData>> => {
   const context = await loadRepoContext(git, fs, options.cwd);
-  const candidates = await buildCleanCandidates(git, context, options.ext);
+  const candidates = await buildCleanCandidates(git, fs, context, options.ext);
 
   if (options.dryRun) {
     return ok({ data: { candidates } });
@@ -160,7 +160,7 @@ const executeClean = ({
       // Re-validate under lock: a candidate may have gone dirty, or lost its
       // Garbage status, since it was computed above.
       const fresh = await loadRepoContext(git, fs, context.rootPath);
-      const freshCandidates = await buildCleanCandidates(git, fresh, cleanOptions.ext);
+      const freshCandidates = await buildCleanCandidates(git, fs, fresh, cleanOptions.ext);
       const freshByPath = new Map(freshCandidates.map((candidate) => [candidate.path, candidate]));
       const stillValid = candidates.flatMap((candidate) => {
         const freshCandidate = freshByPath.get(candidate.path);

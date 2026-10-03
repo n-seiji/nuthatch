@@ -24,7 +24,7 @@ export const ls = async (
     // oxlint-disable-next-line oxc/no-map-spread
     context.worktrees.map(async (wt): Promise<LsEntry> => {
       const [dirtyState, aheadBehind] = await Promise.all([
-        worktreeDirtyState(git, context.worktrees, wt),
+        worktreeDirtyState(git, fs, context.worktrees, wt),
         wt.branch === null ? Promise.resolve(null) : git.aheadBehind(context.rootPath, wt.branch),
       ]);
       return {
