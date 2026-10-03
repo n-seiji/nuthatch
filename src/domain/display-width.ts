@@ -4,8 +4,8 @@
  * clusters. picker-layout.ts's column padding and path truncation used
  * `.length`/`.slice`/`.padEnd` directly, which misaligns as soon as a
  * branch name or path contains a fullwidth character (CJK, fullwidth
- * forms), a combining mark, or an emoji — ink absorbed some of that when
- * it owned layout, but a self-drawn renderer can't rely on that. Kept in
+ * forms), a combining mark, or an emoji — a self-drawn renderer has no
+ * layout engine to absorb that, so it must measure widths itself. Kept in
  * domain/ (pure, no dependencies) so it's unit-testable without a
  * terminal — see display-width.test.ts.
  *

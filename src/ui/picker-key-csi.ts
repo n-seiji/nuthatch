@@ -46,7 +46,7 @@ const isCsiFinalByte = (byte: number): boolean =>
 /** Ctrl+C's byte. No legitimate CSI parameter byte is this low (params are digits/`;`/intermediate bytes, all >= 0x20), so seeing it mid-sequence can only mean the terminal sent a real Ctrl+C press while a CSI/SS3 sequence was still (incompletely) buffered -- see the "interrupted" SequenceResult below. */
 const CTRL_C_BYTE = 0x03;
 
-export const BRACKETED_PASTE_START = "200~";
+const BRACKETED_PASTE_START = "200~";
 export const BRACKETED_PASTE_END = "201~";
 
 /** What one complete CSI/SS3 sequence resolved to, plus how many bytes it consumed. */

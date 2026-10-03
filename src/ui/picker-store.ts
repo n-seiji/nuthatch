@@ -29,9 +29,9 @@ interface PickerState {
 /**
  * A memoizing filter+sort selector, factored out of createPickerStore to
  * keep that function under the lint line limit. Recomputes only when
- * candidates/query actually change, so repeated calls (e.g. from
- * useSyncExternalStore) return a stable array reference and don't cause
- * needless re-renders.
+ * candidates/query actually change, so repeated calls (e.g. a fresh
+ * snapshot after every state change) return a stable array reference
+ * instead of re-filtering and re-sorting.
  */
 const createFilteredSelector = () => {
   let cache: {
@@ -69,26 +69,18 @@ const runMutation = async (
   if (action === "switchRoot") {
     const result = await callbacks.switchRootHere(candidate);
     if (!result.ok || result.path === undefined) {
-      const transition = panelErrorTransition(
-        candidate,
-        result.message ?? "Failed to switch root.",
-      );
       return {
         type: "patch",
-        patch: { mode: transition.mode, panelIndex: transition.panelIndex },
+        patch: panelErrorTransition(candidate, result.message ?? "Failed to switch root."),
       };
     }
     return { type: "exit", outcome: { type: "path", path: result.path } };
   }
   const result = await callbacks.deleteWorktree(candidate);
   if (!result.ok) {
-    const transition = panelErrorTransition(
-      candidate,
-      result.message ?? "Failed to delete worktree.",
-    );
     return {
       type: "patch",
-      patch: { mode: transition.mode, panelIndex: transition.panelIndex },
+      patch: panelErrorTransition(candidate, result.message ?? "Failed to delete worktree."),
     };
   }
   const fresh = await callbacks.reloadCandidates();
@@ -114,7 +106,7 @@ export interface PickerStore {
   handleInput: (input: string, key: PickerKeyModifiers) => void;
 }
 
-/** Wraps onExit/onCancel so a second call after the first is inert, and exposes whether either fired via `isExited` -- lets handleInput stop dispatching once the picker has resolved (second layer of defense; terminal-session.ts's handleData is the first). Factored out of createPickerStore to keep that function under the lint line limit. */
+/** Wraps onExit/onCancel to record that the picker has resolved (read back via `isExited`), so handleInput stops dispatching once it has -- second layer of defense; terminal-session.ts's handleData is the first. Every call is still forwarded to onExit/onCancel (terminal-session.ts's finish ignores repeats). Factored out of createPickerStore to keep that function under the lint line limit. */
 const createExitGuard = (
   onExit: (outcome: PickerOutcome) => void,
   onCancel: (reason: PickerCancelReason) => void,
@@ -134,9 +126,9 @@ const createExitGuard = (
 };
 
 /**
- * All picker state and transitions, framework-free (no React) -- lets
- * picker.ts stay a thin adapter and a future non-ink renderer subscribe the
- * same way. Async mutations (delete/switchRoot) notify immediately on start
+ * All picker state and transitions, kept free of rendering and terminal I/O
+ * -- lets picker.ts stay a thin adapter that just subscribes and repaints.
+ * Async mutations (delete/switchRoot) notify immediately on start
  * (`busy: true`) and again on settling, so a subscribed renderer repaints
  * without new input; `handleInput` ignores keys while busy so an in-flight
  * mutation can't be double-triggered.
@@ -215,10 +207,7 @@ export const createPickerStore = (
   const setQuery = (updater: (current: string) => string): void => {
     setState({ query: updater(state.query) });
   };
-  const setPanelIndexByValue = (value: number): void => {
-    setState({ panelIndex: value });
-  };
-  const setPanelIndexByUpdater = (updater: (current: number) => number): void => {
+  const setPanelIndex = (updater: (current: number) => number): void => {
     setState({ panelIndex: updater(state.panelIndex) });
   };
   const setMode = (mode: PickerMode): void => {
@@ -238,13 +227,12 @@ export const createPickerStore = (
       handlePanelInput(input, key, mode, {
         panelIndex,
         runAction,
-        setPanelIndex: setPanelIndexByUpdater,
+        setPanelIndex,
         setMode,
       });
       return;
     }
-    const filtered = getFiltered(state);
-    const clampedIndex = Math.min(state.index, Math.max(filtered.length - 1, 0));
+    const { filtered, clampedIndex } = getSnapshot();
     handleListInput(input, key, {
       selectedCandidate: filtered[clampedIndex],
       filteredLength: filtered.length,
@@ -252,7 +240,7 @@ export const createPickerStore = (
       onCancel: guardedOnCancel,
       setIndex,
       setQuery,
-      setPanelIndex: setPanelIndexByValue,
+      setPanelIndex,
       setMode,
     });
   };

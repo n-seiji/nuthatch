@@ -54,5 +54,4 @@ export type PickerMode =
       /** Which mutation the y/N overlay is gating — currently "delete" or "switchRoot". */
       readonly action: Exclude<PickerActionKind, "cd">;
       readonly candidate: PickCandidate;
-      readonly error: string | null;
     };

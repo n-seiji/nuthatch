@@ -28,7 +28,8 @@ const requiresConfirmation = (candidate: PickCandidate, action: PickerActionKind
   return false;
 };
 
-interface ConfirmInputContext {
+/** The store hooks every action path needs: run an action, or switch mode to confirm it first. */
+interface ActionContext {
   readonly runAction: RunAction;
   readonly setMode: (mode: PickerMode) => void;
 }
@@ -38,7 +39,7 @@ export const handleConfirmInput = (
   input: string,
   key: PickerKeyModifiers,
   confirmMode: Extract<PickerMode, { kind: "confirm" }>,
-  ctx: ConfirmInputContext,
+  ctx: ActionContext,
 ): void => {
   const confirmAction = resolveConfirmKeyAction(input, key);
   if (confirmAction.type === "yes") {
@@ -48,26 +49,24 @@ export const handleConfirmInput = (
   }
 };
 
-interface PanelInputContext {
+interface PanelInputContext extends ActionContext {
   readonly panelIndex: number;
-  readonly runAction: RunAction;
   readonly setPanelIndex: (updater: (current: number) => number) => void;
-  readonly setMode: (mode: PickerMode) => void;
 }
 
 /**
- * Runs a panel-selected action, unless it's a delete or switchRoot that
- * requires confirmation (external worktrees) — in that case it opens the
- * same y/N overlay the list-mode shortcuts use, instead of running
- * immediately.
+ * Runs an action picked in the panel or via list mode's Ctrl+R, unless it's
+ * a delete or switchRoot that requires confirmation (external worktrees) —
+ * in that case it opens the same y/N overlay the list-mode shortcuts use,
+ * instead of running immediately.
  */
 const runOrConfirm = (
   candidate: PickCandidate,
   action: PickerActionKind,
-  ctx: PanelInputContext,
+  ctx: ActionContext,
 ): void => {
   if ((action === "delete" || action === "switchRoot") && requiresConfirmation(candidate, action)) {
-    ctx.setMode({ kind: "confirm", action, candidate, error: null });
+    ctx.setMode({ kind: "confirm", action, candidate });
     return;
   }
   ctx.runAction(candidate, action);
@@ -122,7 +121,7 @@ interface ListInputContext {
   readonly onCancel: (reason: PickerCancelReason) => void;
   readonly setIndex: (updater: (current: number) => number) => void;
   readonly setQuery: (updater: (current: string) => string) => void;
-  readonly setPanelIndex: (index: number) => void;
+  readonly setPanelIndex: (updater: (current: number) => number) => void;
   readonly setMode: (mode: PickerMode) => void;
 }
 
@@ -169,7 +168,7 @@ export const handleListInput = (
     }
     case "openPanel": {
       if (ctx.selectedCandidate !== undefined) {
-        ctx.setPanelIndex(0);
+        ctx.setPanelIndex(() => 0);
         ctx.setMode({
           kind: "panel",
           candidate: ctx.selectedCandidate,
@@ -187,7 +186,6 @@ export const handleListInput = (
           kind: "confirm",
           action: "delete",
           candidate: ctx.selectedCandidate,
-          error: null,
         });
       }
       break;
@@ -197,16 +195,7 @@ export const handleListInput = (
         ctx.selectedCandidate !== undefined &&
         availableActions(ctx.selectedCandidate).includes("switchRoot")
       ) {
-        if (requiresSwitchRootConfirmation(ctx.selectedCandidate)) {
-          ctx.setMode({
-            kind: "confirm",
-            action: "switchRoot",
-            candidate: ctx.selectedCandidate,
-            error: null,
-          });
-        } else {
-          ctx.runAction(ctx.selectedCandidate, "switchRoot");
-        }
+        runOrConfirm(ctx.selectedCandidate, "switchRoot", ctx);
       }
       break;
     }

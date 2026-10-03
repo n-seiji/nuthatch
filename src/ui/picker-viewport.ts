@@ -13,8 +13,8 @@
  * the current selection, not a fixed head slice, so the two can never
  * disagree: the window always contains `selectedIndex`.
  *
- * Kept pure and framework-free (no ink/process.stdout) so it's unit
- * testable without a real terminal — see picker-viewport.test.ts.
+ * Kept pure (no process.stdout) so it's unit testable without a real
+ * terminal — see picker-viewport.test.ts.
  */
 
 /** Assumed terminal height when it can't be measured (e.g. stream.rows is undefined — not a TTY, or a very early resize event). Matches common defaults (macOS Terminal.app, most CI TTYs default near 24). */
@@ -49,7 +49,7 @@ export interface RowBudgetInputs {
   /**
    * How many rows the side panel/confirm box actually occupies when it's
    * stacked below the list instead of beside it (narrow terminals — see
-   * picker-layout.ts's isNarrowTerminal); 0 when there's no panel or it
+   * picker-side-by-side.ts's isNarrowTerminal); 0 when there's no panel or it
    * sits beside the list instead. Pass the real rendered row count (the
    * panel's content wraps onto extra rows for long branch names/errors —
    * see picker-frame.ts's wrapInBox), not an estimate: a fixed guess here

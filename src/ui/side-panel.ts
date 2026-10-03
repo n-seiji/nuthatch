@@ -9,11 +9,11 @@ import type { StyledLine } from "./picker-frame.ts";
 /**
  * The picker's side column: row builders for the action panel and the y/N
  * delete/switchRoot confirmation panel. Pure functions returning StyledLine
- * rows (see picker-frame.ts) rather than ink components — picker.ts wraps
- * the result in a border via picker-frame.ts's wrapInBox.
+ * rows (see picker-frame.ts) — picker-render.ts wraps the result in a
+ * border via picker-frame.ts's wrapInBox.
  */
 
-export const ACTION_LABELS: Record<PickerActionKind, string> = {
+const ACTION_LABELS: Record<PickerActionKind, string> = {
   cd: "cd into this worktree",
   delete: "delete worktree",
   switchRoot: "switch root here",

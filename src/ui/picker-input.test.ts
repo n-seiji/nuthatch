@@ -78,7 +78,6 @@ describe("handlePanelInput — delete confirmation gating", () => {
       kind: "confirm",
       action: "delete",
       candidate,
-      error: null,
     });
   });
 
@@ -100,7 +99,6 @@ describe("handlePanelInput — delete confirmation gating", () => {
       kind: "confirm",
       action: "delete",
       candidate,
-      error: null,
     });
   });
 });
@@ -149,7 +147,6 @@ describe("handleListInput / handlePanelInput — switchRoot confirmation gating"
       kind: "confirm",
       action: "switchRoot",
       candidate,
-      error: null,
     });
   });
 
@@ -172,7 +169,6 @@ describe("handleListInput / handlePanelInput — switchRoot confirmation gating"
       kind: "confirm",
       action: "switchRoot",
       candidate,
-      error: null,
     });
   });
 });

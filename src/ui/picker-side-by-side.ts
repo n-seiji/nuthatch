@@ -3,7 +3,7 @@ import { GUTTER } from "./picker-frame.ts";
 import { KIND_COLUMN_WIDTH, MAX_BRANCH_COLUMN_WIDTH, MAX_PATH_LENGTH } from "./picker-layout.ts";
 import { SIDE_PANEL_WIDTH } from "./side-panel.ts";
 
-/** Non-column, always-present chrome in a rendered candidate row: the 2-column "❯ "/"  " selection marker, the 1-column status marker, a space after it, the 2-column gutter between the branch and kind columns, and a space before the path -- mirrors picker.ts's candidateRowLine format string exactly. */
+/** Non-column, always-present chrome in a rendered candidate row: the 2-column "❯ "/"  " selection marker, the 1-column status marker, a space after it, the 2-column gutter between the branch and kind columns, and a space before the path -- mirrors picker-render.ts's candidateRowLine format string exactly. */
 const SELECTION_MARKER_WIDTH = 2;
 const STATUS_MARKER_WIDTH = 1;
 const STATUS_MARKER_GAP_WIDTH = 1;
@@ -55,10 +55,10 @@ export const MIN_SIDE_BY_SIDE_WIDTH =
 
 export const isNarrowTerminal = (columns: number): boolean => columns < MIN_SIDE_BY_SIDE_WIDTH;
 
-/** The picker's two footer key-hint lines -- kept here (rather than in picker.ts) so footerHintForWidth (below) can pick between this and its short fallback. */
-export const LIST_FOOTER_HINT =
+/** The picker's two footer key-hint lines -- kept here (rather than in picker-render.ts) so footerHintForWidth (below) can pick between this and its short fallback. */
+const LIST_FOOTER_HINT =
   "Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K,J move · Enter cd · Esc cancel";
-export const PANEL_FOOTER_HINT =
+const PANEL_FOOTER_HINT =
   "↑↓/Ctrl+P,N,K,J move · Enter run · c/d/r shortcuts · Esc/Tab/←/Ctrl+H close";
 
 /**

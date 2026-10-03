@@ -5,17 +5,13 @@ import {
   truncateToWidth,
   truncateToWidthKeepingTail,
 } from "../domain/display-width.ts";
-
-// Re-exported so picker.ts (already at its import-count budget) doesn't
-// Need a separate import source for viewport math — picker-viewport.ts
-// Stays its own module for testability, this is just a re-export.
-export { computeViewport, DEFAULT_TERMINAL_HEIGHT, rowBudget } from "./picker-viewport.ts";
+import type { WorktreeKind } from "../domain/model.ts";
 
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
  * display the picker renders (WORKTREES / BRANCHES, status markers, padded
- * columns, shortened paths). Kept free of ink/react so it's unit-testable
- * without rendering — see picker-layout.test.ts.
+ * columns, shortened paths). Kept free of any rendering or terminal code so
+ * it's unit-testable on its own — see picker-layout.test.ts.
  */
 
 /** Exported for picker-side-by-side.ts's MAX_CANDIDATE_ROW_WIDTH -- kept here since it's this module's own column-width budget. */
@@ -25,7 +21,7 @@ export const MAX_BRANCH_COLUMN_WIDTH = 24;
 
 export const LEGEND_TEXT = "●=dirty ○=clean +=not created";
 
-const WORKTREE_KIND_LABELS: Record<"root" | "managed" | "external", string> = {
+const WORKTREE_KIND_LABELS: Record<WorktreeKind, string> = {
   root: "root",
   managed: "managed",
   external: "ext",
@@ -60,7 +56,7 @@ const isCreatableCandidate = (
   candidate: PickCandidate,
 ): candidate is Extract<PickCandidate, { kind: "creatable" }> => candidate.kind === "creatable";
 
-const WORKTREE_KIND_ORDER: Record<"root" | "managed" | "external", number> = {
+const WORKTREE_KIND_ORDER: Record<WorktreeKind, number> = {
   root: 0,
   managed: 1,
   external: 2,
@@ -149,7 +145,7 @@ const candidatePathLabel = (
 ): string =>
   candidate.kind === "worktree" ? shortenPath(candidate.worktree.path, homeDir, maxLength) : "";
 
-/** Longest branch label's display width, uncapped -- lets a wide terminal show branch names past MAX_BRANCH_COLUMN_WIDTH in full instead of clipping two long names sharing a prefix to the same text (Fable-reported). Used by picker.ts's terminal-aware constrainRowColumnWidths; branchColumnWidth (below) is for callers that don't know the terminal width. */
+/** Longest branch label's display width, uncapped -- lets a wide terminal show branch names past MAX_BRANCH_COLUMN_WIDTH in full instead of clipping two long names sharing a prefix to the same text (Fable-reported). Used by picker-render.ts's terminal-aware constrainRowColumnWidths; branchColumnWidth (below) is for callers that don't know the terminal width. */
 export const rawBranchColumnWidth = (candidates: readonly PickCandidate[]): number =>
   candidates.reduce(
     (max, candidate) => Math.max(max, displayWidth(candidateBranchLabel(candidate))),
@@ -182,16 +178,6 @@ export interface CandidateRow {
 
 export type DisplayRow = HeaderRow | CandidateRow;
 
-/**
- * Stable React key for a display row. Candidate rows key off their
- * candidate index (unique within the filtered list — two rows never share
- * one, even when their branch label collides, e.g. two detached-HEAD
- * worktrees both labeled "(detached)"). Header rows key off their label,
- * which is unique since a section renders at most one header.
- */
-export const displayRowKey = (row: DisplayRow): string =>
-  row.kind === "header" ? `header:${row.label}` : `candidate:${row.index}`;
-
 interface ToCandidateRowOptions {
   readonly index: number;
   readonly section: "worktree" | "branch";
@@ -216,6 +202,29 @@ const toCandidateRow = (
   pathLabel: candidatePathLabel(candidate, options.homeDir, options.pathMaxLength),
 });
 
+interface IndexedCandidate {
+  readonly candidate: PickCandidate;
+  readonly index: number;
+}
+
+/** A section header followed by one row per entry, or nothing at all when the section is empty. */
+const sectionRows = (
+  label: string,
+  section: CandidateRow["section"],
+  entries: readonly IndexedCandidate[],
+  rowOptions: Omit<ToCandidateRowOptions, "index" | "section">,
+): DisplayRow[] => {
+  if (entries.length === 0) {
+    return [];
+  }
+  return [
+    { kind: "header", label },
+    ...entries.map((entry) =>
+      toCandidateRow(entry.candidate, { ...rowOptions, index: entry.index, section }),
+    ),
+  ];
+};
+
 /**
  * Builds the rows the picker renders: a WORKTREES section followed by a
  * BRANCHES section. `index` on each candidate row is its position in
@@ -223,7 +232,7 @@ const toCandidateRow = (
  * position) -- matters when `candidates` is a scrolled *window* rather
  * than the full filtered list (see picker-viewport.ts). `columnWidths`
  * overrides the natural (candidate-driven) branch/path column widths --
- * used by picker.ts to keep every row within the terminal's actual width
+ * used by picker-render.ts to keep every row within the terminal's actual width
  * (see picker-side-by-side.ts's constrainRowColumnWidths); omitted, it
  * defaults to the unconstrained widths every existing caller/test expects.
  */
@@ -247,34 +256,9 @@ export const buildDisplayRows = (
   const worktreeEntries = indexed.filter((entry) => isWorktreeCandidate(entry.candidate));
   const branchEntries = indexed.filter((entry) => isCreatableCandidate(entry.candidate));
 
-  const rows: DisplayRow[] = [];
-  if (worktreeEntries.length > 0) {
-    rows.push({ kind: "header", label: "WORKTREES" });
-    for (const entry of worktreeEntries) {
-      rows.push(
-        toCandidateRow(entry.candidate, {
-          index: entry.index,
-          section: "worktree",
-          branchWidth,
-          pathMaxLength,
-          homeDir,
-        }),
-      );
-    }
-  }
-  if (branchEntries.length > 0) {
-    rows.push({ kind: "header", label: "BRANCHES — Enter creates a worktree" });
-    for (const entry of branchEntries) {
-      rows.push(
-        toCandidateRow(entry.candidate, {
-          index: entry.index,
-          section: "branch",
-          branchWidth,
-          pathMaxLength,
-          homeDir,
-        }),
-      );
-    }
-  }
-  return rows;
+  const rowOptions = { branchWidth, pathMaxLength, homeDir };
+  return [
+    ...sectionRows("WORKTREES", "worktree", worktreeEntries, rowOptions),
+    ...sectionRows("BRANCHES — Enter creates a worktree", "branch", branchEntries, rowOptions),
+  ];
 };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { PickCandidate } from "../domain/candidates.ts";
 import { displayWidth } from "../domain/display-width.ts";
-import { renderPickerFrame } from "./picker.ts";
+import { renderPickerFrame } from "./picker-render.ts";
 import type { PickerSnapshot } from "./picker-store.ts";
 
 /**
