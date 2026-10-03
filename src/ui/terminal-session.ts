@@ -1,15 +1,14 @@
 import { EXIT_CANCELLED } from "../domain/result.ts";
 import { type AltScreenTarget, enterAltScreen, leaveAltScreen } from "./alt-screen.ts";
+import { ESC } from "./ansi.ts";
 import { PickerKeyParser, type PickerKeyEvent } from "./picker-key-parser.ts";
 
 /**
  * Owns the picker's raw-mode terminal lifecycle: alt screen, bracketed
  * paste, stdin raw mode, key decoding, resize-triggered re-renders, and
  * teardown on every exit path (normal finish, Esc/Ctrl+C, an exception, or
- * an external SIGINT). Replaces ink's render()/unmount() lifecycle (see
- * alt-screen-session.ts, which this supersedes for the picker — that module
- * is kept only for its enterAltScreen/leaveAltScreen primitives, reused
- * here) now that the picker draws itself instead of going through ink.
+ * an external SIGINT). The alt-screen enter/leave primitives it reuses live
+ * in alt-screen.ts.
  *
  * Event-driven, not a render loop: a frame is (re)drawn whenever
  * `requestRender` is called — after a key is decoded and dispatched, on a
@@ -20,7 +19,6 @@ import { PickerKeyParser, type PickerKeyEvent } from "./picker-key-parser.ts";
  * a burst of pasted characters doesn't repaint once per byte.
  */
 
-const ESC = "";
 const ENABLE_BRACKETED_PASTE = `${ESC}[?2004h`;
 const DISABLE_BRACKETED_PASTE = `${ESC}[?2004l`;
 
@@ -147,9 +145,8 @@ const installExitSignalHandlers = (cleanup: () => void): (() => void) => {
 /**
  * Runs one picker session. `createHandlers` receives the session API
  * (requestRender/finish) up front so it can close over them when building
- * its onKey/buildFrame handlers — mirrors the `finish`-callback pattern
- * alt-screen-session.ts uses for the same reason (the render logic needs a
- * way to end the session before the session itself exists).
+ * its onKey/buildFrame handlers (the render logic needs a way to end the
+ * session before the session itself exists).
  */
 export const runTerminalSession = <T>(
   createHandlers: (api: TerminalSessionApi<T>) => TerminalSessionHandlers,

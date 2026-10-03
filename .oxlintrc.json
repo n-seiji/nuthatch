@@ -116,6 +116,8 @@
                   "./rm.ts",
                   "./init.ts",
                   "./pick.ts",
+                  "./root.ts",
+                  "./clean.ts",
                   "../ui/**",
                   "../cli.ts",
                   "../render.ts",

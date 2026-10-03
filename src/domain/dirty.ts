@@ -1,3 +1,5 @@
+import { isWithin } from "./classify.ts";
+
 /**
  * Filters relative paths parsed from `git status --porcelain -z
  * --untracked-files=all` (see parseStatusPaths below), dropping any path
@@ -11,7 +13,7 @@
  * resolved (e.g. via realpath) by the caller, and use `/` as the path
  * separator (this project targets macOS/Linux only). Containment is decided
  * with prefix-plus-separator logic, never a naive string-prefix comparison
- * (`isSameOrNested` below), consistent with classify.ts's `isWithin`.
+ * (see classify.ts's `isWithin`).
  */
 export const filterOutNestedWorktreePaths = (
   relativePaths: readonly string[],
@@ -29,7 +31,7 @@ export const filterOutNestedWorktreePaths = (
 
   return relativePaths.filter((relativePath) => {
     const absolutePath = stripTrailingSlash(`${target}/${relativePath}`);
-    return !others.some((other) => isSameOrNested(absolutePath, other));
+    return !others.some((other) => absolutePath === other || isWithin(other, absolutePath));
   });
 };
 
@@ -50,8 +52,11 @@ export const isDirtyFromStatus = (
 const stripTrailingSlash = (path: string): string =>
   path.endsWith("/") ? path.slice(0, -1) : path;
 
-const isSameOrNested = (childPath: string, otherPath: string): boolean =>
-  childPath === otherPath || childPath.startsWith(`${otherPath}/`);
+const STATUS_CODE_WIDTH = 3;
+const RECORDS_PER_RENAME_OR_COPY = 2;
+const RECORDS_PER_ORDINARY_ENTRY = 1;
+
+const isRenameOrCopyCode = (code: string): boolean => code.includes("R") || code.includes("C");
 
 /**
  * Parses the relative destination paths out of `git status --porcelain -z
@@ -73,10 +78,6 @@ const isSameOrNested = (childPath: string, otherPath: string): boolean =>
  * NUL-terminated record holding the *old* path — that old-path record is
  * consumed and dropped, since only the destination matters for containment.
  */
-const isRenameOrCopyCode = (code: string): boolean => code.includes("R") || code.includes("C");
-const RECORDS_PER_RENAME_OR_COPY = 2;
-const RECORDS_PER_ORDINARY_ENTRY = 1;
-
 export const parseStatusPaths = (statusOutput: string): string[] => {
   const records = statusOutput.split("\0").filter((record) => record.length > 0);
   const paths: string[] = [];
@@ -98,5 +99,3 @@ export const parseStatusPaths = (statusOutput: string): string[] => {
 
   return paths;
 };
-
-const STATUS_CODE_WIDTH = 3;

@@ -24,7 +24,7 @@ type ErrorFields = Record<string, unknown>;
 const fieldsOf = (error: unknown): ErrorFields =>
   typeof error === "object" && error !== null ? (error as ErrorFields) : {};
 
-const messageOf = (error: unknown): string =>
+export const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 const trimmedStringOf = (value: unknown): string => (typeof value === "string" ? value.trim() : "");

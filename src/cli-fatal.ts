@@ -1,6 +1,6 @@
 import { describeFatalError } from "./domain/fatal-error.ts";
 import { fail } from "./domain/result.ts";
-import { render } from "./render.ts";
+import { reportResult } from "./render.ts";
 
 /**
  * The CLI's fatal-error surface. An error a command let escape (a git
@@ -21,6 +21,5 @@ export const wantsJson = (args: readonly string[]): boolean =>
 export const reportFatalError = (command: string, json: boolean, error: unknown): void => {
   const fatal = describeFatalError(error);
   const result = fail(fatal.exitCode, `hop: ${fatal.message}`);
-  render(command, result, json);
-  process.exitCode = result.exitCode;
+  reportResult(command, result, json);
 };

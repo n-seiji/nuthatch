@@ -1,8 +1,7 @@
 import { defineCommand } from "citty";
 import { root } from "./commands/root.ts";
-import type { CommandResult } from "./domain/result.ts";
 import type { FsPort, GitPort } from "./domain/ports.ts";
-import { render } from "./render.ts";
+import { reportResult } from "./render.ts";
 
 /**
  * Citty's positional-arg parser special-cases a bare "-" token (treating it
@@ -43,11 +42,7 @@ export const rewriteRootPreviousToken = (args: readonly string[]): string[] => {
 const resolveRootTarget = (branch: unknown): unknown =>
   branch === ROOT_PREVIOUS_TOKEN ? "-" : branch;
 
-export const createRootCommand = (
-  git: GitPort,
-  fs: FsPort,
-  applyExitCode: <T>(result: CommandResult<T>) => void,
-) =>
+export const createRootCommand = (git: GitPort, fs: FsPort) =>
   defineCommand({
     meta: {
       name: "root",
@@ -72,7 +67,6 @@ export const createRootCommand = (
         ...(target === undefined ? {} : { target: String(target) }),
         ...(args.track === undefined ? {} : { track: String(args.track) }),
       });
-      render("root", result, Boolean(args.json));
-      applyExitCode(result);
+      reportResult("root", result, Boolean(args.json));
     },
   });

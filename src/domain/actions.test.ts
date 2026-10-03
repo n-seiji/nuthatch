@@ -73,6 +73,19 @@ describe("requiresDeleteConfirmation", () => {
     ).toBe(false);
   });
 
+  it("prunable な managed worktree の場合、rm が dirty を確認しないので確認が必要になる", () => {
+    expect(
+      requiresDeleteConfirmation(
+        worktreeCandidate({
+          kind: "managed",
+          branch: "feat/a",
+          prunable: true,
+          prunableReason: "gitdir file points to non-existent location",
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it("creatable candidate は worktree ではないので確認不要", () => {
     const candidate: PickCandidate = {
       kind: "creatable",

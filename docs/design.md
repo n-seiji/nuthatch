@@ -41,7 +41,7 @@ auto-`cd`.
 
 | Command | Behavior |
 |---|---|
-| `hop` | TTY: pick a worktree/branch with the ink picker and `cd` into it. Branches without a worktree yet (local/remote) are also offered as candidates — selecting one creates it and `cd`s in. Non-TTY: prints a listing |
+| `hop` | TTY: pick a worktree/branch with the interactive picker and `cd` into it. Branches without a worktree yet (local/remote) are also offered as candidates — selecting one creates it and `cd`s in. Non-TTY: prints a listing |
 | `hop <branch>` | **create-or-jump.** `cd`s into the worktree if it exists; otherwise creates it from the default branch and `cd`s in. Creation always requires `--create` (TTY or not — to prevent accidental creation from a typo); without it, `hop <branch>` refuses with a message to re-run with `--create` |
 | `hop root` | `cd` into the root clone |
 | `hop -` | Return to the previously visited worktree |
@@ -50,10 +50,10 @@ auto-`cd`.
 
 | Command | Behavior |
 |---|---|
-| `hop ls [--json]` | Listing: branch / path / category / dirty / ahead-behind |
-| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). If multiple worktrees hold the same branch, the branch-only CLI refuses rather than guessing; the picker carries the selected path through the lock-protected re-validation. `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
+| `hop ls [--json]` | Listing: branch / path / category / dirty / ahead-behind. `dirty` is `false` for an entry with no working tree to inspect (bare, prunable, or git-locked with its directory missing) — check `prunable` / `locked` as well |
+| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). A worktree git reports as prunable is not dirty-checked (there is no working tree to check): rm drops its stale registration with a warning — the same policy as `hop clean`'s prunable candidates — and if a directory without a valid `.git` file is still at that path, git itself refuses (exit 3). If multiple worktrees hold the same branch, the branch-only CLI refuses rather than guessing; the picker carries the selected path through the lock-protected re-validation. `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
 | `hop clean [--yes\|--dry-run]` | Auto-detects and removes garbage worktrees (below). Targets managed worktrees only by default (`--ext` extends the target to external ones as well, unchanged from before) |
-| `hop root <branch>` | Temporarily switches root for verification purposes. Even if the target branch is already checked out on another worktree (the "holder"), swaps it out as long as the holder is clean and not git-locked — the holder is set to detached HEAD to free up the branch. Refuses if the holder is dirty/locked. `hop root -` returns (using git's `@{-1}`, no state file needed — this restores only root's branch; a holder detached by the swap is not re-attached) |
+| `hop root <branch>` | Temporarily switches root for verification purposes. Even if the target branch is already checked out on another worktree (the "holder"), swaps it out as long as the holder is clean and not git-locked — the holder is set to detached HEAD to free up the branch. Refuses if the holder is dirty/locked, or a stale registration git reports as prunable. `hop root -` returns (using git's `@{-1}`, no state file needed — this restores only root's branch; a holder detached by the swap is not re-attached) |
 
 ## The 3 worktree categories
 
@@ -69,15 +69,17 @@ allowed. `hop` can now `rm` an external worktree with the same procedure as
 a managed one (dirty check → overridable with `--force`), but deleting from
 the picker always requires a y/N confirmation for an external worktree (to
 avoid accidentally destroying another agent's in-progress session — the
-existing confirmation behavior for managed worktrees is unchanged). Any
+existing confirmation behavior for managed worktrees is unchanged), and for
+a prunable one, since its removal cannot be dirty-checked. Any
 worktree git itself reports as locked is always refused — for `rm` as well
 as for the holder swap in `hop root` — regardless of `--force`; hop never
 calls `git worktree unlock` automatically. `hop clean`'s automatic targets
 remain managed-only (external can be added explicitly with `--ext`).
 Picker-triggered mutations carry the selected worktree path into the
-lock-protected re-validation. If the holder/target changed, or an external
-holder appeared after an unconfirmed picker selection, the mutation is
-refused instead of acting on the newly discovered worktree.
+lock-protected re-validation. If the holder/target changed, an external
+holder appeared, or the target turned prunable after an unconfirmed picker
+selection, the mutation is refused instead of acting on the newly
+discovered state.
 Category classification uses realpath plus path-boundary comparison, never
 a string-prefix comparison.
 
@@ -111,8 +113,9 @@ clone.
 - Even if the target branch is already checked out on another worktree (the
   "holder"), it is **swapped**, as long as the holder is clean and not
   git-locked: the holder is switched to `git switch --detach` to free up the
-  branch, and root is switched onto it. If the holder is dirty or locked,
-  the switch is refused as before, and its path is reported.
+  branch, and root is switched onto it. If the holder is dirty, locked, or a
+  stale registration git reports as prunable, the switch is refused and its
+  path is reported.
 - All checks are re-validated inside the repo lock (the holder's
   dirty/lock/branch state is re-read after acquiring the lock, then
   detached — a TOCTOU guard). Picker-triggered swaps also re-validate the
@@ -185,26 +188,31 @@ src/
 │   ├── porcelain.ts     #   worktree list --porcelain parser
 │   ├── sanitize.ts      #   branch name → dir name
 │   ├── classify.ts      #   root/managed/external classification
-│   ├── garbage.ts       #   garbage detection for clean (clock is injected)
+│   ├── tracking.ts      #   which remote branch a new branch tracks (origin wins)
+│   ├── garbage.ts       #   garbage detection for clean
 │   ├── git-executable.ts #  where the git binary may live (candidate list)
 │   └── fatal-error.ts   #   escaped error → message + exit code
 ├── infra/               # The only place with external dependencies. Implements domain's ports
 │   ├── git.ts           #   node:child_process execFile (argv array only)
 │   ├── git-executable.ts #  probes the candidates, caches the absolute path
-│   ├── fs.ts            #   exists / realpath
+│   ├── fs.ts            #   realpath / exists / mkdir / readdir
+│   ├── repo.ts          #   classified worktree list, dirty check, how to check out a branch
+│   ├── lock.ts          #   per-repo mutation lock (withRepoLock)
 │   └── term.ts          #   TTY detection, stderr logging
 ├── cli-fatal.ts         # cli.ts only: renders an escaped error (hop: … + envelope)
 ├── commands/             # 1 command = 1 component. Cross-imports forbidden
-│   ├── jump.ts / ls.ts / rm.ts / clean.ts / root.ts / init.ts
+│   ├── jump.ts / ls.ts / pick.ts / rm.ts / clean.ts / root.ts / init.ts
 │   │                    #   ★ Never renders. Only returns a structured Result
-├── ui/picker.tsx        # ink. Dynamic-imported (literal specifier) only on TTY
-└── render.ts            # cli.ts only: Result → plain / JSON. Never imported from commands
+├── ui/                  # Self-drawn picker (raw-mode stdin, alternate screen on stderr). Wired to commands only via cli-pick.ts
+└── render.ts            # cli layer only: Result → plain / JSON. Never imported from commands
 shell/init.zsh           # Template for `hop init zsh` (strict quoting, idempotent)
-test/                    # domain gets unit tests; commands get integration tests against a real git repo
 ```
 
-- **Dependencies flow one way**: cli → commands → domain + infra. domain
-  depends on nothing.
+- **Tests sit next to the code** (`foo.ts` → `foo.test.ts`): domain gets unit
+  tests; commands get integration tests against a real git repo in a tmpdir.
+
+- **Dependencies flow one way**: cli.ts/render.ts → commands → infra →
+  domain (commands may use both infra and domain). domain depends on nothing.
 - **commands never render**: they return a structured Result, and
   cli.ts + render.ts do the rendering (no shared output module exists,
   since that would be a cross-cutting dependency).
@@ -219,7 +227,7 @@ test/                    # domain gets unit tests; commands get integration test
 |---|---|---|
 | Language | TypeScript | Development runtime is bun |
 | Minimum versions | git >= 2.36 / node >= 22 / bun >= 1.1 | Range supporting porcelain -z and compilation |
-| TUI | ink | Dynamic-imported only on TTY. Verified compiling to work with the binary; falls back to a numbered selection if not |
+| TUI | self-drawn (no TUI dependency) | Raw-mode stdin + alternate screen on stderr, TTY only; without a TTY, bare `hop` prints a listing instead |
 | arg parser | citty | Rolling our own is forbidden |
 | lint/format | oxlint / oxfmt | |
 | Testing | bun test | unit (domain) + integration (real repo in a tmpdir, GIT_CONFIG_NOSYSTEM=1 / isolated HOME / hooks disabled / LC_ALL=C / injected clock) |

@@ -2,10 +2,7 @@ import { buildPickCandidates } from "../domain/candidates.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import { type CommandResult, ok } from "../domain/result.ts";
 import type { PickData } from "../domain/schema.ts";
-import { loadRepoContext, otherWorktreePaths } from "../infra/repo.ts";
-
-export type { PickCandidate } from "../domain/candidates.ts";
-export type { PickData } from "../domain/schema.ts";
+import { loadRepoContext, worktreeDirtyState } from "../infra/repo.ts";
 
 export interface PickOptions {
   readonly cwd: string;
@@ -29,9 +26,7 @@ export const pick = async (
     Promise.all(
       context.worktrees.map(async (worktree): Promise<readonly [string, boolean | null]> => [
         worktree.path,
-        worktree.bare
-          ? null
-          : await git.isDirty(worktree.path, otherWorktreePaths(context.worktrees, worktree.path)),
+        await worktreeDirtyState(git, fs, context.worktrees, worktree),
       ]),
     ),
   ]);

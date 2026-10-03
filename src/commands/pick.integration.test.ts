@@ -2,14 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { join } from "node:path";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
-import { createTermPort } from "../infra/term.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 import { jump } from "./jump.ts";
 import { pick } from "./pick.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
-const term = createTermPort();
 
 let repo: TestRepo;
 let savedEnv: NodeJS.ProcessEnv;
@@ -46,7 +44,7 @@ describe("pick (integration)", () => {
 
   it("jump --create で作った worktree は worktree candidate になり creatable からは消える", async () => {
     await repo.git(["branch", "feat/soon"]);
-    await jump(git, fs, term, {
+    await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/soon",
       create: true,
@@ -62,7 +60,7 @@ describe("pick (integration)", () => {
   });
 
   it("dirty な worktree は dirty: true になる", async () => {
-    const created = await jump(git, fs, term, {
+    const created = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/dirty-pick",
       create: true,

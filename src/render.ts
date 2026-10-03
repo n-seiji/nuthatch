@@ -9,7 +9,7 @@ export interface JsonEnvelope<T> {
   readonly warnings: readonly string[];
 }
 
-/** Turns a command Result into stdout/stderr output. Only cli.ts calls this. */
+/** Turns a command Result into stdout/stderr output. Only the CLI layer (cli.ts and cli-*.ts) calls this. */
 export const render = <T>(command: string, result: CommandResult<T>, json: boolean): void => {
   if (json) {
     const envelope: JsonEnvelope<T | undefined> = {
@@ -38,4 +38,10 @@ export const render = <T>(command: string, result: CommandResult<T>, json: boole
   if (!result.ok && result.errorMessage !== undefined) {
     process.stderr.write(`${result.errorMessage}\n`);
   }
+};
+
+/** How a command invocation ends: its output, then its exit code. */
+export const reportResult = <T>(command: string, result: CommandResult<T>, json: boolean): void => {
+  render(command, result, json);
+  process.exitCode = result.exitCode;
 };

@@ -1,22 +1,16 @@
-import type { GitPort } from "../domain/ports.ts";
+import type { GitPort, SwitchBranchOptions } from "../domain/ports.ts";
 import { type CommandResult, EXIT_SAFE_REJECTION, fail } from "../domain/result.ts";
 import type { RootData } from "../domain/schema.ts";
-import { otherWorktreePaths, type RepoContext } from "../infra/repo.ts";
+import { isWorktreeDirty, type RepoContext } from "../infra/repo.ts";
 
 /**
- * Split out of root.ts purely to keep that file and switchAndReport under
- * the lint's line/statement limits — see root.ts's module comment for the
- * feature this implements (`hop root`'s holder swap).
+ * The holder swap behind `hop root <branch>`: resolves which other worktree
+ * holds the target branch and detaches it when that is safe.
  */
 
 export interface DetachedHolder {
   readonly path: string;
   readonly branch: string;
-}
-
-export interface HolderSwitchOptions {
-  createBranch?: boolean;
-  track?: string;
 }
 
 export interface HolderSwapPolicy {
@@ -32,6 +26,19 @@ const holderRejection = (
   fail(
     EXIT_SAFE_REJECTION,
     `Branch "${branch}" is already checked out at ${holderPath}, and it ${reason}. Not swapping — cd there instead of using hop root.`,
+  );
+
+/**
+ * A holder git reports prunable (its directory or its .git file is gone) can be
+ * neither inspected nor detached, and git refuses to switch to its branch
+ * anyway, so this only swaps an opaque spawn error for the ways out: re-link
+ * the worktree if it was moved, otherwise drop the registration. Not
+ * `holderRejection`: there is nowhere to cd.
+ */
+const prunableHolderRejection = (branch: string, holderPath: string): CommandResult<RootData> =>
+  fail(
+    EXIT_SAFE_REJECTION,
+    `Branch "${branch}" is held by a stale worktree registration at ${holderPath} (git reports it prunable). Not swapping — if that worktree was moved, re-link it with "git worktree repair <new path>"; otherwise drop the registration first ("hop rm ${branch}" or "git worktree prune").`,
   );
 
 /**
@@ -60,7 +67,7 @@ interface ResolveHolderSwapOptions {
   readonly git: GitPort;
   readonly fresh: RepoContext;
   readonly target: string;
-  readonly switchOptions: HolderSwitchOptions;
+  readonly switchOptions: SwitchBranchOptions;
   readonly policy: HolderSwapPolicy;
 }
 
@@ -139,10 +146,10 @@ export const resolveHolderSwap = async ({
       ),
     };
   }
-  const holderDirty = await git.isDirty(
-    freshHolder.path,
-    otherWorktreePaths(fresh.worktrees, freshHolder.path),
-  );
+  if (freshHolder.prunable) {
+    return { rejection: prunableHolderRejection(target, freshHolder.path) };
+  }
+  const holderDirty = await isWorktreeDirty(git, fresh.worktrees, freshHolder.path);
   if (holderDirty) {
     return {
       rejection: holderRejection(target, freshHolder.path, "has uncommitted or untracked changes"),

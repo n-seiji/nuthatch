@@ -78,7 +78,32 @@ describe("handlePanelInput — delete confirmation gating", () => {
       kind: "confirm",
       action: "delete",
       candidate,
-      error: null,
+    });
+  });
+
+  it("prunable な managed worktree を panel の Enter で delete する場合、実行せず y/N の確認 overlay を開く", () => {
+    const candidate = worktreeCandidate({
+      kind: "managed",
+      prunable: true,
+      prunableReason: "gitdir file points to non-existent location",
+    });
+    const runAction = mock(() => {});
+    const setMode = mock((_mode: PickerMode) => {});
+    const panelMode = { kind: "panel" as const, candidate, error: null };
+
+    // Panel order is [cd, delete, switchRoot] for managed — index 1 is delete.
+    handlePanelInput("\r", enterKey, panelMode, {
+      panelIndex: 1,
+      runAction,
+      setPanelIndex: () => {},
+      setMode,
+    });
+
+    expect(runAction).not.toHaveBeenCalled();
+    expect(setMode).toHaveBeenCalledWith({
+      kind: "confirm",
+      action: "delete",
+      candidate,
     });
   });
 
@@ -100,7 +125,6 @@ describe("handlePanelInput — delete confirmation gating", () => {
       kind: "confirm",
       action: "delete",
       candidate,
-      error: null,
     });
   });
 });
@@ -149,7 +173,6 @@ describe("handleListInput / handlePanelInput — switchRoot confirmation gating"
       kind: "confirm",
       action: "switchRoot",
       candidate,
-      error: null,
     });
   });
 
@@ -172,7 +195,6 @@ describe("handleListInput / handlePanelInput — switchRoot confirmation gating"
       kind: "confirm",
       action: "switchRoot",
       candidate,
-      error: null,
     });
   });
 });

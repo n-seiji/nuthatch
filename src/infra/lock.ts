@@ -15,7 +15,7 @@ interface LockInfo {
   token: string;
 }
 
-export class LockHeldError extends Error {
+class LockHeldError extends Error {
   readonly info: LockInfo;
 
   constructor(info: LockInfo) {
@@ -128,31 +128,40 @@ export const acquireRepoLock = async (
   };
 };
 
-export type RepoLockAcquisition<T> =
-  | { readonly ok: true; readonly lock: RepoLock }
-  | { readonly ok: false; readonly rejection: CommandResult<T> };
-
-/**
- * Same as acquireRepoLock, but turns a LockHeldError into a normal
- * CommandResult rejection (exit 3, safe rejection) instead of a thrown
- * exception. Another process holding the repo lock is a safe, expected
- * outcome — not an internal error — so it must surface through the
- * command's usual structured-error path (intact `--json` envelope) rather
- * than as an uncaught exception with a bare stack trace. Any other error
- * (e.g. an unreadable lock dir permission failure) still throws, since
- * that's a genuine unexpected failure.
- */
-export const acquireRepoLockOrRejection = async <T>(
-  commonDir: string,
-  ttlMs?: number,
-): Promise<RepoLockAcquisition<T>> => {
+const acquireUnlessHeld = async (commonDir: string): Promise<RepoLock | LockHeldError> => {
   try {
-    const lock = await acquireRepoLock(commonDir, ttlMs);
-    return { ok: true, lock };
+    return await acquireRepoLock(commonDir);
   } catch (error) {
     if (error instanceof LockHeldError) {
-      return { ok: false, rejection: fail(EXIT_SAFE_REJECTION, error.message) };
+      return error;
     }
     throw error;
+  }
+};
+
+/**
+ * Runs `mutate` while holding the repo lock and always releases it
+ * afterwards, whether `mutate` returns or throws. Another process holding
+ * the repo lock is a safe, expected outcome — not an internal error — so it
+ * comes back as a normal CommandResult rejection (exit 3, safe rejection)
+ * and surfaces through the command's usual structured-error path (intact
+ * `--json` envelope) rather than as an uncaught exception with a bare stack
+ * trace. Any other acquisition error (e.g. an unreadable lock dir
+ * permission failure) still throws, since that's a genuine unexpected
+ * failure.
+ */
+export const withRepoLock = async <T>(
+  commonDir: string,
+  mutate: () => Promise<CommandResult<T>>,
+): Promise<CommandResult<T>> => {
+  const lock = await acquireUnlessHeld(commonDir);
+  if (lock instanceof LockHeldError) {
+    return fail(EXIT_SAFE_REJECTION, lock.message);
+  }
+  try {
+    // Awaited so the lock is released only after `mutate` settles.
+    return await mutate();
+  } finally {
+    await lock.release();
   }
 };

@@ -26,7 +26,7 @@ doesn't exist yet. Built for humans (interactive picker) and AI coding agents
 
 ```sh
 hop                # pick a worktree/branch interactively and cd into it
-hop feat/foo       # cd into feat/foo's worktree — created on demand
+hop feat/foo       # cd into feat/foo's worktree (add --create to create it if missing)
 hop root           # cd into the root clone
 hop -              # cd back to the previous worktree
 
@@ -87,14 +87,14 @@ screen on exit, however it exits (selection, Esc/Ctrl-C, or an interrupt).
 
 The action panel renders as a column beside the candidate list (not an
 overlay), so the list stays visible while you pick an action. On terminals
-narrower than 60 columns it falls back to stacking below the list instead,
-since the two can't fit side by side.
+too narrow to fit both (under about 94 columns) it falls back to stacking
+below the list instead.
 
 | Key | Action |
 |---|---|
 | `Enter` | cd into the selected candidate |
 | `Tab`, `→`, `Ctrl+L`, `Ctrl+F` | Open the action panel for the selected candidate (cd / delete / switch root here) |
-| `Ctrl+X` | Delete the selected worktree (asks y/N first for an `external` worktree) |
+| `Ctrl+X` | Delete the selected worktree (always asks y/N first) |
 | `Ctrl+R` | Switch the root clone to the selected branch (asks y/N first for an `external` worktree) |
 | `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K`/`Ctrl+J` | Move the selection (arrow, emacs, and vim keys all work side by side) |
 | `Esc` | Cancel quietly — exit 0, stdout stays empty (the shell wrapper just doesn't cd) |
@@ -106,8 +106,9 @@ highlighted action, `c`/`d`/`r` to run cd/delete/switch-root directly, and
 `Esc`, `Tab`, `←`, or `Ctrl+H` to close it back to the list (`←`/`Ctrl+H`
 mirror the `→`/`Ctrl+L`/`Ctrl+F` that open it; `Tab` toggles either way —
 handy on terminals like Ghostty that remap a chord such as Cmd+K to Tab). `delete`
-appears for any already-created worktree (`managed` or `external` — deleting
-an `external` one always asks y/N, whether from the panel or Ctrl+X); `switch
+appears for any already-created worktree (`managed` or `external` — from the
+panel, deleting an `external` worktree, or a prunable one (git can no longer
+find its working tree), asks y/N first; Ctrl+X always asks); `switch
 root here` doesn't appear on the root worktree itself, and also asks y/N
 first for an `external` worktree, since it can detach that worktree's HEAD.
 Deleting reloads the

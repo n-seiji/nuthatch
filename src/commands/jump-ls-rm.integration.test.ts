@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
-import { createTermPort } from "../infra/term.ts";
 import { type TestRepo, createTestRepo } from "../testing/repo.ts";
 import { jump } from "./jump.ts";
 import { ls } from "./ls.ts";
@@ -9,7 +8,6 @@ import { rm } from "./rm.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
-const term = createTermPort();
 
 let repo: TestRepo;
 let savedEnv: NodeJS.ProcessEnv;
@@ -27,7 +25,7 @@ afterEach(async () => {
 
 describe("jump → ls → rm (integration)", () => {
   it("非TTY で存在しない branch に --create なしで jump すると exit 3 になる", async () => {
-    const result = await jump(git, fs, term, {
+    const result = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/new",
       create: false,
@@ -37,7 +35,7 @@ describe("jump → ls → rm (integration)", () => {
   });
 
   it("--create を指定すると worktree を作成して path を返す", async () => {
-    const result = await jump(git, fs, term, {
+    const result = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/new",
       create: true,
@@ -49,12 +47,12 @@ describe("jump → ls → rm (integration)", () => {
   });
 
   it("既に worktree がある branch に jump すると同じ path を返す (create-or-jump)", async () => {
-    const created = await jump(git, fs, term, {
+    const created = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/new",
       create: true,
     });
-    const jumped = await jump(git, fs, term, {
+    const jumped = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/new",
       create: false,
@@ -65,7 +63,7 @@ describe("jump → ls → rm (integration)", () => {
   });
 
   it("ls は root と作成した worktree の両方を返す", async () => {
-    await jump(git, fs, term, {
+    await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/new",
       create: true,
@@ -77,7 +75,7 @@ describe("jump → ls → rm (integration)", () => {
   });
 
   it("dirty な worktree を --force なしで rm すると exit 3 になる", async () => {
-    const created = await jump(git, fs, term, {
+    const created = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/dirty",
       create: true,
@@ -96,7 +94,7 @@ describe("jump → ls → rm (integration)", () => {
   });
 
   it("clean な worktree は rm で削除できる", async () => {
-    await jump(git, fs, term, {
+    await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/clean",
       create: true,
@@ -252,7 +250,7 @@ describe("jump → ls → rm (integration)", () => {
     // The domain layer itself has no notion of reserved words — that's a
     // Cli.ts concern — so this exercises the command directly with "ls" as
     // A literal branch name to prove commands never special-case it.
-    const created = await jump(git, fs, term, {
+    const created = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "ls",
       create: true,

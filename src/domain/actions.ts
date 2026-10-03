@@ -5,12 +5,12 @@ import type { PickCandidate } from "./schema.ts";
  * always available; `delete` and `switchRoot` depend on the candidate's
  * kind (see availableActions).
  */
-export const PICKER_ACTIONS = ["cd", "delete", "switchRoot"] as const;
+const PICKER_ACTIONS = ["cd", "delete", "switchRoot"] as const;
 export type PickerActionKind = (typeof PICKER_ACTIONS)[number];
 
 /**
  * Which panel actions apply to a given picker candidate. Pure so it can be
- * unit tested without ink or git:
+ * unit tested without git:
  *
  * - `cd`: every candidate.
  * - `delete`: any already-created worktree except root (`kind: "managed"` or
@@ -50,11 +50,15 @@ export const availableActions = (candidate: PickCandidate): readonly PickerActio
  * Whether deleting this candidate must go through an explicit y/N
  * confirmation regardless of entry point (Ctrl+X shortcut or the action
  * panel's "delete" entry). Managed worktrees keep the picker's existing
- * behavior (Ctrl+X confirms, the panel entry does not); external worktrees
- * always require it, since they may be another agent's in-use working copy.
+ * behavior (Ctrl+X confirms, the panel entry does not: `rm` refuses a dirty
+ * one). External worktrees always require it, since they may be another
+ * agent's in-use working copy. So do prunable ones: `rm` does not dirty-check
+ * a prunable target (no working tree on disk), and if its directory was moved
+ * by hand, dropping the registration unlinks the moved copy from the repo.
  */
 export const requiresDeleteConfirmation = (candidate: PickCandidate): boolean =>
-  candidate.kind === "worktree" && candidate.worktree.kind === "external";
+  candidate.kind === "worktree" &&
+  (candidate.worktree.kind === "external" || candidate.worktree.prunable);
 
 /**
  * Whether switching root "here" for this candidate must go through an

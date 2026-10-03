@@ -13,6 +13,12 @@ operate only on a worktree you created for the current task.
   files instead of forcing removal.
 - Git-locked worktrees are always refused, even with `--force`; hop never
   removes the lock.
+- A worktree git reports as prunable (its directory, or its `.git` file, is
+  gone) is not dirty-checked: `hop rm` drops its stale registration and
+  prints a warning saying so (git still refuses if a directory without a
+  valid `.git` file is in the way). In `hop ls --json`, `dirty` is `false`
+  whenever there is no working tree to inspect, so check `prunable` and
+  `locked` too.
 - If multiple worktrees hold the same branch, hop refuses rather than guessing
   which path to remove.
 
@@ -29,7 +35,7 @@ merged or gone; branches whose state cannot be confirmed are kept.
 
 `hop root <branch>` switches the root clone for verification. If another
 worktree already holds the branch, hop may detach that clean, unlocked holder
-at its current HEAD. It refuses a dirty or locked holder.
+at its current HEAD. It refuses a dirty, locked, or stale (prunable) holder.
 
 Use only your own unique branch, and always finish with `hop root -`. The
 restore operation restores the root clone's previous branch; a holder detached

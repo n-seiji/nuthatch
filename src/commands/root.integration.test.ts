@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
-import { createTermPort } from "../infra/term.ts";
 import { acquireRepoLock } from "../infra/lock.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
 import { jump } from "./jump.ts";
@@ -9,7 +8,6 @@ import { root } from "./root.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
-const term = createTermPort();
 
 let repo: TestRepo;
 let savedEnv: NodeJS.ProcessEnv;
@@ -70,7 +68,7 @@ describe("root (integration)", () => {
 
   it("対象 branch を他 worktree (holder) が checkout 済みでも clean なら detach して swap する", async () => {
     await repo.git(["branch", "feat/held"]);
-    const held = await jump(git, fs, term, {
+    const held = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/held",
       create: true,
@@ -99,7 +97,7 @@ describe("root (integration)", () => {
 
   it("holder が dirty なら detach せず swap を拒否する", async () => {
     await repo.git(["branch", "feat/held-dirty"]);
-    const held = await jump(git, fs, term, {
+    const held = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/held-dirty",
       create: true,
@@ -125,7 +123,7 @@ describe("root (integration)", () => {
 
   it("holder が git でロック中なら detach せず swap を拒否する", async () => {
     await repo.git(["branch", "feat/held-locked"]);
-    const held = await jump(git, fs, term, {
+    const held = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/held-locked",
       create: true,
@@ -218,7 +216,7 @@ describe("root (integration)", () => {
 
   it("holder を detach した後に root の switch が失敗したら holder を元の branch に rollback する", async () => {
     await repo.git(["branch", "feat/held-rollback"]);
-    const held = await jump(git, fs, term, {
+    const held = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/held-rollback",
       create: true,
@@ -268,7 +266,7 @@ describe("root (integration)", () => {
 
   it("swap 後の `-` は root の branch だけ戻し、holder は detached のままにする", async () => {
     await repo.git(["branch", "feat/held-back"]);
-    const held = await jump(git, fs, term, {
+    const held = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/held-back",
       create: true,
