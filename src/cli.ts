@@ -21,25 +21,20 @@ import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
 import { rm } from "./commands/rm.ts";
 import { describeFatalError } from "./domain/fatal-error.ts";
-import {
-  type CommandResult,
-  EXIT_CANCELLED,
-  EXIT_SUCCESS,
-  EXIT_USAGE_ERROR,
-  ok,
-} from "./domain/result.ts";
+import { EXIT_CANCELLED, EXIT_SUCCESS, EXIT_USAGE_ERROR, ok } from "./domain/result.ts";
 import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
-import { render } from "./render.ts";
+import { render, reportResult } from "./render.ts";
 import { USAGE } from "./usage.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
 const term = createTermPort();
 
-const applyExitCode = <T>(result: CommandResult<T>): void => {
-  process.exitCode = result.exitCode;
+const runLs = async (json: boolean): Promise<void> => {
+  const result = await ls(git, fs, { cwd: process.cwd() });
+  reportResult("ls", result, json);
 };
 
 const lsCommand = defineCommand({
@@ -48,9 +43,7 @@ const lsCommand = defineCommand({
     json: { type: "boolean", description: "Output JSON" },
   },
   async run({ args }) {
-    const result = await ls(git, fs, { cwd: process.cwd() });
-    render("ls", result, Boolean(args.json));
-    applyExitCode(result);
+    await runLs(Boolean(args.json));
   },
 });
 
@@ -76,12 +69,11 @@ const rmCommand = defineCommand({
       force: Boolean(args.force),
       ext: Boolean(args.ext),
     });
-    render("rm", result, Boolean(args.json));
-    applyExitCode(result);
+    reportResult("rm", result, Boolean(args.json));
   },
 });
 
-const rootCommand = createRootCommand(git, fs, applyExitCode);
+const rootCommand = createRootCommand(git, fs);
 
 const cleanCommand = defineCommand({
   meta: {
@@ -103,8 +95,7 @@ const cleanCommand = defineCommand({
       dryRun: Boolean(args.dryRun),
       yes: Boolean(args.yes),
     });
-    render("clean", result, Boolean(args.json));
-    applyExitCode(result);
+    reportResult("clean", result, Boolean(args.json));
   },
 });
 
@@ -138,8 +129,7 @@ const runJump = async (
     create: options.create,
     ...(options.track === undefined ? {} : { track: options.track }),
   });
-  render("jump", result, options.json);
-  applyExitCode(result);
+  reportResult("jump", result, options.json);
 };
 
 const RESERVED_COMMANDS = {
@@ -204,11 +194,7 @@ const runInteractivePick = async (json: boolean): Promise<void> => {
       path: selected.worktree.path,
       data: { branch: selected.worktree.branch, created: false },
     });
-    if (json) {
-      render("pick", result, true);
-    } else {
-      process.stdout.write(`${selected.worktree.path}\n`);
-    }
+    render("pick", result, json);
     return;
   }
 
@@ -223,9 +209,7 @@ const runJumpFromArgs = async (rawArgs: readonly string[]): Promise<void> => {
       return;
     }
     // Non-TTY: no picker, just list worktrees.
-    const result = await ls(git, fs, { cwd: process.cwd() });
-    render("ls", result, Boolean(args.json));
-    applyExitCode(result);
+    await runLs(Boolean(args.json));
     return;
   }
   await runJump(String(args.target), {
