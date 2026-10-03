@@ -1,8 +1,8 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import type { PickCandidate } from "../domain/candidates.ts";
 import type { Worktree } from "../domain/model.ts";
 import { createPickerStore, panelErrorTransition } from "./picker-store.ts";
-import type { PickerCallbacks } from "./picker-types.ts";
+import type { PickerCallbacks, PickerOutcome } from "./picker-types.ts";
 import type { PickerKeyModifiers } from "./picker-keys.ts";
 
 const NO_MODIFIERS: PickerKeyModifiers = {
@@ -45,6 +45,12 @@ const externalCandidate: PickCandidate = {
   dirty: null,
 };
 
+const creatableCandidate: PickCandidate = {
+  kind: "creatable",
+  branch: "feat/c",
+  source: "local",
+};
+
 describe("panelErrorTransition", () => {
   it("panelIndex を常に 0 にリセットする (astra P2 regression)", () => {
     // Bug scenario (astra P2): panel opened on a managed worktree (3 actions: cd/delete/switchRoot), highlight moved to index 2 (switchRoot), Esc back to the list, then a different candidate with only 2 actions (cd/switchRoot — e.g. external) triggers Ctrl+R and it fails (dirty rejection). Without resetting panelIndex, the stale index 2 survives into a 2-item action list: nothing is highlighted, but Enter still clamps to the last action and re-runs switchRoot — display and execution target disagree. panelErrorTransition must always return 0 regardless of the candidate or the panelIndex the caller had before.
@@ -78,33 +84,70 @@ const flush = (): Promise<void> =>
     setTimeout(resolve, 0);
   });
 
-describe("createPickerStore", () => {
-  it("busy 中に来た入力は無視する (二重実行防止)", async () => {
-    let resolveDelete: (() => void) | undefined;
-    const deleteWorktree: PickerCallbacks["deleteWorktree"] = () =>
+/** A deleteWorktree callback that stays in flight until `settle` is called. */
+const inFlightDelete = () => {
+  let resolveDelete: (() => void) | undefined;
+  const deleteWorktree = mock<PickerCallbacks["deleteWorktree"]>(
+    () =>
       new Promise((resolve) => {
         resolveDelete = () => resolve({ ok: true });
-      });
-    const store = createPickerStore(
-      [managedCandidate],
-      noopCallbacks({ deleteWorktree }),
-      () => {},
-      () => {},
-    );
+      }),
+  );
+  return { deleteWorktree, settle: () => resolveDelete?.() };
+};
 
-    openPanel(store);
+/** A store on the managed candidate with its panel open; a delete started there stays in flight. */
+const storeWithInFlightDelete = () => {
+  const { deleteWorktree, settle } = inFlightDelete();
+  const onExit = mock((_outcome: PickerOutcome) => {});
+  const store = createPickerStore(
+    [managedCandidate],
+    noopCallbacks({ deleteWorktree }),
+    onExit,
+    () => {},
+  );
+  openPanel(store);
+  return { store, deleteWorktree, onExit, settle };
+};
+
+describe("createPickerStore", () => {
+  it.each([
+    ["↓ (ハイライト移動)", "", { downArrow: true }],
+    ["Esc (panel を閉じる)", "", { escape: true }],
+    ["c (cd して picker を抜ける)", "c", {}],
+  ] as const)("busy 中の %s は無視する (二重実行防止)", async (_label, input, modifiers) => {
+    const { store, onExit, settle } = storeWithInFlightDelete();
     expect(store.getSnapshot().mode.kind).toBe("panel");
 
     // "D" (delete shortcut letter) triggers the mutation and flips busy.
     store.handleInput("d", NO_MODIFIERS);
     expect(store.getSnapshot().busy).toBe(true);
 
-    // Further input while busy must not reopen/close panels or move selection.
+    // This key would act (move, close the panel, or exit) if busy did not block it.
     const before = store.getSnapshot();
-    store.handleInput("j", NO_MODIFIERS);
+    store.handleInput(input, { ...NO_MODIFIERS, ...modifiers });
     expect(store.getSnapshot()).toEqual(before);
+    expect(onExit).not.toHaveBeenCalled();
 
-    resolveDelete?.();
+    settle();
+    await flush();
+    expect(store.getSnapshot().busy).toBe(false);
+  });
+
+  it("busy 中に delete を押し直しても (Enter でも d でも)、mutation は 2 回目を始めない", async () => {
+    const { store, deleteWorktree, settle } = storeWithInFlightDelete();
+
+    // The managed panel lists cd / delete / switchRoot: move the highlight to delete, then Enter.
+    store.handleInput("", { ...NO_MODIFIERS, downArrow: true });
+    store.handleInput("", { ...NO_MODIFIERS, return: true });
+    expect(store.getSnapshot().busy).toBe(true);
+    expect(deleteWorktree).toHaveBeenCalledTimes(1);
+
+    store.handleInput("", { ...NO_MODIFIERS, return: true });
+    store.handleInput("d", NO_MODIFIERS);
+    expect(deleteWorktree).toHaveBeenCalledTimes(1);
+
+    settle();
     await flush();
     expect(store.getSnapshot().busy).toBe(false);
   });
@@ -164,6 +207,30 @@ describe("createPickerStore", () => {
     expect(store.getSnapshot().mode.kind).toBe("panel");
     store.handleInput("", { ...NO_MODIFIERS, escape: true });
     expect(store.getSnapshot().mode).toEqual({ kind: "list" });
+  });
+
+  it("別の候補で panel を開き直す場合、前の panel で動かしたハイライトは先頭に戻る", () => {
+    const store = createPickerStore(
+      [managedCandidate, creatableCandidate],
+      noopCallbacks(),
+      () => {},
+      () => {},
+    );
+
+    // The managed panel lists cd / delete / switchRoot: move the highlight to the last one.
+    openPanel(store);
+    store.handleInput("", { ...NO_MODIFIERS, downArrow: true });
+    store.handleInput("", { ...NO_MODIFIERS, downArrow: true });
+    expect(store.getSnapshot().panelIndex).toBe(2);
+
+    // Back to the list, select the creatable branch below the worktree, open its panel.
+    store.handleInput("", { ...NO_MODIFIERS, escape: true });
+    store.handleInput("", { ...NO_MODIFIERS, downArrow: true });
+    openPanel(store);
+
+    const snapshot = store.getSnapshot();
+    expect(snapshot.mode).toEqual({ kind: "panel", candidate: creatableCandidate, error: null });
+    expect(snapshot.panelIndex).toBe(0);
   });
 
   it("subscribe したリスナーは非同期のミューテーション完了時にも通知される (キー入力なしで再描画できる)", async () => {

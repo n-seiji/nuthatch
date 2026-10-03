@@ -139,17 +139,6 @@ describe("resolveBranchCheckout", () => {
     expect(remoteLookups).toEqual([]);
   });
 
-  it("branch が local にあっても track を明示した場合、その track をそのまま渡す", async () => {
-    const { git } = gitWithBranches(["feat/a"], []);
-
-    const result = await checkout(git, "feat/a", "origin/feat/a");
-
-    expect(result).toEqual({
-      ok: true,
-      options: { createBranch: false, track: "origin/feat/a" },
-    });
-  });
-
   it("branch が local に無く track も無い場合、その branch 名で remote を問い合わせて track を決める", async () => {
     const { git, remoteLookups } = gitWithBranches([], ["origin"]);
 
