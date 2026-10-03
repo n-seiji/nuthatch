@@ -36,6 +36,13 @@ const lockedRejection = <T>(branch: string, lockReason: string | null): CommandR
     `Worktree for "${branch}" is locked by git${lockReason === null ? "" : ` (${lockReason})`}. hop never unlocks worktrees automatically — run "git worktree unlock" yourself first if you're sure.`,
   );
 
+/**
+ * Prunable also covers a directory moved by hand without `git worktree move`;
+ * dropping the registration loses its index/link, so the user is told.
+ */
+const stalePrunableWarning = ({ path, prunableReason }: Worktree): string =>
+  `Worktree at ${path} no longer exists${prunableReason === null ? "" : ` (${prunableReason})`}; only its stale registration was removed.`;
+
 const resolveTarget = (
   worktrees: readonly Worktree[],
   branch: string,
@@ -184,7 +191,10 @@ const removeWorktree = async (
       const { target } = freshValidation;
 
       await git.removeWorktree(context.rootPath, target.path, options.force);
-      return ok({ data: { branch: options.branch, path: target.path } });
+      return ok({
+        data: { branch: options.branch, path: target.path },
+        ...(target.prunable ? { warnings: [stalePrunableWarning(target)] } : {}),
+      });
     } catch (error) {
       return fail(EXIT_SAFE_REJECTION, `Failed to remove worktree: ${messageOf(error)}`);
     }

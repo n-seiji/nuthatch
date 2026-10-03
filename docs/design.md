@@ -50,10 +50,10 @@ auto-`cd`.
 
 | Command | Behavior |
 |---|---|
-| `hop ls [--json]` | Listing: branch / path / category / dirty / ahead-behind |
-| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). If multiple worktrees hold the same branch, the branch-only CLI refuses rather than guessing; the picker carries the selected path through the lock-protected re-validation. `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
+| `hop ls [--json]` | Listing: branch / path / category / dirty / ahead-behind. `dirty` is `false` for an entry with no working tree to inspect (bare, prunable, or git-locked with its directory missing) — check `prunable` / `locked` as well |
+| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). A prunable worktree (git reports its directory gone) has nothing to dirty-check: rm only drops its stale registration and says so in a warning, as `hop clean` does for prunable candidates. If multiple worktrees hold the same branch, the branch-only CLI refuses rather than guessing; the picker carries the selected path through the lock-protected re-validation. `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
 | `hop clean [--yes\|--dry-run]` | Auto-detects and removes garbage worktrees (below). Targets managed worktrees only by default (`--ext` extends the target to external ones as well, unchanged from before) |
-| `hop root <branch>` | Temporarily switches root for verification purposes. Even if the target branch is already checked out on another worktree (the "holder"), swaps it out as long as the holder is clean and not git-locked — the holder is set to detached HEAD to free up the branch. Refuses if the holder is dirty/locked. `hop root -` returns (using git's `@{-1}`, no state file needed — this restores only root's branch; a holder detached by the swap is not re-attached) |
+| `hop root <branch>` | Temporarily switches root for verification purposes. Even if the target branch is already checked out on another worktree (the "holder"), swaps it out as long as the holder is clean and not git-locked — the holder is set to detached HEAD to free up the branch. Refuses if the holder is dirty/locked, or a stale registration git reports as prunable. `hop root -` returns (using git's `@{-1}`, no state file needed — this restores only root's branch; a holder detached by the swap is not re-attached) |
 
 ## The 3 worktree categories
 
@@ -111,8 +111,9 @@ clone.
 - Even if the target branch is already checked out on another worktree (the
   "holder"), it is **swapped**, as long as the holder is clean and not
   git-locked: the holder is switched to `git switch --detach` to free up the
-  branch, and root is switched onto it. If the holder is dirty or locked,
-  the switch is refused as before, and its path is reported.
+  branch, and root is switched onto it. If the holder is dirty, locked, or a
+  stale registration git reports as prunable, the switch is refused and its
+  path is reported.
 - All checks are re-validated inside the repo lock (the holder's
   dirty/lock/branch state is re-read after acquiring the lock, then
   detached — a TOCTOU guard). Picker-triggered swaps also re-validate the
@@ -186,7 +187,7 @@ src/
 │   ├── sanitize.ts      #   branch name → dir name
 │   ├── classify.ts      #   root/managed/external classification
 │   ├── tracking.ts      #   which remote branch a new branch tracks (origin wins)
-│   ├── garbage.ts       #   garbage detection for clean (clock is injected)
+│   ├── garbage.ts       #   garbage detection for clean
 │   ├── git-executable.ts #  where the git binary may live (candidate list)
 │   └── fatal-error.ts   #   escaped error → message + exit code
 ├── infra/               # The only place with external dependencies. Implements domain's ports
@@ -208,8 +209,8 @@ shell/init.zsh           # Template for `hop init zsh` (strict quoting, idempote
 - **Tests sit next to the code** (`foo.ts` → `foo.test.ts`): domain gets unit
   tests; commands get integration tests against a real git repo in a tmpdir.
 
-- **Dependencies flow one way**: cli → commands → domain + infra. domain
-  depends on nothing.
+- **Dependencies flow one way**: cli.ts/render.ts → commands → infra →
+  domain (commands may use both infra and domain). domain depends on nothing.
 - **commands never render**: they return a structured Result, and
   cli.ts + render.ts do the rendering (no shared output module exists,
   since that would be a cross-cutting dependency).

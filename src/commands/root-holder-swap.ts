@@ -29,6 +29,18 @@ const holderRejection = (
   );
 
 /**
+ * A holder git reports prunable (its directory or its .git file is gone) can be
+ * neither inspected nor detached, and git refuses to switch to its branch
+ * anyway, so this only swaps an opaque spawn error for the way out. Not
+ * `holderRejection`: there is nowhere to cd.
+ */
+const prunableHolderRejection = (branch: string, holderPath: string): CommandResult<RootData> =>
+  fail(
+    EXIT_SAFE_REJECTION,
+    `Branch "${branch}" is held by a stale worktree registration at ${holderPath} (git reports it prunable). Not swapping — drop that registration first ("hop rm ${branch}", or "git worktree prune").`,
+  );
+
+/**
  * Rejects when more than one other worktree has `target` checked out (e.g.
  * `git worktree add --force` lets git create a second worktree on the same
  * branch). Detaching one of several holders would still leave the branch
@@ -132,6 +144,9 @@ export const resolveHolderSwap = async ({
         `is locked by git${freshHolder.lockReason === null ? "" : ` (${freshHolder.lockReason})`}`,
       ),
     };
+  }
+  if (freshHolder.prunable) {
+    return { rejection: prunableHolderRejection(target, freshHolder.path) };
   }
   const holderDirty = await isWorktreeDirty(git, fresh.worktrees, freshHolder.path);
   if (holderDirty) {

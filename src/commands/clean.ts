@@ -24,8 +24,9 @@ export interface CleanOptions {
  * into the default branch, or whose upstream is gone) and, unless
  * `--dry-run`, removes them. Candidates are always computed first; execution
  * only proceeds once removal is confirmed — by `--yes`, or by the user at the
- * y/N prompt (`term.confirm`) when running on a TTY. With neither, it refuses
- * with a usage error instead of removing anything.
+ * y/N prompt (`term.confirm`) when running on a TTY. Without `--yes` and
+ * without a TTY it refuses with a usage error; a declined prompt removes
+ * nothing and still succeeds (exit 0).
  */
 export const clean = async (
   git: GitPort,
@@ -73,7 +74,7 @@ interface ExecuteCleanOptions {
   readonly git: GitPort;
   readonly fs: FsPort;
   readonly context: RepoContext;
-  readonly candidates: CleanCandidate[];
+  readonly candidates: readonly CleanCandidate[];
   readonly cleanOptions: CleanOptions;
 }
 
@@ -204,7 +205,7 @@ const executeClean = ({
         }
       }
       return ok({
-        data: { candidates, removed },
+        data: { candidates: [...candidates], removed },
         ...(warnings.length === 0 ? {} : { warnings }),
       });
     } catch (error) {

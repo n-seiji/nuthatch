@@ -145,7 +145,7 @@ const candidatePathLabel = (
 ): string =>
   candidate.kind === "worktree" ? shortenPath(candidate.worktree.path, homeDir, maxLength) : "";
 
-/** Longest branch label's display width, uncapped -- lets a wide terminal show branch names past MAX_BRANCH_COLUMN_WIDTH in full instead of clipping two long names sharing a prefix to the same text (Fable-reported). Used by picker-render.ts's terminal-aware constrainRowColumnWidths; branchColumnWidth (below) is for callers that don't know the terminal width. */
+/** Longest branch label's display width, uncapped -- lets a wide terminal show branch names past MAX_BRANCH_COLUMN_WIDTH in full instead of clipping two long names sharing a prefix to the same text (Fable-reported). Passed by picker-render.ts to picker-side-by-side.ts's terminal-aware constrainRowColumnWidths; branchColumnWidth (below) is for callers that don't know the terminal width. */
 export const rawBranchColumnWidth = (candidates: readonly PickCandidate[]): number =>
   candidates.reduce(
     (max, candidate) => Math.max(max, displayWidth(candidateBranchLabel(candidate))),
