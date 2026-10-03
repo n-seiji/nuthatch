@@ -34,8 +34,8 @@ export interface RootOptions {
  * branch is already checked out on another (managed or external) worktree —
  * the "holder" — and that holder is clean and not locked by git, its HEAD is
  * detached to free up the branch (see resolveHolderSwap in
- * root-holder-swap.ts); a dirty or git-locked holder still refuses the
- * switch entirely, as before.
+ * root-holder-swap.ts); a dirty, git-locked, or prunable (stale registration)
+ * holder still refuses the switch entirely, as before.
  */
 export const root = async (
   git: GitPort,

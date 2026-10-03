@@ -41,7 +41,7 @@ const lockedRejection = <T>(branch: string, lockReason: string | null): CommandR
  * dropping the registration loses its index/link, so the user is told.
  */
 const stalePrunableWarning = ({ path, prunableReason }: Worktree): string =>
-  `Worktree at ${path} no longer exists${prunableReason === null ? "" : ` (${prunableReason})`}; only its stale registration was removed.`;
+  `Worktree at ${path} no longer exists${prunableReason === null ? "" : ` (${prunableReason})`}; removed its stale registration — if it had been moved by hand, the moved copy is no longer linked to this repository.`;
 
 const resolveTarget = (
   worktrees: readonly Worktree[],

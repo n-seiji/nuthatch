@@ -79,14 +79,14 @@ picker は terminal の alternate screen buffer (fzf や vim と同じ仕組み)
 ### 対話的 picker のキー
 
 action panel は候補一覧の隣に列として表示される (overlay ではない) ので、
-action を選ぶ間も一覧が見え続ける。60 列未満の terminal では横に並べられ
-ないため、一覧の下にスタックする形にフォールバックする。
+action を選ぶ間も一覧が見え続ける。横に並べられない幅 (おおよそ 94 列
+未満) の terminal では、一覧の下にスタックする形にフォールバックする。
 
 | キー | 動作 |
 |---|---|
 | `Enter` | 選択中の候補へ cd |
 | `Tab`, `→`, `Ctrl+L`, `Ctrl+F` | 選択中の候補の action panel を開く (ここで cd / 削除 / root 切替) |
-| `Ctrl+X` | 選択中の worktree を削除 (`external` は先に y/N を確認) |
+| `Ctrl+X` | 選択中の worktree を削除 (常に先に y/N を確認) |
 | `Ctrl+R` | root clone を選択中の branch へ切替 (`external` は先に y/N を確認) |
 | `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K`/`Ctrl+J` | 選択を移動 (矢印・emacs・vim キーがすべて併用可) |
 | `Esc` | 静かにキャンセル — exit 0、stdout は空のまま (shell wrapper は cd しない) |
@@ -99,8 +99,9 @@ action panel 内: 同じ上下移動キー (左右は閉じる操作に予約さ
 対になっている; `Tab` はどちらの状態からでもトグルする — Ghostty のように
 Cmd+K のようなキーの組み合わせを Tab に remap する terminal で便利)。
 `delete` はすでに作成済みの worktree (`managed` / `external`) すべてに
-表示される (`external` の削除は panel からでも Ctrl+X からでも必ず y/N
-を確認する); `switch root here` は root worktree 自身には表示されず、
+表示される (panel からの削除は、`external` worktree と、ディレクトリが
+すでに消えた prunable な worktree なら先に y/N を確認する。Ctrl+X は常に
+確認する); `switch root here` は root worktree 自身には表示されず、
 `external` worktree に対しては HEAD を detach する可能性があるため
 同じく先に y/N を確認する。削除すると候補一覧が再読み込みされ、picker を
 抜けずに削除を続けられる; cd と switch-root は終了して結果の path を

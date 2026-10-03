@@ -51,7 +51,7 @@ auto-`cd`.
 | Command | Behavior |
 |---|---|
 | `hop ls [--json]` | Listing: branch / path / category / dirty / ahead-behind. `dirty` is `false` for an entry with no working tree to inspect (bare, prunable, or git-locked with its directory missing) — check `prunable` / `locked` as well |
-| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). A prunable worktree (git reports its directory gone) has nothing to dirty-check: rm only drops its stale registration and says so in a warning, as `hop clean` does for prunable candidates. If multiple worktrees hold the same branch, the branch-only CLI refuses rather than guessing; the picker carries the selected path through the lock-protected re-validation. `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
+| `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). A worktree git reports as prunable is not dirty-checked (there is no working tree to check): rm drops its stale registration with a warning — the same policy as `hop clean`'s prunable candidates — and if a directory without a valid `.git` file is still at that path, git itself refuses (exit 3). If multiple worktrees hold the same branch, the branch-only CLI refuses rather than guessing; the picker carries the selected path through the lock-protected re-validation. `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
 | `hop clean [--yes\|--dry-run]` | Auto-detects and removes garbage worktrees (below). Targets managed worktrees only by default (`--ext` extends the target to external ones as well, unchanged from before) |
 | `hop root <branch>` | Temporarily switches root for verification purposes. Even if the target branch is already checked out on another worktree (the "holder"), swaps it out as long as the holder is clean and not git-locked — the holder is set to detached HEAD to free up the branch. Refuses if the holder is dirty/locked, or a stale registration git reports as prunable. `hop root -` returns (using git's `@{-1}`, no state file needed — this restores only root's branch; a holder detached by the swap is not re-attached) |
 
@@ -69,7 +69,8 @@ allowed. `hop` can now `rm` an external worktree with the same procedure as
 a managed one (dirty check → overridable with `--force`), but deleting from
 the picker always requires a y/N confirmation for an external worktree (to
 avoid accidentally destroying another agent's in-progress session — the
-existing confirmation behavior for managed worktrees is unchanged). Any
+existing confirmation behavior for managed worktrees is unchanged), and for
+a prunable one, since its removal cannot be dirty-checked. Any
 worktree git itself reports as locked is always refused — for `rm` as well
 as for the holder swap in `hop root` — regardless of `--force`; hop never
 calls `git worktree unlock` automatically. `hop clean`'s automatic targets

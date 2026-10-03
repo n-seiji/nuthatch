@@ -31,13 +31,14 @@ const holderRejection = (
 /**
  * A holder git reports prunable (its directory or its .git file is gone) can be
  * neither inspected nor detached, and git refuses to switch to its branch
- * anyway, so this only swaps an opaque spawn error for the way out. Not
+ * anyway, so this only swaps an opaque spawn error for the ways out: re-link
+ * the worktree if it was moved, otherwise drop the registration. Not
  * `holderRejection`: there is nowhere to cd.
  */
 const prunableHolderRejection = (branch: string, holderPath: string): CommandResult<RootData> =>
   fail(
     EXIT_SAFE_REJECTION,
-    `Branch "${branch}" is held by a stale worktree registration at ${holderPath} (git reports it prunable). Not swapping — drop that registration first ("hop rm ${branch}", or "git worktree prune").`,
+    `Branch "${branch}" is held by a stale worktree registration at ${holderPath} (git reports it prunable). Not swapping — if that worktree was moved, re-link it with "git worktree repair <new path>"; otherwise drop the registration first ("hop rm ${branch}" or "git worktree prune").`,
   );
 
 /**

@@ -81,6 +81,32 @@ describe("handlePanelInput — delete confirmation gating", () => {
     });
   });
 
+  it("prunable な managed worktree を panel の Enter で delete する場合、実行せず y/N の確認 overlay を開く", () => {
+    const candidate = worktreeCandidate({
+      kind: "managed",
+      prunable: true,
+      prunableReason: "gitdir file points to non-existent location",
+    });
+    const runAction = mock(() => {});
+    const setMode = mock((_mode: PickerMode) => {});
+    const panelMode = { kind: "panel" as const, candidate, error: null };
+
+    // Panel order is [cd, delete, switchRoot] for managed — index 1 is delete.
+    handlePanelInput("\r", enterKey, panelMode, {
+      panelIndex: 1,
+      runAction,
+      setPanelIndex: () => {},
+      setMode,
+    });
+
+    expect(runAction).not.toHaveBeenCalled();
+    expect(setMode).toHaveBeenCalledWith({
+      kind: "confirm",
+      action: "delete",
+      candidate,
+    });
+  });
+
   it("external worktree: letter shortcut ('d') for delete also opens the confirm overlay", () => {
     const candidate = worktreeCandidate({ kind: "external" });
     const runAction = mock(() => {});

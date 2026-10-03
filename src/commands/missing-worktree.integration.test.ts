@@ -106,7 +106,7 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
 
     expect(result.ok).toBe(true);
     expect(result.warnings).toEqual([
-      `Worktree at ${path} no longer exists (${reason}); only its stale registration was removed.`,
+      `Worktree at ${path} no longer exists (${reason}); removed its stale registration — if it had been moved by hand, the moved copy is no longer linked to this repository.`,
     ]);
     const worktrees = await repo.git(["worktree", "list", "--porcelain"]);
     expect(worktrees).not.toContain(path);
@@ -134,7 +134,7 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
 
     expect(result.ok).toBe(true);
     expect(result.warnings).toEqual([
-      `Worktree at ${path} no longer exists; only its stale registration was removed.`,
+      `Worktree at ${path} no longer exists; removed its stale registration — if it had been moved by hand, the moved copy is no longer linked to this repository.`,
     ]);
   });
 
@@ -150,7 +150,7 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
 
     expect(result.ok).toBe(true);
     expect(result.warnings).toEqual([
-      expect.stringContaining("only its stale registration was removed"),
+      expect.stringContaining("removed its stale registration"),
       expect.stringContaining("--ext is deprecated"),
     ]);
   });
@@ -165,6 +165,7 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
     expect(result.errorMessage).toContain("stale worktree registration");
     expect(result.errorMessage).toContain(path);
     expect(result.errorMessage).toContain(`hop rm ${BRANCH}`);
+    expect(result.errorMessage).toContain("git worktree repair");
     // The holder's missing directory must never reach a git spawn.
     expect(result.errorMessage).not.toContain("Failed to switch root");
     const rootBranch = await repo.git(["branch", "--show-current"]);

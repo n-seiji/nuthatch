@@ -50,11 +50,15 @@ export const availableActions = (candidate: PickCandidate): readonly PickerActio
  * Whether deleting this candidate must go through an explicit y/N
  * confirmation regardless of entry point (Ctrl+X shortcut or the action
  * panel's "delete" entry). Managed worktrees keep the picker's existing
- * behavior (Ctrl+X confirms, the panel entry does not); external worktrees
- * always require it, since they may be another agent's in-use working copy.
+ * behavior (Ctrl+X confirms, the panel entry does not: `rm` refuses a dirty
+ * one). External worktrees always require it, since they may be another
+ * agent's in-use working copy. So do prunable ones: `rm` does not dirty-check
+ * a prunable target (no working tree on disk), and if its directory was moved
+ * by hand, dropping the registration unlinks the moved copy from the repo.
  */
 export const requiresDeleteConfirmation = (candidate: PickCandidate): boolean =>
-  candidate.kind === "worktree" && candidate.worktree.kind === "external";
+  candidate.kind === "worktree" &&
+  (candidate.worktree.kind === "external" || candidate.worktree.prunable);
 
 /**
  * Whether switching root "here" for this candidate must go through an

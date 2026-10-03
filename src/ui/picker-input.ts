@@ -56,7 +56,8 @@ interface PanelInputContext extends ActionContext {
 
 /**
  * Runs an action picked in the panel or via list mode's Ctrl+R, unless it's
- * a delete or switchRoot that requires confirmation (external worktrees) —
+ * a delete or switchRoot that requires confirmation (external worktrees, and
+ * prunable ones for delete — see domain/actions.ts) —
  * in that case it opens the same y/N overlay the list-mode shortcuts use,
  * instead of running immediately.
  */

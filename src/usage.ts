@@ -27,7 +27,7 @@ Interactive picker keys:
   action, c/d/r to run cd/delete/switchRoot directly, Esc/Tab/←/Ctrl+H to close
 
 Options:
-  --create               Create the worktree when jumping to a branch without one (required outside a TTY)
+  --create               Create the worktree when jumping to a branch without one (always required, TTY or not)
   --json                 Output JSON instead of plain text
   --force                Force removal even if the worktree is dirty (hop rm)
   --ext                  [deprecated, no-op for hop rm] hop rm no longer requires it to
