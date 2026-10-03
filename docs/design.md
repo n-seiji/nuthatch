@@ -41,7 +41,7 @@ auto-`cd`.
 
 | Command | Behavior |
 |---|---|
-| `hop` | TTY: pick a worktree/branch with the ink picker and `cd` into it. Branches without a worktree yet (local/remote) are also offered as candidates — selecting one creates it and `cd`s in. Non-TTY: prints a listing |
+| `hop` | TTY: pick a worktree/branch with the interactive picker and `cd` into it. Branches without a worktree yet (local/remote) are also offered as candidates — selecting one creates it and `cd`s in. Non-TTY: prints a listing |
 | `hop <branch>` | **create-or-jump.** `cd`s into the worktree if it exists; otherwise creates it from the default branch and `cd`s in. Creation always requires `--create` (TTY or not — to prevent accidental creation from a typo); without it, `hop <branch>` refuses with a message to re-run with `--create` |
 | `hop root` | `cd` into the root clone |
 | `hop -` | Return to the previously visited worktree |
@@ -185,23 +185,28 @@ src/
 │   ├── porcelain.ts     #   worktree list --porcelain parser
 │   ├── sanitize.ts      #   branch name → dir name
 │   ├── classify.ts      #   root/managed/external classification
+│   ├── tracking.ts      #   which remote branch a new branch tracks (origin wins)
 │   ├── garbage.ts       #   garbage detection for clean (clock is injected)
 │   ├── git-executable.ts #  where the git binary may live (candidate list)
 │   └── fatal-error.ts   #   escaped error → message + exit code
 ├── infra/               # The only place with external dependencies. Implements domain's ports
 │   ├── git.ts           #   node:child_process execFile (argv array only)
 │   ├── git-executable.ts #  probes the candidates, caches the absolute path
-│   ├── fs.ts            #   exists / realpath
+│   ├── fs.ts            #   realpath / exists / mkdir / readdir
+│   ├── repo.ts          #   classified worktree list, dirty check, how to check out a branch
+│   ├── lock.ts          #   per-repo mutation lock (withRepoLock)
 │   └── term.ts          #   TTY detection, stderr logging
 ├── cli-fatal.ts         # cli.ts only: renders an escaped error (hop: … + envelope)
 ├── commands/             # 1 command = 1 component. Cross-imports forbidden
-│   ├── jump.ts / ls.ts / rm.ts / clean.ts / root.ts / init.ts
+│   ├── jump.ts / ls.ts / pick.ts / rm.ts / clean.ts / root.ts / init.ts
 │   │                    #   ★ Never renders. Only returns a structured Result
-├── ui/picker.tsx        # ink. Dynamic-imported (literal specifier) only on TTY
-└── render.ts            # cli.ts only: Result → plain / JSON. Never imported from commands
+├── ui/                  # Self-drawn picker (raw-mode stdin, alternate screen on stderr). Wired to commands only via cli-pick.ts
+└── render.ts            # cli layer only: Result → plain / JSON. Never imported from commands
 shell/init.zsh           # Template for `hop init zsh` (strict quoting, idempotent)
-test/                    # domain gets unit tests; commands get integration tests against a real git repo
 ```
+
+- **Tests sit next to the code** (`foo.ts` → `foo.test.ts`): domain gets unit
+  tests; commands get integration tests against a real git repo in a tmpdir.
 
 - **Dependencies flow one way**: cli → commands → domain + infra. domain
   depends on nothing.
@@ -219,7 +224,7 @@ test/                    # domain gets unit tests; commands get integration test
 |---|---|---|
 | Language | TypeScript | Development runtime is bun |
 | Minimum versions | git >= 2.36 / node >= 22 / bun >= 1.1 | Range supporting porcelain -z and compilation |
-| TUI | ink | Dynamic-imported only on TTY. Verified compiling to work with the binary; falls back to a numbered selection if not |
+| TUI | self-drawn (no TUI dependency) | Raw-mode stdin + alternate screen on stderr, TTY only; without a TTY, bare `hop` prints a listing instead |
 | arg parser | citty | Rolling our own is forbidden |
 | lint/format | oxlint / oxfmt | |
 | Testing | bun test | unit (domain) + integration (real repo in a tmpdir, GIT_CONFIG_NOSYSTEM=1 / isolated HOME / hooks disabled / LC_ALL=C / injected clock) |
