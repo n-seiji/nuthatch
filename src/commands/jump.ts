@@ -10,7 +10,7 @@ import {
 } from "../domain/result.ts";
 import type { JumpData } from "../domain/schema.ts";
 import { sanitizeBranchName } from "../domain/sanitize.ts";
-import { acquireRepoLock } from "../infra/lock.ts";
+import { withRepoLock } from "../infra/lock.ts";
 import { loadRepoContext, resolveBranchCheckout } from "../infra/repo.ts";
 
 export type { JumpData } from "../domain/schema.ts";
@@ -72,25 +72,23 @@ export const jump = async (
   );
   const targetPath = join(context.managedRoot, dirName);
 
-  const lock = await acquireRepoLock(context.commonDir);
-  try {
-    // Re-validate under lock: another process may have created it concurrently.
-    const fresh = await loadRepoContext(git, fs, options.cwd);
-    const racedExisting = fresh.worktrees.find((wt) => wt.branch === options.target);
-    if (racedExisting !== undefined) {
-      return existingWorktreeResult(options.target, racedExisting.path);
+  return withRepoLock<JumpData>(context.commonDir, async () => {
+    try {
+      // Re-validate under lock: another process may have created it concurrently.
+      const fresh = await loadRepoContext(git, fs, options.cwd);
+      const racedExisting = fresh.worktrees.find((wt) => wt.branch === options.target);
+      if (racedExisting !== undefined) {
+        return existingWorktreeResult(options.target, racedExisting.path);
+      }
+
+      await fs.mkdir(context.managedRoot);
+      await git.addWorktree(context.rootPath, targetPath, options.target, checkout.options);
+      return ok({
+        path: targetPath,
+        data: { branch: options.target, created: true },
+      });
+    } catch (error) {
+      return fail(EXIT_SAFE_REJECTION, `Failed to create worktree: ${messageOf(error)}`);
     }
-
-    await fs.mkdir(context.managedRoot);
-    await git.addWorktree(context.rootPath, targetPath, options.target, checkout.options);
-  } catch (error) {
-    return fail(EXIT_SAFE_REJECTION, `Failed to create worktree: ${messageOf(error)}`);
-  } finally {
-    await lock.release();
-  }
-
-  return ok({
-    path: targetPath,
-    data: { branch: options.target, created: true },
   });
 };
