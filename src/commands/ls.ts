@@ -3,8 +3,6 @@ import { type CommandResult, ok } from "../domain/result.ts";
 import type { LsEntry } from "../domain/schema.ts";
 import { loadRepoContext, worktreeDirtyState } from "../infra/repo.ts";
 
-export type { LsEntry } from "../domain/schema.ts";
-
 export interface LsOptions {
   readonly cwd: string;
 }

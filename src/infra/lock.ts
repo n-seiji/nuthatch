@@ -15,7 +15,7 @@ interface LockInfo {
   token: string;
 }
 
-export class LockHeldError extends Error {
+class LockHeldError extends Error {
   readonly info: LockInfo;
 
   constructor(info: LockInfo) {

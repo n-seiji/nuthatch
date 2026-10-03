@@ -77,10 +77,3 @@ export interface TermPort {
   /** Prompts on stderr/stdin and resolves to whether the user confirmed. Only call when isTTY(). */
   confirm: (message: string) => Promise<boolean>;
 }
-
-export interface WorktreeQuery {
-  git: GitPort;
-  fs: FsPort;
-}
-
-export type { Worktree } from "./model.ts";

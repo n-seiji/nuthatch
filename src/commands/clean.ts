@@ -7,8 +7,6 @@ import { withRepoLock } from "../infra/lock.ts";
 import { loadRepoContext, nestedWorktrees, type RepoContext } from "../infra/repo.ts";
 import { buildCleanCandidates } from "./clean-candidates.ts";
 
-export type { CleanCandidate, CleanData } from "../domain/schema.ts";
-
 export interface CleanOptions {
   readonly cwd: string;
   /** Also consider external (non-nuthatch-managed) worktrees. */

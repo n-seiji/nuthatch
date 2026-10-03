@@ -15,8 +15,6 @@ import {
   resolveHolderSwap,
 } from "./root-holder-swap.ts";
 
-export type { RootData } from "../domain/schema.ts";
-
 export interface RootOptions {
   readonly cwd: string;
   /** Undefined: bare `hop root` (just navigate). "-": switch back (@{-1}). Otherwise a branch name. */
@@ -35,8 +33,9 @@ export interface RootOptions {
  * "hop root — verification session"), refusing if root is dirty. If the target
  * branch is already checked out on another (managed or external) worktree —
  * the "holder" — and that holder is clean and not locked by git, its HEAD is
- * detached to free up the branch (see swapHolderAndReport below); a dirty or
- * git-locked holder still refuses the switch entirely, as before.
+ * detached to free up the branch (see resolveHolderSwap in
+ * root-holder-swap.ts); a dirty or git-locked holder still refuses the
+ * switch entirely, as before.
  */
 export const root = async (
   git: GitPort,

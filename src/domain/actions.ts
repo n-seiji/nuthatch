@@ -5,12 +5,12 @@ import type { PickCandidate } from "./schema.ts";
  * always available; `delete` and `switchRoot` depend on the candidate's
  * kind (see availableActions).
  */
-export const PICKER_ACTIONS = ["cd", "delete", "switchRoot"] as const;
+const PICKER_ACTIONS = ["cd", "delete", "switchRoot"] as const;
 export type PickerActionKind = (typeof PICKER_ACTIONS)[number];
 
 /**
  * Which panel actions apply to a given picker candidate. Pure so it can be
- * unit tested without ink or git:
+ * unit tested without git:
  *
  * - `cd`: every candidate.
  * - `delete`: any already-created worktree except root (`kind: "managed"` or

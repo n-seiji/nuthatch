@@ -129,6 +129,26 @@ export const padToWidth = (value: string, width: number): string => {
 const DEFAULT_ELLIPSIS = "…";
 
 /**
+ * The leading clusters of `clusters` whose combined width fits in `budget`
+ * columns: whole clusters only, stopping at the first one that would
+ * overflow. Walking direction is the caller's choice — pass the clusters
+ * reversed to take from the end.
+ */
+const takeWithinWidth = (clusters: readonly string[], budget: number): string[] => {
+  const taken: string[] = [];
+  let usedWidth = WIDTH_ZERO;
+  for (const grapheme of clusters) {
+    const nextWidth = usedWidth + graphemeWidth(grapheme);
+    if (nextWidth > budget) {
+      break;
+    }
+    taken.push(grapheme);
+    usedWidth = nextWidth;
+  }
+  return taken;
+};
+
+/**
  * Truncates `value` to at most `width` display columns, replacing any cut
  * content with `ellipsis` (default "…", itself 1 column wide) — never
  * splitting a grapheme cluster. Keeps whole clusters from the front,
@@ -148,17 +168,7 @@ export const truncateToWidth = (
   if (budget < WIDTH_ZERO) {
     return "";
   }
-  let kept = "";
-  let usedWidth = WIDTH_ZERO;
-  for (const grapheme of graphemes(value)) {
-    const nextWidth = usedWidth + graphemeWidth(grapheme);
-    if (nextWidth > budget) {
-      break;
-    }
-    kept += grapheme;
-    usedWidth = nextWidth;
-  }
-  return kept + ellipsis;
+  return takeWithinWidth(graphemes(value), budget).join("") + ellipsis;
 };
 
 /**
@@ -179,15 +189,6 @@ export const truncateToWidthKeepingTail = (
   if (budget < WIDTH_ZERO) {
     return "";
   }
-  let kept = "";
-  let usedWidth = WIDTH_ZERO;
-  for (const grapheme of graphemes(value).toReversed()) {
-    const nextWidth = usedWidth + graphemeWidth(grapheme);
-    if (nextWidth > budget) {
-      break;
-    }
-    kept = grapheme + kept;
-    usedWidth = nextWidth;
-  }
-  return ellipsis + kept;
+  const keptFromEnd = takeWithinWidth(graphemes(value).toReversed(), budget);
+  return ellipsis + keptFromEnd.toReversed().join("");
 };

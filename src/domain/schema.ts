@@ -120,6 +120,7 @@ export const RootEnvelopeSchema = jsonEnvelopeSchema(RootDataSchema);
 export type RootEnvelope = InferOutput<typeof RootEnvelopeSchema>;
 
 export const GarbageReasonSchema = picklist(["prunable", "merged", "gone"]);
+export type GarbageReason = InferOutput<typeof GarbageReasonSchema>;
 
 /** A single `hop clean` candidate: a managed (or, with --ext, external) worktree safe to remove. */
 export const CleanCandidateSchema = object({

@@ -123,7 +123,6 @@ describe("clean (integration)", () => {
       create: true,
     });
     expect(created.ok).toBe(true);
-    await fs.exists(created.path ?? "");
     const { writeFile } = await import("node:fs/promises");
     await writeFile(join(created.path ?? "", "dirty.txt"), "uncommitted");
 

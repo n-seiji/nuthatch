@@ -13,8 +13,6 @@ import { sanitizeBranchName } from "../domain/sanitize.ts";
 import { withRepoLock } from "../infra/lock.ts";
 import { loadRepoContext, resolveBranchCheckout } from "../infra/repo.ts";
 
-export type { JumpData } from "../domain/schema.ts";
-
 export interface JumpOptions {
   readonly cwd: string;
   readonly target: string;

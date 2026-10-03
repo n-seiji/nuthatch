@@ -1,4 +1,4 @@
-export type GarbageReason = "prunable" | "merged" | "gone";
+import type { GarbageReason } from "./schema.ts";
 
 /**
  * Facts about a single managed worktree, gathered by infra/commands and

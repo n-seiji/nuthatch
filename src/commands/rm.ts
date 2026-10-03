@@ -18,8 +18,6 @@ import {
   worktreeDirtyState,
 } from "../infra/repo.ts";
 
-export type { RmData } from "../domain/schema.ts";
-
 export interface RmOptions {
   readonly cwd: string;
   readonly branch: string;
