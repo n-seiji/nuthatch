@@ -155,6 +155,41 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
     ]);
   });
 
+  it("prunable の削除が未確認 (allowPrunable: false) の場合、rm は exit 3 で拒否し、登録を残す", async () => {
+    const path = await createPrunableWorktree();
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: BRANCH,
+      allowPrunable: false,
+      force: false,
+      ext: false,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(3);
+    expect(result.errorMessage).toContain("changed before removal");
+    expect(result.errorMessage).toContain("git now reports it prunable");
+    const worktrees = await repo.git(["worktree", "list", "--porcelain"]);
+    expect(worktrees).toContain(path);
+  });
+
+  it("prunable の削除が確認済み (allowPrunable: true) の場合、rm は登録を削除して成功する", async () => {
+    const path = await createPrunableWorktree();
+
+    const result = await rm(git, fs, {
+      cwd: repo.repoPath,
+      branch: BRANCH,
+      allowPrunable: true,
+      force: false,
+      ext: false,
+    });
+
+    expect(result.ok).toBe(true);
+    const worktrees = await repo.git(["worktree", "list", "--porcelain"]);
+    expect(worktrees).not.toContain(path);
+  });
+
   it("prunable な worktree が branch を保持している場合、root は swap を拒否して理由と対処を示す", async () => {
     const path = await createPrunableWorktree();
 

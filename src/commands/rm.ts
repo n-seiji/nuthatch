@@ -23,6 +23,11 @@ export interface RmOptions {
   readonly branch: string;
   /** Picker-selected path. When present, never remove another worktree that happens to share the branch. */
   readonly expectedPath?: string;
+  /**
+   * False for picker actions that have not confirmed removing a prunable worktree.
+   * Undefined means allowed, which is what the CLI's `hop rm` uses.
+   */
+  readonly allowPrunable?: boolean;
   readonly force: boolean;
   readonly ext: boolean;
 }
@@ -34,6 +39,12 @@ const lockedRejection = <T>(branch: string, lockReason: string | null): CommandR
   fail(
     EXIT_SAFE_REJECTION,
     `Worktree for "${branch}" is locked by git${lockReason === null ? "" : ` (${lockReason})`}. hop never unlocks worktrees automatically — run "git worktree unlock" yourself first if you're sure.`,
+  );
+
+const turnedPrunableRejection = (branch: string): CommandResult<RmData> =>
+  fail(
+    EXIT_SAFE_REJECTION,
+    `The selected worktree for "${branch}" changed before removal (git now reports it prunable). Refresh the picker and retry.`,
   );
 
 /**
@@ -121,6 +132,10 @@ const targetSafetyRejection = async (
   }
   if (target.locked) {
     return lockedRejection(options.branch, target.lockReason);
+  }
+  // A prunable target is never dirty-checked, so only a caller that confirmed it may remove one.
+  if (target.prunable && options.allowPrunable === false) {
+    return turnedPrunableRejection(options.branch);
   }
   // Only a definite "dirty" refuses: null (no working tree on disk) leaves removal to git.
   if (!options.force && (await worktreeDirtyState(git, fs, context.worktrees, target)) === true) {

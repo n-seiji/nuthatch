@@ -26,7 +26,7 @@ doesn't exist yet. Built for humans (interactive picker) and AI coding agents
 
 ```sh
 hop                # pick a worktree/branch interactively and cd into it
-hop feat/foo       # cd into feat/foo's worktree — created on demand
+hop feat/foo       # cd into feat/foo's worktree (add --create to create it if missing)
 hop root           # cd into the root clone
 hop -              # cd back to the previous worktree
 
@@ -107,8 +107,8 @@ highlighted action, `c`/`d`/`r` to run cd/delete/switch-root directly, and
 mirror the `→`/`Ctrl+L`/`Ctrl+F` that open it; `Tab` toggles either way —
 handy on terminals like Ghostty that remap a chord such as Cmd+K to Tab). `delete`
 appears for any already-created worktree (`managed` or `external` — from the
-panel, deleting an `external` worktree, or a prunable one whose directory is
-already gone, asks y/N first; Ctrl+X always asks); `switch
+panel, deleting an `external` worktree, or a prunable one (git can no longer
+find its working tree), asks y/N first; Ctrl+X always asks); `switch
 root here` doesn't appear on the root worktree itself, and also asks y/N
 first for an `external` worktree, since it can detach that worktree's HEAD.
 Deleting reloads the

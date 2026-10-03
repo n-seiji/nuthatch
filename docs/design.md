@@ -76,9 +76,10 @@ as for the holder swap in `hop root` — regardless of `--force`; hop never
 calls `git worktree unlock` automatically. `hop clean`'s automatic targets
 remain managed-only (external can be added explicitly with `--ext`).
 Picker-triggered mutations carry the selected worktree path into the
-lock-protected re-validation. If the holder/target changed, or an external
-holder appeared after an unconfirmed picker selection, the mutation is
-refused instead of acting on the newly discovered worktree.
+lock-protected re-validation. If the holder/target changed, an external
+holder appeared, or the target turned prunable after an unconfirmed picker
+selection, the mutation is refused instead of acting on the newly
+discovered state.
 Category classification uses realpath plus path-boundary comparison, never
 a string-prefix comparison.
 

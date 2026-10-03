@@ -73,8 +73,8 @@ const CONFIRM_QUESTIONS: Record<Exclude<PickerActionKind, "cd">, string> = {
  * Row builder for the y/N confirmation panel (delete via Ctrl+X or the
  * panel, or switch root via Ctrl+R/panel) — rendered in the same side-column
  * slot the action panel uses. Switching root can detach the candidate's
- * HEAD, and deleting a prunable worktree only drops its stale registration
- * (see requiresDeleteConfirmation), so the panel makes each explicit.
+ * HEAD, and deleting a prunable worktree is not dirty-checked (see
+ * requiresDeleteConfirmation), so the panel makes each explicit.
  */
 export const buildConfirmPanelRows = ({
   candidate,
@@ -93,8 +93,8 @@ export const buildConfirmPanelRows = ({
   if (action === "delete" && candidate.kind === "worktree" && candidate.worktree.prunable) {
     // Two rows, each within the box's inner width, so the note never wraps mid-word.
     rows.push(
-      [{ text: "Directory gone: removing only", style: "dim" }],
-      [{ text: "its stale registration.", style: "dim" }],
+      [{ text: "Prunable, not dirty-checked:", style: "dim" }],
+      [{ text: "removes just its registration.", style: "dim" }],
     );
   }
   rows.push([{ text: "(y/N)", style: "dim" }]);

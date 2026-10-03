@@ -24,7 +24,7 @@
 
 ```sh
 hop                # worktree/branch を対話的に選んで cd
-hop feat/foo       # feat/foo の worktree へ cd — 未作成ならその場で作成
+hop feat/foo       # feat/foo の worktree へ cd (未作成なら --create でその場で作成)
 hop root           # root clone へ cd
 hop -              # 直前の worktree へ戻る
 
@@ -99,8 +99,8 @@ action panel 内: 同じ上下移動キー (左右は閉じる操作に予約さ
 対になっている; `Tab` はどちらの状態からでもトグルする — Ghostty のように
 Cmd+K のようなキーの組み合わせを Tab に remap する terminal で便利)。
 `delete` はすでに作成済みの worktree (`managed` / `external`) すべてに
-表示される (panel からの削除は、`external` worktree と、ディレクトリが
-すでに消えた prunable な worktree なら先に y/N を確認する。Ctrl+X は常に
+表示される (panel からの削除は、`external` worktree と、git が作業ツリーを
+見失った prunable な worktree なら先に y/N を確認する。Ctrl+X は常に
 確認する); `switch root here` は root worktree 自身には表示されず、
 `external` worktree に対しては HEAD を detach する可能性があるため
 同じく先に y/N を確認する。削除すると候補一覧が再読み込みされ、picker を

@@ -43,6 +43,8 @@ const deleteWorktree = async (
     cwd: process.cwd(),
     branch,
     ...(candidate.kind === "worktree" ? { expectedPath: candidate.worktree.path } : {}),
+    // The picker asked y/N only for a row that was already prunable when it loaded.
+    allowPrunable: candidate.kind === "worktree" && candidate.worktree.prunable,
     force: false,
     ext: false,
   });
