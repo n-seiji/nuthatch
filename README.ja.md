@@ -38,6 +38,10 @@ hop root -         # root clone を元に戻す (root の branch のみ; swap �
 hop -- <branch>    # 予約コマンドと被る branch 名をエスケープ
                    # (`hop` 自体と同名の branch (例: `hop -- hop`) にも必要)
 hop --help         # usage を表示 (-h / hop help でも同じ)
+
+hop --version          # hop の version を表示
+hop --update           # 最新リリースへ、インストールした方法のまま更新
+hop --update --check   # --update が何をするかを報告するだけ — 何も変更しない
 ```
 
 同じ branch が複数の worktree で checkout されている場合、branch だけを指定する
@@ -137,6 +141,25 @@ install script は `hop` を `~/.local/bin` に置き (`HOP_INSTALL_DIR` で
 上書き可)、常に最新の GitHub Release を取得する; 特定バージョンに固定する
 には `HOP_VERSION=vX.Y.Z` を使う。Linux arm64 はビルド済みバイナリが
 まだないため、npm install を使う。
+
+### 更新
+
+```sh
+hop --update          # 最新リリースへ、インストールした方法のまま更新
+hop --update --check  # 報告だけ: current / latest / method / 実行されるコマンド
+hop --version         # 今どの version か
+```
+
+`hop --update` は hop のインストール方法を判定する。`install.sh` で入れた
+バイナリ (など compile 済みの `hop`) は、リリースに添付された `.sha256` と
+SHA-256 が一致した場合にだけその場で差し替える — 不一致なら何も置換しない。
+mise / npm / bun 経由の install は、そのツール自身の upgrade コマンド
+(`mise upgrade …`、`npm install -g @n-seiji/nuthatch@latest`、
+`bun add -g @n-seiji/nuthatch@latest`) を実行して更新するので、version を
+固定した mise の設定が優先される。`npx` / `bunx`、ソースチェックアウト、
+hop が扱わない配置 (pnpm・yarn の global、プロジェクトの依存) は、代わりに
+どうすればよいかを示して拒否する。hop がネットワークに出るのはこれだけで、
+GitHub と npm の固定アドレスへの HTTPS リクエストのみ。
 
 ## トラブルシューティング
 

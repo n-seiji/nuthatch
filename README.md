@@ -40,6 +40,10 @@ hop root -         # switch the root clone back (only root's branch; a swapped-o
 hop -- <branch>    # escape a branch name that collides with a reserved command
                    # (also required for a branch named the same as your `hop` binary/alias, e.g. `hop -- hop`)
 hop --help         # print usage (also -h / hop help)
+
+hop --version          # print hop's version
+hop --update           # update hop to the latest release, the way it was installed
+hop --update --check   # only report what --update would do — changes nothing
 ```
 
 If Git reports the same branch checked out in multiple worktrees, the
@@ -146,6 +150,25 @@ The install script places `hop` in `~/.local/bin` (override with
 `HOP_INSTALL_DIR`) and always fetches the latest GitHub Release; pin a
 specific version with `HOP_VERSION=vX.Y.Z`. Linux arm64 has no prebuilt
 binary yet — use the npm install instead.
+
+### Updating
+
+```sh
+hop --update          # update to the latest release, the way hop was installed
+hop --update --check  # just report: current, latest, method, and the command it would run
+hop --version         # which version do I have?
+```
+
+`hop --update` detects how hop was installed. A binary from `install.sh` (or
+any compiled `hop`) is replaced in place, but only after its SHA-256 matches
+the `.sha256` attached to the release — on a mismatch nothing is replaced. A
+mise / npm / bun install is updated by running that tool's own upgrade command
+(`mise upgrade …`, `npm install -g @n-seiji/nuthatch@latest`,
+`bun add -g @n-seiji/nuthatch@latest`), so a mise config that pins a version
+still wins. `npx` / `bunx`, a source checkout, and layouts hop does not drive
+(a pnpm or yarn global, a project dependency) are refused with a note on what
+to do instead. This is the only thing hop does over the network: HTTPS
+requests to fixed GitHub and npm addresses.
 
 ## Troubleshooting
 
