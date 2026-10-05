@@ -1,5 +1,5 @@
 import { execFile as execFileCb } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile as writeFileFs } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -36,7 +36,6 @@ export const createTestRepo = async (): Promise<TestRepo> => {
   const repoPath = join(rootDir, "repo");
   const env = isolatedEnv(homeDir);
 
-  const { mkdir, writeFile: writeFileFs } = await import("node:fs/promises");
   await mkdir(homeDir, { recursive: true });
   await mkdir(repoPath, { recursive: true });
 

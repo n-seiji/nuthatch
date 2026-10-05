@@ -1,10 +1,10 @@
-import { pick, type PickCandidate } from "./commands/pick.ts";
+import { pick } from "./commands/pick.ts";
 import { rm } from "./commands/rm.ts";
 import { root } from "./commands/root.ts";
-import { candidateBranchName } from "./domain/candidates.ts";
+import { candidateBranchName, type PickCandidate } from "./domain/candidates.ts";
 import type { FsPort, GitPort } from "./domain/ports.ts";
 import { ok } from "./domain/result.ts";
-import { render } from "./render.ts";
+import { render, reportResult } from "./render.ts";
 import {
   runPicker,
   type ActionOutcome,
@@ -15,7 +15,7 @@ import {
 /**
  * Loads the fresh candidate list for the picker (used both for the initial
  * render and to reload after an in-picker delete). Returns null on failure,
- * having already rendered/exit-coded the error via `render`.
+ * having already rendered/exit-coded the error via `reportResult`.
  */
 export const loadPickCandidates = async (
   git: GitPort,
@@ -24,8 +24,7 @@ export const loadPickCandidates = async (
 ): Promise<readonly PickCandidate[] | null> => {
   const pickResult = await pick(git, fs, { cwd: process.cwd() });
   if (!pickResult.ok) {
-    render("pick", pickResult, json);
-    process.exitCode = pickResult.exitCode;
+    reportResult("pick", pickResult, json);
     return null;
   }
   return pickResult.data?.candidates ?? [];
@@ -44,6 +43,8 @@ const deleteWorktree = async (
     cwd: process.cwd(),
     branch,
     ...(candidate.kind === "worktree" ? { expectedPath: candidate.worktree.path } : {}),
+    // The picker asked y/N only for a row that was already prunable when it loaded.
+    allowPrunable: candidate.kind === "worktree" && candidate.worktree.prunable,
     force: false,
     ext: false,
   });
@@ -140,12 +141,5 @@ export const renderSwitchRootOutcome = (
   const branch = outcome?.branch ?? null;
   const detachedHolder = outcome?.detachedHolder ?? null;
   const warnings = outcome?.warnings ?? [];
-  if (json) {
-    render("root", ok({ path, data: { branch, switched: true, detachedHolder }, warnings }), true);
-    return;
-  }
-  process.stdout.write(`${path}\n`);
-  for (const warning of warnings) {
-    process.stderr.write(`warning: ${warning}\n`);
-  }
+  render("root", ok({ path, data: { branch, switched: true, detachedHolder }, warnings }), json);
 };

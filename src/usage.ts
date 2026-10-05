@@ -2,7 +2,7 @@
 export const USAGE = `Usage: hop [command] [options]
 
   hop                    Pick a worktree/branch interactively and cd into it (TTY); lists worktrees otherwise
-  hop <branch>           Create-or-jump: cd into <branch>'s worktree, creating it on demand
+  hop <branch>           Create-or-jump: cd into <branch>'s worktree (pass --create to create a missing one)
   hop root               cd into the root clone
   hop -                  cd back to the previous worktree
   hop -- <branch>        Escape a branch name that collides with a reserved command (ls/rm/clean/root/init/help)
@@ -19,7 +19,7 @@ Interactive picker keys:
   Tab, →, Ctrl+L, Ctrl+F Open the action panel, as a column beside the list
                          (stacks below it instead on narrow terminals)
   Ctrl+X                 Delete the selected worktree (y/N confirmation)
-  Ctrl+R                 Switch the root clone to the selected branch, immediately
+  Ctrl+R                 Switch the root clone to the selected branch (y/N first for an external worktree)
   ↑/↓, Ctrl+P/N, Ctrl+K/J Move the selection (arrow, emacs, and vim keys all work)
   Esc                    Cancel (exit 0, no output)
   Ctrl+C                 Cancel like an interrupt (exit 130, same as SIGINT)
@@ -27,7 +27,7 @@ Interactive picker keys:
   action, c/d/r to run cd/delete/switchRoot directly, Esc/Tab/←/Ctrl+H to close
 
 Options:
-  --create               Create the worktree when jumping to a branch without one (required outside a TTY)
+  --create               Create the worktree when jumping to a branch without one (always required, TTY or not)
   --json                 Output JSON instead of plain text
   --force                Force removal even if the worktree is dirty (hop rm)
   --ext                  [deprecated, no-op for hop rm] hop rm no longer requires it to

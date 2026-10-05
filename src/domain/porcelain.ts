@@ -102,5 +102,3 @@ export const parsePorcelain = (output: string): ParsedWorktree[] => {
   }
   return result;
 };
-
-export type { WorktreeKind } from "./model.ts";

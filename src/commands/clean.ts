@@ -1,12 +1,11 @@
+import { messageOf } from "../domain/fatal-error.ts";
 import type { Worktree } from "../domain/model.ts";
 import type { FsPort, GitPort, TermPort } from "../domain/ports.ts";
 import { type CommandResult, EXIT_USAGE_ERROR, fail, ok } from "../domain/result.ts";
 import type { CleanCandidate, CleanData } from "../domain/schema.ts";
-import { acquireRepoLockOrRejection } from "../infra/lock.ts";
+import { withRepoLock } from "../infra/lock.ts";
 import { loadRepoContext, nestedWorktrees, type RepoContext } from "../infra/repo.ts";
 import { buildCleanCandidates } from "./clean-candidates.ts";
-
-export type { CleanCandidate, CleanData } from "../domain/schema.ts";
 
 export interface CleanOptions {
   readonly cwd: string;
@@ -24,8 +23,10 @@ export interface CleanOptions {
  * `hop clean` — finds worktrees that are safe to remove (prunable, merged
  * into the default branch, or whose upstream is gone) and, unless
  * `--dry-run`, removes them. Candidates are always computed first; execution
- * only proceeds when the caller has already confirmed (`--yes`) — this
- * command never prompts itself (see cli.ts, which owns TTY interaction).
+ * only proceeds once removal is confirmed — by `--yes`, or by the user at the
+ * y/N prompt (`term.confirm`) when running on a TTY. Without `--yes` and
+ * without a TTY it refuses with a usage error; a declined prompt removes
+ * nothing and still succeeds (exit 0).
  */
 export const clean = async (
   git: GitPort,
@@ -34,7 +35,7 @@ export const clean = async (
   options: CleanOptions,
 ): Promise<CommandResult<CleanData>> => {
   const context = await loadRepoContext(git, fs, options.cwd);
-  const candidates = await buildCleanCandidates(git, context, options.ext);
+  const candidates = await buildCleanCandidates(git, fs, context, options.ext);
 
   if (options.dryRun) {
     return ok({ data: { candidates } });
@@ -60,19 +61,12 @@ export const clean = async (
     }
   }
 
-  const execution = await executeClean({
+  return executeClean({
     git,
     fs,
     context,
     candidates,
     cleanOptions: options,
-  });
-  if (!execution.ok) {
-    return execution.rejection;
-  }
-  return ok({
-    data: { candidates, removed: execution.removed },
-    ...(execution.warnings.length === 0 ? {} : { warnings: execution.warnings }),
   });
 };
 
@@ -84,14 +78,6 @@ interface ExecuteCleanOptions {
   readonly cleanOptions: CleanOptions;
 }
 
-/**
- * Removes each still-valid candidate, skipping (not failing) any that fail
- * individually. Also skips (rather than removing) any candidate that still
- * contains a registered worktree — same rule as commands/rm.ts's
- * nestedWorktreeRejection: removing it would destroy the inner worktree's
- * files too, so `hop clean`'s automatic deletion must refuse it just as
- * `hop rm` would, --force-equivalent or not.
- */
 interface RemoveCandidateOptions {
   readonly git: GitPort;
   readonly rootPath: string;
@@ -100,27 +86,29 @@ interface RemoveCandidateOptions {
   readonly worktrees: readonly Worktree[];
 }
 
+type RemoveOutcome = "removed" | "nested" | "failed";
+
 const removeCandidate = async ({
   git,
   rootPath,
   candidate,
   deleteBranch,
   worktrees,
-}: RemoveCandidateOptions): Promise<boolean> => {
+}: RemoveCandidateOptions): Promise<RemoveOutcome> => {
   if (nestedWorktrees(worktrees, candidate.path).length > 0) {
-    return false;
+    return "nested";
   }
   try {
     await git.removeWorktree(rootPath, candidate.path, false);
     if (deleteBranch && candidate.branch.length > 0) {
       await git.deleteBranch(rootPath, candidate.branch);
     }
-    return true;
+    return "removed";
   } catch {
     // Best-effort: skip candidates that fail to remove (e.g. raced away).
     // A partial clean is still useful, and the safety checks above already
     // Ensure nothing unreviewed is touched.
-    return false;
+    return "failed";
   }
 };
 
@@ -151,78 +139,78 @@ const canDeletePrunableBranch = async (
   return false;
 };
 
-type CleanExecution =
-  | {
-      readonly ok: true;
-      readonly removed: string[];
-      readonly warnings: string[];
-    }
-  | { readonly ok: false; readonly rejection: CommandResult<CleanData> };
-
-const executeClean = async ({
+/**
+ * Removes each still-valid candidate, skipping (not failing) any that fail
+ * individually. Also skips (rather than removing) any candidate that still
+ * contains a registered worktree — same rule as commands/rm.ts's
+ * nestedWorktreeRejection: removing it would destroy the inner worktree's
+ * files too, so `hop clean`'s automatic deletion must refuse it just as
+ * `hop rm` would, --force-equivalent or not.
+ */
+const executeClean = ({
   git,
   fs,
   context,
   candidates,
   cleanOptions,
-}: ExecuteCleanOptions): Promise<CleanExecution> => {
-  const acquisition = await acquireRepoLockOrRejection<CleanData>(context.commonDir);
-  if (!acquisition.ok) {
-    return { ok: false, rejection: acquisition.rejection };
-  }
-  const { lock } = acquisition;
-  try {
-    // Re-validate under lock: a candidate may have gone dirty, or lost its
-    // Garbage status, since it was computed above.
-    const fresh = await loadRepoContext(git, fs, context.rootPath);
-    const freshCandidates = await buildCleanCandidates(git, fresh, cleanOptions.ext);
-    const freshByPath = new Map(freshCandidates.map((candidate) => [candidate.path, candidate]));
-    const stillValid = candidates.flatMap((candidate) => {
-      const freshCandidate = freshByPath.get(candidate.path);
-      return freshCandidate === undefined ? [] : [freshCandidate];
-    });
-    const defaultRef = await git.resolveDefaultBranchRef(fresh.rootPath);
+}: ExecuteCleanOptions): Promise<CommandResult<CleanData>> =>
+  withRepoLock<CleanData>(context.commonDir, async () => {
+    try {
+      // Re-validate under lock: a candidate may have gone dirty, or lost its
+      // Garbage status, since it was computed above.
+      const fresh = await loadRepoContext(git, fs, context.rootPath);
+      const freshCandidates = await buildCleanCandidates(git, fs, fresh, cleanOptions.ext);
+      const freshByPath = new Map(freshCandidates.map((candidate) => [candidate.path, candidate]));
+      const stillValid = candidates.flatMap((candidate) => {
+        const freshCandidate = freshByPath.get(candidate.path);
+        return freshCandidate === undefined ? [] : [freshCandidate];
+      });
+      const defaultRef = await git.resolveDefaultBranchRef(fresh.rootPath);
 
-    const removed: string[] = [];
-    const warnings: string[] = [];
-    for (const candidate of stillValid) {
-      // A prunable worktree has no directory to inspect, so prunable alone
-      // Does not establish that its branch is safe to delete.
-      // oxlint-disable-next-line no-await-in-loop
-      const branchSafe = await canDeletePrunableBranch(git, fresh.rootPath, candidate, defaultRef);
-      const deleteBranch = cleanOptions.withBranch && branchSafe;
-      if (
-        cleanOptions.withBranch &&
-        candidate.reason === "prunable" &&
-        candidate.branch.length > 0 &&
-        !branchSafe
-      ) {
-        warnings.push(
-          `Keeping branch "${candidate.branch}": prunable worktree is not confirmed merged or gone.`,
-        );
-      }
-      if (nestedWorktrees(fresh.worktrees, candidate.path).length > 0) {
-        warnings.push(`Skipped ${candidate.path}: still contains a registered worktree.`);
-      } else {
+      const removed: string[] = [];
+      const warnings: string[] = [];
+      for (const candidate of stillValid) {
+        // A prunable worktree has no directory to inspect, so prunable alone
+        // Does not establish that its branch is safe to delete.
         // oxlint-disable-next-line no-await-in-loop
-        const success = await removeCandidate({
+        const branchSafe = await canDeletePrunableBranch(
+          git,
+          fresh.rootPath,
+          candidate,
+          defaultRef,
+        );
+        const deleteBranch = cleanOptions.withBranch && branchSafe;
+        if (
+          cleanOptions.withBranch &&
+          candidate.reason === "prunable" &&
+          candidate.branch.length > 0 &&
+          !branchSafe
+        ) {
+          warnings.push(
+            `Keeping branch "${candidate.branch}": prunable worktree is not confirmed merged or gone.`,
+          );
+        }
+        // oxlint-disable-next-line no-await-in-loop
+        const outcome = await removeCandidate({
           git,
           rootPath: fresh.rootPath,
           candidate,
           deleteBranch,
           worktrees: fresh.worktrees,
         });
-        if (success) {
+        if (outcome === "removed") {
           removed.push(candidate.branch);
+        } else if (outcome === "nested") {
+          warnings.push(`Skipped ${candidate.path}: still contains a registered worktree.`);
         }
       }
+      return ok({
+        data: { candidates: [...candidates], removed },
+        ...(warnings.length === 0 ? {} : { warnings }),
+      });
+    } catch (error) {
+      throw new Error(`Failed to clean worktrees: ${messageOf(error)}`, {
+        cause: error,
+      });
     }
-    return { ok: true, removed, warnings };
-  } catch (error) {
-    throw new Error(`Failed to clean worktrees: ${(error as Error).message}`, {
-      cause: error,
-    });
-  } finally {
-    await lock.release();
-  }
-};
+  });

@@ -1,3 +1,4 @@
+import { messageOf } from "../domain/fatal-error.ts";
 import type { Worktree } from "../domain/model.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import {
@@ -9,21 +10,24 @@ import {
   ok,
 } from "../domain/result.ts";
 import type { RmData } from "../domain/schema.ts";
-import { acquireRepoLockOrRejection } from "../infra/lock.ts";
+import { withRepoLock } from "../infra/lock.ts";
 import {
   loadRepoContext,
   nestedWorktrees,
-  otherWorktreePaths,
   type RepoContext,
+  worktreeDirtyState,
 } from "../infra/repo.ts";
-
-export type { RmData } from "../domain/schema.ts";
 
 export interface RmOptions {
   readonly cwd: string;
   readonly branch: string;
   /** Picker-selected path. When present, never remove another worktree that happens to share the branch. */
   readonly expectedPath?: string;
+  /**
+   * False for picker actions that have not confirmed removing a prunable worktree.
+   * Undefined means allowed, which is what the CLI's `hop rm` uses.
+   */
+  readonly allowPrunable?: boolean;
   readonly force: boolean;
   readonly ext: boolean;
 }
@@ -36,6 +40,19 @@ const lockedRejection = <T>(branch: string, lockReason: string | null): CommandR
     EXIT_SAFE_REJECTION,
     `Worktree for "${branch}" is locked by git${lockReason === null ? "" : ` (${lockReason})`}. hop never unlocks worktrees automatically — run "git worktree unlock" yourself first if you're sure.`,
   );
+
+const turnedPrunableRejection = (branch: string): CommandResult<RmData> =>
+  fail(
+    EXIT_SAFE_REJECTION,
+    `The selected worktree for "${branch}" changed before removal (git now reports it prunable). Refresh the picker and retry.`,
+  );
+
+/**
+ * Prunable also covers a directory moved by hand without `git worktree move`;
+ * dropping the registration loses its index/link, so the user is told.
+ */
+const stalePrunableWarning = ({ path, prunableReason }: Worktree): string =>
+  `Worktree at ${path} no longer exists${prunableReason === null ? "" : ` (${prunableReason})`}; removed its stale registration — if it had been moved by hand, the moved copy is no longer linked to this repository.`;
 
 const resolveTarget = (
   worktrees: readonly Worktree[],
@@ -94,11 +111,16 @@ const nestedWorktreeRejection = <T>(
   );
 };
 
+interface RemovalCheck {
+  readonly git: GitPort;
+  readonly fs: FsPort;
+  readonly context: RepoContext;
+  readonly options: RmOptions;
+}
+
 const targetSafetyRejection = async (
-  git: GitPort,
-  context: RepoContext,
+  { git, fs, context, options }: RemovalCheck,
   target: Worktree,
-  options: RmOptions,
 ): Promise<CommandResult<RmData> | null> => {
   const nestedRejection = nestedWorktreeRejection<RmData>(
     options.branch,
@@ -111,10 +133,12 @@ const targetSafetyRejection = async (
   if (target.locked) {
     return lockedRejection(options.branch, target.lockReason);
   }
-  if (
-    !options.force &&
-    (await git.isDirty(target.path, otherWorktreePaths(context.worktrees, target.path)))
-  ) {
+  // A prunable target is never dirty-checked, so only a caller that confirmed it may remove one.
+  if (target.prunable && options.allowPrunable === false) {
+    return turnedPrunableRejection(options.branch);
+  }
+  // Only a definite "dirty" refuses: null (no working tree on disk) leaves removal to git.
+  if (!options.force && (await worktreeDirtyState(git, fs, context.worktrees, target)) === true) {
     return fail(
       EXIT_SAFE_REJECTION,
       `Worktree for "${options.branch}" has uncommitted or untracked changes. Use --force to remove anyway.`,
@@ -123,70 +147,78 @@ const targetSafetyRejection = async (
   return null;
 };
 
-export const rm = async (
+type RemovalValidation =
+  | { readonly ok: true; readonly target: Worktree }
+  | { readonly ok: false; readonly rejection: CommandResult<RmData> };
+
+const validateRemoval = async (check: RemovalCheck): Promise<RemovalValidation> => {
+  const { context, options } = check;
+  const resolved = resolveTarget(context.worktrees, options.branch, options.expectedPath);
+  if (resolved.rejection !== undefined) {
+    return { ok: false, rejection: resolved.rejection };
+  }
+  const { target } = resolved;
+  if (target === undefined) {
+    return {
+      ok: false,
+      rejection: fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`),
+    };
+  }
+  if (target.kind === "root") {
+    return { ok: false, rejection: fail(EXIT_USAGE_ERROR, "Cannot remove the root clone.") };
+  }
+  const rejection = await targetSafetyRejection(check, target);
+  return rejection === null ? { ok: true, target } : { ok: false, rejection };
+};
+
+/*
+ * --ext is a deprecated no-op kept for backward compatibility: it no longer
+ * gates anything, but every return path still surfaces the warning when it
+ * was passed, so callers can migrate off it.
+ */
+const withExtWarning = (ext: boolean, result: CommandResult<RmData>): CommandResult<RmData> =>
+  ext
+    ? {
+        ...result,
+        warnings: [...(result.warnings ?? []), EXT_DEPRECATION_WARNING],
+      }
+    : result;
+
+const removeWorktree = async (
   git: GitPort,
   fs: FsPort,
   options: RmOptions,
 ): Promise<CommandResult<RmData>> => {
-  // --ext is a deprecated no-op kept for backward compatibility: it no
-  // Longer gates anything, but every return path still surfaces the warning
-  // When it was passed, so callers can migrate off it.
-  const finish = <T>(result: CommandResult<T>): CommandResult<T> =>
-    options.ext
-      ? {
-          ...result,
-          warnings: [...(result.warnings ?? []), EXT_DEPRECATION_WARNING],
-        }
-      : result;
-
   const context = await loadRepoContext(git, fs, options.cwd);
-  const resolved = resolveTarget(context.worktrees, options.branch, options.expectedPath);
-  if (resolved.rejection !== undefined) {
-    return finish(resolved.rejection);
-  }
-  const { target } = resolved;
-
-  if (target === undefined) {
-    return finish(fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`));
+  const validation = await validateRemoval({ git, fs, context, options });
+  if (!validation.ok) {
+    return validation.rejection;
   }
 
-  if (target.kind === "root") {
-    return finish(fail(EXIT_USAGE_ERROR, "Cannot remove the root clone."));
-  }
+  return withRepoLock<RmData>(context.commonDir, async () => {
+    try {
+      // Re-validate under lock: the worktree may have changed since the check above.
+      const fresh = await loadRepoContext(git, fs, options.cwd);
+      const freshValidation = await validateRemoval({ git, fs, context: fresh, options });
+      if (!freshValidation.ok) {
+        return freshValidation.rejection;
+      }
+      const { target } = freshValidation;
 
-  const safetyRejection = await targetSafetyRejection(git, context, target, options);
-  if (safetyRejection !== null) {
-    return finish(safetyRejection);
-  }
-
-  const acquisition = await acquireRepoLockOrRejection<RmData>(context.commonDir);
-  if (!acquisition.ok) {
-    return finish(acquisition.rejection);
-  }
-  const { lock } = acquisition;
-  try {
-    // Re-validate under lock: the worktree may have changed since the check above.
-    const fresh = await loadRepoContext(git, fs, options.cwd);
-    const freshResolved = resolveTarget(fresh.worktrees, options.branch, options.expectedPath);
-    if (freshResolved.rejection !== undefined) {
-      return finish(freshResolved.rejection);
+      await git.removeWorktree(context.rootPath, target.path, options.force);
+      return ok({
+        data: { branch: options.branch, path: target.path },
+        ...(target.prunable ? { warnings: [stalePrunableWarning(target)] } : {}),
+      });
+    } catch (error) {
+      return fail(EXIT_SAFE_REJECTION, `Failed to remove worktree: ${messageOf(error)}`);
     }
-    const freshTarget = freshResolved.target;
-    if (freshTarget === undefined) {
-      return finish(fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`));
-    }
-    const freshSafetyRejection = await targetSafetyRejection(git, fresh, freshTarget, options);
-    if (freshSafetyRejection !== null) {
-      return finish(freshSafetyRejection);
-    }
-
-    await git.removeWorktree(context.rootPath, freshTarget.path, options.force);
-    return finish(ok({ data: { branch: options.branch, path: freshTarget.path } }));
-  } catch (error) {
-    return finish(
-      fail(EXIT_SAFE_REJECTION, `Failed to remove worktree: ${(error as Error).message}`),
-    );
-  } finally {
-    await lock.release();
-  }
+  });
 };
+
+export const rm = async (
+  git: GitPort,
+  fs: FsPort,
+  options: RmOptions,
+): Promise<CommandResult<RmData>> =>
+  withExtWarning(options.ext, await removeWorktree(git, fs, options));

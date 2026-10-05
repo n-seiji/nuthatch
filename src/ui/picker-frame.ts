@@ -1,12 +1,8 @@
 import { displayWidth, graphemes } from "../domain/display-width.ts";
-
-// Re-exported so picker.ts (already at its import-count budget) doesn't
-// Need a separate import source just for the query line's tail-preserving
-// Truncation -- see picker.ts's queryLine.
-export { truncateToWidthKeepingTail } from "../domain/display-width.ts";
+import { ESC } from "./ansi.ts";
 
 /**
- * Pure frame builder for the self-drawn picker (replaces ink's render tree).
+ * Pure frame builder for the self-drawn picker.
  * Turns a list of styled lines (the left column: query/rows/legend/footer,
  * and optionally a right column: the action/confirm panel) into one ANSI
  * string to write in a single `process.stderr.write` call per frame — see
@@ -21,7 +17,6 @@ export { truncateToWidthKeepingTail } from "../domain/display-width.ts";
  * line-level diffing.
  */
 
-const ESC = "";
 const CURSOR_HOME = `${ESC}[H`;
 const CLEAR_TO_END = `${ESC}[J`;
 const SGR_RESET = `${ESC}[0m`;
@@ -70,13 +65,13 @@ export interface FrameInput {
   readonly left: readonly StyledLine[];
   /** The side panel (action panel / confirm), or null when not shown. */
   readonly right: readonly StyledLine[] | null;
-  /** True when the panel must stack below the list instead of beside it (see picker-layout.ts's isNarrowTerminal). Ignored when `right` is null. */
+  /** True when the panel must stack below the list instead of beside it (see picker-side-by-side.ts's isNarrowTerminal). Ignored when `right` is null. */
   readonly stacked: boolean;
   /** False disables all SGR output — NO_COLOR, a non-TTY stderr, or a terminal that reports no color support. Selection is still shown via the "❯ "/"  " marker regardless. */
   readonly colorEnabled: boolean;
 }
 
-/** The horizontal gap between the list column and the side panel in the non-stacked layout — exported so picker.ts can factor it into the minimum width needed for side-by-side (see picker-layout.ts's dynamic narrow-terminal threshold). */
+/** The horizontal gap between the list column and the side panel in the non-stacked layout — exported so picker-side-by-side.ts and picker-render.ts can factor it into the widths they compute (see picker-side-by-side.ts's MIN_SIDE_BY_SIDE_WIDTH). */
 export const GUTTER = "  ";
 
 const buildSideBySide = (
@@ -168,12 +163,12 @@ const wrapLineToWidth = (line: StyledLine, width: number): StyledLine[] => {
 
 /**
  * Wraps `content` in a round-cornered border, `width` display columns wide
- * -- replaces ink's `borderStyle="round"` box for the action/confirm side
- * panel. A content line wider than the inner width wraps onto additional
- * rows (display-width based, grapheme-safe) rather than being clipped --
- * losing the tail of a branch name or the "?" off a confirm prompt left the
- * user unable to tell what they were about to delete (astra/Fable-reported
- * regression from the ink version, which wrapped the same way).
+ * -- the box around the action/confirm side panel. A content line wider
+ * than the inner width wraps onto additional rows (display-width based,
+ * grapheme-safe) rather than being clipped -- losing the tail of a branch
+ * name or the "?" off a confirm prompt left the user unable to tell what
+ * they were about to delete (astra/Fable-reported regression from the
+ * previous renderer, which wrapped the same way).
  */
 export const wrapInBox = (content: readonly StyledLine[], width: number): StyledLine[] => {
   const innerWidth = Math.max(0, width - BOX_BORDER_WIDTH - BOX_PADDING_TOTAL);
@@ -197,14 +192,14 @@ const ELLIPSIS = "…";
 /**
  * Truncates one line to at most `width` display columns, replacing any cut
  * content with an ellipsis -- never splitting a grapheme cluster.
- * Exported as a last-resort safety net picker.ts applies to every rendered
- * line: the row/footer builders already try to fit content within the
- * known terminal width (picker-layout.ts's candidateRowPathMaxLength/
- * candidateRowBranchWidth, picker-side-by-side.ts's footerHintForWidth),
- * but this guarantees no line can ever exceed the terminal's actual width
- * regardless of what produced it (astra/Fable-reported: an overflowing
- * line gets wrapped by the terminal itself, which throws off
- * picker-viewport.ts's rowBudget estimate and can scroll the screen).
+ * Exported as a last-resort safety net picker-render.ts applies to every
+ * rendered line: the row/footer builders already try to fit content within
+ * the known terminal width (picker-side-by-side.ts's
+ * constrainRowColumnWidths and footerHintForWidth), but this guarantees no
+ * line can ever exceed the terminal's actual width regardless of what
+ * produced it (astra/Fable-reported: an overflowing line gets wrapped by
+ * the terminal itself, which throws off picker-viewport.ts's rowBudget
+ * estimate and can scroll the screen).
  */
 export const truncateLineToWidth = (line: StyledLine, width: number): StyledLine => {
   if (lineWidth(line) <= width) {

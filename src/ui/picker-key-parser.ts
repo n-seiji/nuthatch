@@ -4,13 +4,12 @@ import { BRACKETED_PASTE_END, parseCsi, parseSs3 } from "./picker-key-csi.ts";
 export type { PickerKeyEvent } from "./picker-key-event.ts";
 
 /**
- * Converts raw stdin bytes (as read in raw mode, without ink) into the same
- * `{input, key}` shape `resolvePickerKeyAction`/`resolvePanelKeyAction`/
- * `resolveConfirmKeyAction` already expect. Ink used to own this translation
- * (via a bundled fork of the `keypress` module); this is a from-scratch
- * replacement kept deliberately narrow — it only recognizes the sequences
- * the picker's key resolvers actually branch on (see picker-keys.ts's module
- * comment for the exact byte-level contract Ctrl+J/Ctrl+H rely on).
+ * Converts raw stdin bytes (as read in raw mode) into the `{input, key}`
+ * shape `resolvePickerKeyAction`/`resolvePanelKeyAction`/
+ * `resolveConfirmKeyAction` expect. Kept deliberately narrow — it only
+ * recognizes the sequences the picker's key resolvers actually branch on
+ * (see picker-keys.ts's module comment for the exact byte-level contract
+ * Ctrl+J/Ctrl+H rely on).
  *
  * Chunk boundaries are not key boundaries: a single `read()`/`data` event can
  * split a UTF-8 codepoint, split an escape sequence across two chunks, or
@@ -35,7 +34,7 @@ const TAB = 0x09;
 const LF = 0x0a;
 const CR = 0x0d;
 
-/** Ctrl+<letter> byte range, 0x01-0x1A, mapped back to the lowercase letter. Excludes the bytes ink/terminals special-case as their own named keys (Tab, LF, CR, Backspace) — those are handled before this range is consulted. */
+/** Ctrl+<letter> byte range, 0x01-0x1A, mapped back to the lowercase letter. Excludes the bytes terminals treat as their own named keys (Tab, LF, CR, Backspace) — those are handled before this range is consulted. */
 const CTRL_LETTER_START = 0x01;
 const CTRL_LETTER_END = 0x1a;
 const CTRL_LETTER_OFFSET = "a".codePointAt(0) as number;
@@ -114,6 +113,11 @@ const SS3_INTRODUCER_CODE = "O".codePointAt(0) as number;
 /** Ceiling on how many buffered bytes an incomplete CSI/SS3 sequence may reach before it's discarded outright. Real sequences (arrow keys, modified arrows, delete, bracketed-paste markers) are all well under this; a buffer growing past it means we're not actually looking at a real sequence (e.g. framing got out of sync), so holding it forever waiting for a final byte that will never come would leave the parser stuck. */
 const MAX_PENDING_SEQUENCE_BYTES = 32;
 
+const PASTE_END_MARKER = Buffer.concat([
+  Buffer.from([ESC]),
+  Buffer.from(`[${BRACKETED_PASTE_END}`),
+]);
+
 /**
  * Byte-level stdin parser feeding the picker's key resolvers. Not
  * thread-safe/re-entrant — one instance per picker session, fed serially
@@ -160,20 +164,19 @@ export class PickerKeyParser {
     if (this.buffer.length === 0) {
       return null;
     }
-    const endMarker = Buffer.concat([Buffer.from([ESC]), Buffer.from(`[${BRACKETED_PASTE_END}`)]);
-    const markerIndex = this.buffer.indexOf(endMarker);
+    const markerIndex = this.buffer.indexOf(PASTE_END_MARKER);
     if (markerIndex !== -1) {
       const text = decodeUtf8(this.buffer.subarray(0, markerIndex));
-      this.buffer = this.buffer.subarray(markerIndex + endMarker.length);
+      this.buffer = this.buffer.subarray(markerIndex + PASTE_END_MARKER.length);
       this.inPaste = false;
       return pastedTextToEvents(text);
     }
 
-    const maxOverlap = Math.min(endMarker.length - 1, this.buffer.length);
+    const maxOverlap = Math.min(PASTE_END_MARKER.length - 1, this.buffer.length);
     let overlap = 0;
     for (let candidate = maxOverlap; candidate > 0; candidate -= 1) {
       const tail = this.buffer.subarray(this.buffer.length - candidate);
-      if (tail.equals(endMarker.subarray(0, candidate))) {
+      if (tail.equals(PASTE_END_MARKER.subarray(0, candidate))) {
         overlap = candidate;
         break;
       }

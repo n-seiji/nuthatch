@@ -48,7 +48,7 @@ describe("clean (integration)", () => {
     await repo.git(["checkout", "main"]);
     await repo.git(["merge", "feat/merged"]);
 
-    const created = await jump(git, fs, term, {
+    const created = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/merged",
       create: true,
@@ -91,7 +91,7 @@ describe("clean (integration)", () => {
     await repo.git(["checkout", "main"]);
     await repo.git(["merge", "feat/merged"]);
 
-    const created = await jump(git, fs, term, {
+    const created = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/merged",
       create: true,
@@ -117,13 +117,12 @@ describe("clean (integration)", () => {
     await repo.git(["checkout", "main"]);
     await repo.git(["merge", "feat/dirty-merged"]);
 
-    const created = await jump(git, fs, term, {
+    const created = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/dirty-merged",
       create: true,
     });
     expect(created.ok).toBe(true);
-    await fs.exists(created.path ?? "");
     const { writeFile } = await import("node:fs/promises");
     await writeFile(join(created.path ?? "", "dirty.txt"), "uncommitted");
 
@@ -146,7 +145,7 @@ describe("clean (integration)", () => {
       await repo.git(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
 
       await repo.git(["branch", "feat/gone"]);
-      const created = await jump(git, fs, term, {
+      const created = await jump(git, fs, {
         cwd: repo.repoPath,
         target: "feat/gone",
         create: true,
@@ -195,7 +194,7 @@ describe("clean (integration)", () => {
 
   it("prunable な worktree (ディレクトリが手動で消えた) を無条件で候補にする", async () => {
     await repo.git(["branch", "feat/prunable"]);
-    const created = await jump(git, fs, term, {
+    const created = await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/prunable",
       create: true,
@@ -219,7 +218,7 @@ describe("clean (integration)", () => {
     await repo.git(["checkout", "-b", "feat/merged"]);
     await repo.git(["checkout", "main"]);
     await repo.git(["merge", "feat/merged"]);
-    await jump(git, fs, term, {
+    await jump(git, fs, {
       cwd: repo.repoPath,
       target: "feat/merged",
       create: true,
