@@ -4,6 +4,8 @@ import {
   dispatchCliArgs,
   isHelpRequest,
   isRunningAsCompiledBinary,
+  isUpdateRequest,
+  isVersionRequest,
   normalizeCliArgs,
 } from "./cli-dispatch.ts";
 import { reportFatalError, wantsJson } from "./cli-fatal.ts";
@@ -15,6 +17,7 @@ import {
   runInteractivePicker,
   type SwitchRootOutcome,
 } from "./cli-pick.ts";
+import { runUpdate } from "./cli-update.ts";
 import { clean } from "./commands/clean.ts";
 import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
@@ -27,6 +30,7 @@ import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
 import { render, reportResult } from "./render.ts";
 import { USAGE } from "./usage.ts";
+import { VERSION } from "./version.ts";
 
 const git = createGitPort();
 const fs = createFsPort();
@@ -254,6 +258,17 @@ const main = async (): Promise<void> => {
   if (isHelpRequest(rawArgs)) {
     process.stderr.write(USAGE);
     process.exitCode = 0;
+    return;
+  }
+
+  // Both are flags (not reserved words), recognised only as the first token.
+  if (isVersionRequest(rawArgs)) {
+    process.stdout.write(`${VERSION}\n`);
+    process.exitCode = EXIT_SUCCESS;
+    return;
+  }
+  if (isUpdateRequest(rawArgs)) {
+    await runUpdate(rawArgs, term);
     return;
   }
 

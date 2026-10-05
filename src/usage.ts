@@ -14,6 +14,10 @@ export const USAGE = `Usage: hop [command] [options]
   hop root -             Switch the root clone back
   hop init zsh           Print the zsh shell integration (eval "$(hop init zsh)")
 
+  hop --update           Update hop to the latest release, the way it was installed
+  hop --update --check   Only report whether an update is available; change nothing
+  hop --version          Print hop's version
+
 Interactive picker keys:
   Enter                  cd into the selected candidate
   Tab, →, Ctrl+L, Ctrl+F Open the action panel, as a column beside the list

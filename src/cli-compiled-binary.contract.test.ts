@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import packageJson from "../package.json" with { type: "json" };
 import { createTestRepo, type TestRepo } from "./testing/repo.ts";
 
 const execFile = promisify(execFileCb);
@@ -81,5 +82,18 @@ describe("コンパイル済みバイナリでの git 解決", () => {
 
     expect(stderr).not.toContain("git executable not found");
     expect(JSON.parse(stdout)).toMatchObject({ command: "ls" });
+  });
+});
+
+describe("コンパイル済みバイナリでの `hop --version`", () => {
+  it("バイナリに埋め込まれた package.json の version を出す", async () => {
+    // バイナリは package.json の無い場所へ置かれうる。import した JSON が
+    // コンパイル時に埋め込まれていることを確かめる。
+    const { stdout } = await execFile(binaryPath, ["--version"], {
+      cwd: repo.repoPath,
+      env: repo.env,
+    });
+
+    expect(stdout).toBe(`${packageJson.version}\n`);
   });
 });

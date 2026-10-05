@@ -46,6 +46,17 @@ const HELP_FLAGS: ReadonlySet<string> = new Set(["--help", "-h", "help"]);
 export const isHelpRequest = (rawArgs: readonly string[]): boolean =>
   rawArgs.length > 0 && HELP_FLAGS.has(rawArgs[0] ?? "");
 
+/**
+ * Detects `hop --update`. A flag, not a reserved word: git branch names
+ * cannot start with `-`, so it never collides with a branch. Like help, only
+ * the first raw token counts, so `hop -- --update` stays an escaped jump and
+ * everything after `--update` is left for its own argument parsing.
+ */
+export const isUpdateRequest = (rawArgs: readonly string[]): boolean => rawArgs[0] === "--update";
+
+/** Detects `hop --version`, by the same first-token rule as `--update`. */
+export const isVersionRequest = (rawArgs: readonly string[]): boolean => rawArgs[0] === "--version";
+
 /** Routes reserved subcommands while letting every other token be a branch. */
 export const dispatchCliArgs = (
   rawArgs: readonly string[],
