@@ -128,9 +128,6 @@ eval "$(hop init zsh)"
 
 ## Install
 
-> Not released yet — no version has been published or tagged. Once the first
-> `v*` tag ships, the options below will work as described.
-
 Recommended: the GitHub Release binary (built with bun; via mise,
 `mise use github:n-seiji/nuthatch`). The npm version runs on Node, so its git
 calls are slower (hop ls ~400ms vs ~60ms) — prefer the binary for CI or
