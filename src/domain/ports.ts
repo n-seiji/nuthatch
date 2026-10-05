@@ -3,6 +3,8 @@
  * Concrete implementations live in infra/ and are injected by commands.
  */
 
+import type { CommandArgv, InstallFacts } from "./install-method.ts";
+
 export interface GitPort {
   /** Runs `git worktree list --porcelain -z` and returns raw stdout. */
   listWorktreesPorcelain: (cwd: string) => Promise<string>;
@@ -76,4 +78,39 @@ export interface TermPort {
   logStderr: (message: string) => void;
   /** Prompts on stderr/stdin and resolves to whether the user confirmed. Only call when isTTY(). */
   confirm: (message: string) => Promise<boolean>;
+}
+
+/**
+ * Everything `hop --update` needs from outside the process: the network, the
+ * binary on disk, and package managers. Every network address is fixed (see
+ * domain/self-update.ts), and every method may reject — the command turns a
+ * rejection into a failed result.
+ */
+export interface SelfUpdatePort {
+  /** How this hop process was installed (see domain/install-method.ts). */
+  installFacts: () => Promise<InstallFacts>;
+  /** Version of the latest GitHub release: the tag without its leading `v`. */
+  latestGithubVersion: () => Promise<string>;
+  /** Version npm's `latest` dist-tag points at (the one `npm i -g` would get). */
+  latestNpmVersion: () => Promise<string>;
+  /** Bytes of release asset `assetName` of tag `v<version>`. */
+  downloadReleaseAsset: (version: string, assetName: string) => Promise<Uint8Array>;
+  /** Text of a small release asset of tag `v<version>`, e.g. a `.sha256` file. */
+  downloadReleaseText: (version: string, assetName: string) => Promise<string>;
+  /** Lowercase hex SHA-256 of `bytes`. */
+  sha256Hex: (bytes: Uint8Array) => string;
+  /**
+   * Atomically replaces the executable at `path` (through a symlink, the
+   * link's target) with `bytes`, mode 0755. Rejects with the underlying fs
+   * error (e.g. `code: "EACCES"`) when it cannot, leaving nothing behind.
+   */
+  replaceExecutable: (path: string, bytes: Uint8Array) => Promise<void>;
+  /** Absolute path of `name` on PATH (absolute PATH entries only), or null if it is not there. */
+  resolveExecutable: (name: string) => Promise<string | null>;
+  /**
+   * Runs `argv` (a program by absolute path, then its arguments) with stdin
+   * inherited and both of the child's output streams sent to hop's stderr,
+   * and resolves to its exit code. Rejects if the process cannot be started.
+   */
+  runCommand: (argv: CommandArgv) => Promise<number>;
 }

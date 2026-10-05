@@ -144,3 +144,28 @@ export type CleanEnvelope = InferOutput<typeof CleanEnvelopeSchema>;
 
 export const PickEnvelopeSchema = jsonEnvelopeSchema(PickDataSchema);
 export type PickEnvelope = InferOutput<typeof PickEnvelopeSchema>;
+
+const UpdateCommandSchema = array(string());
+
+/**
+ * `hop --update` data shape. `updateAvailable` is `latest > current`.
+ * `action` is what hop itself did: `none` (already up to date, or `--check`),
+ * `replaced` (the standalone binary was swapped), or `delegated` (the package
+ * manager's own upgrade command ran and exited 0). For `delegated`, hop only
+ * knows the command succeeded — the package manager may still decide not to
+ * move (e.g. a mise config pinned to a version). `command` is the package
+ * manager argv that ran (`delegated`) or that would run (`--check` with an
+ * update available on mise/npm/bun); otherwise null, always for standalone.
+ */
+export const UpdateDataSchema = object({
+  current: string(),
+  latest: string(),
+  updateAvailable: boolean(),
+  method: picklist(["standalone", "mise", "npm", "bun"]),
+  action: picklist(["none", "replaced", "delegated"]),
+  command: nullable(UpdateCommandSchema),
+});
+export type UpdateData = InferOutput<typeof UpdateDataSchema>;
+
+export const UpdateEnvelopeSchema = jsonEnvelopeSchema(UpdateDataSchema);
+export type UpdateEnvelope = InferOutput<typeof UpdateEnvelopeSchema>;

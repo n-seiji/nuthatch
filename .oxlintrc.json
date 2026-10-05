@@ -118,6 +118,7 @@
                   "./pick.ts",
                   "./root.ts",
                   "./clean.ts",
+                  "./self-update.ts",
                   "../ui/**",
                   "../cli.ts",
                   "../render.ts",
