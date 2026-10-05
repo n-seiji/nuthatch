@@ -60,6 +60,7 @@ describe("readInstallFacts: mise が入れた hop", () => {
       executablePath: join(githubToolDir(), "0.1.4", "hop"),
       scriptPath: null,
       mise: { dir: githubToolDir(), backend: "github:n-seiji/nuthatch" },
+      npmGlobalPrefix: null,
       platform: "darwin",
       arch: "arm64",
     });
@@ -91,6 +92,21 @@ describe("readInstallFacts: mise が入れた hop", () => {
       kind: "mise",
       tool: "npm:@n-seiji/nuthatch",
       channel: "npm",
+    });
+  });
+
+  it("マーカーの full に [bin=hop] のようなオプションが付いている場合、オプションを除いた id の mise と判定する", async () => {
+    await touch(
+      join(githubToolDir(), ".mise.backend.toml"),
+      'short = "github:n-seiji/nuthatch[bin=hop]"\nfull = "github:n-seiji/nuthatch[bin=hop]"\n',
+    );
+
+    const method = await methodOf(installSourceOf({ compiled: true, execPath: latestHop() }));
+
+    expect(method).toEqual({
+      kind: "mise",
+      tool: "github:n-seiji/nuthatch",
+      channel: "github",
     });
   });
 

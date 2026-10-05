@@ -63,12 +63,50 @@ describe("resolveExecutable", () => {
     expect(await resolveExecutable("bun", join(sandbox, "empty"))).toBeNull();
     expect(await resolveExecutable("bun")).toBeNull();
   });
+
+  it("優先ディレクトリに実行可能ファイルがある場合、PATH 上に同名があってもそちらを返す", async () => {
+    const preferred = await makeProgram("prefix/bin", "npm", EXECUTABLE_MODE);
+    await makeProgram("path", "npm", EXECUTABLE_MODE);
+
+    const resolved = await resolveExecutable(
+      "npm",
+      join(sandbox, "path"),
+      join(sandbox, "prefix/bin"),
+    );
+
+    expect(resolved).toBe(preferred);
+  });
+
+  it("優先ディレクトリに無い・実行権が無い場合は、PATH から探す", async () => {
+    await makeProgram("prefix/bin", "npm", NON_EXECUTABLE_MODE);
+    const onPath = await makeProgram("path", "npm", EXECUTABLE_MODE);
+
+    expect(await resolveExecutable("npm", join(sandbox, "path"), join(sandbox, "prefix/bin"))).toBe(
+      onPath,
+    );
+    expect(await resolveExecutable("npm", join(sandbox, "path"), join(sandbox, "nowhere"))).toBe(
+      onPath,
+    );
+  });
+
+  it("優先ディレクトリだけにある場合、PATH が空でも見つかる", async () => {
+    const preferred = await makeProgram("prefix/bin", "npm", EXECUTABLE_MODE);
+
+    expect(await resolveExecutable("npm", "", join(sandbox, "prefix/bin"))).toBe(preferred);
+  });
 });
 
 describe("runCommand", () => {
   it("終了コードをそのまま返す", async () => {
     expect(await runCommand(["/bin/sh", "-c", "exit 0"])).toBe(0);
     expect(await runCommand(["/bin/sh", "-c", "exit 3"])).toBe(3);
+  });
+
+  it("シグナルで終了した場合、プログラム名とシグナル名を含むエラーで reject する (終了コード 1 扱いにしない)", async () => {
+    await expect(runCommand(["/bin/sh", "-c", "kill -TERM $$"])).rejects.toThrow(
+      "sh was killed by signal SIGTERM",
+    );
+    await expect(runCommand(["/bin/sh", "-c", "kill -KILL $$"])).rejects.toThrow("SIGKILL");
   });
 
   it("起動できないプログラムの場合、reject する", async () => {

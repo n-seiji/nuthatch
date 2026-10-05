@@ -4,6 +4,7 @@ import {
   type InstallFacts,
   detectInstallMethod,
   latestChannel,
+  preferredProgramDir,
   releaseAssetName,
   upgradeCommand,
 } from "./install-method.ts";
@@ -84,6 +85,37 @@ describe("detectInstallMethod: mise が hop を入れた場合", () => {
     expect(reason).toContain("mise upgrade asdf:n-seiji/nuthatch");
   });
 
+  it("マーカーの backend に [bin=hop] のようなオプションが付いていても、オプションを除いた id で mise になる (mise upgrade にも渡さない)", () => {
+    for (const [backend, tool, channel] of [
+      ["github:n-seiji/nuthatch[bin=hop]", "github:n-seiji/nuthatch", "github"],
+      ["npm:@n-seiji/nuthatch[a=b]", "npm:@n-seiji/nuthatch", "npm"],
+    ] as const) {
+      const method = detectInstallMethod(
+        installFactsOf({
+          compiled: true,
+          executablePath: "/m/hop",
+          mise: miseDir("github-n-seiji-nuthatch", backend),
+        }),
+      );
+
+      expect(method).toEqual({ kind: "mise", tool, channel });
+      if (method.kind === "mise") {
+        expect(upgradeCommand(method)).toEqual(["mise", "upgrade", tool]);
+      }
+    }
+  });
+
+  it("hop を指すが GitHub / npm 以外のバックエンドにオプションが付いている場合も、案内するコマンドにはオプションを含めない", () => {
+    const reason = reasonOf(
+      installFactsOf({
+        mise: miseDir("asdf-n-seiji-nuthatch", "asdf:n-seiji/nuthatch[x=y]"),
+      }),
+    );
+
+    expect(reason).toContain('"mise upgrade asdf:n-seiji/nuthatch"');
+    expect(reason).not.toContain("[x=y]");
+  });
+
   it("コンパイル済みでも mise 配下なら standalone ではなく mise になる", () => {
     const method = detectInstallMethod(
       installFactsOf({
@@ -130,6 +162,32 @@ describe("detectInstallMethod: standalone", () => {
   it("コンパイル済みなのにバイナリの場所が分からない場合、unsupported になる", () => {
     expect(detectInstallMethod(installFactsOf({ compiled: true })).kind).toBe("unsupported");
   });
+
+  it("パッケージ管理ツールの置き場 (Homebrew / Nix / aqua / proto) 配下のバイナリの場合、standalone にせず、そのツールを案内する unsupported になる", () => {
+    for (const [path, manager] of [
+      ["/opt/homebrew/Cellar/nuthatch/0.1.5/bin/hop", "Homebrew"],
+      ["/nix/store/abc123-nuthatch-0.1.5/bin/hop", "Nix"],
+      ["/home/u/.local/share/aquaproj-aqua/pkgs/github_release/hop", "aqua"],
+      ["/home/u/.proto/tools/hop/0.1.5/hop", "proto"],
+    ] as const) {
+      const reason = reasonOf(installFactsOf({ compiled: true, executablePath: path }));
+
+      expect(reason).toContain(manager);
+      expect(reason).toContain(path);
+    }
+  });
+
+  it("管理ツールの置き場でも、script (npm の global など) は影響を受けない", () => {
+    const method = detectInstallMethod(
+      installFactsOf({
+        scriptPath:
+          "/opt/homebrew/Cellar/node/22.0.0/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
+        npmGlobalPrefix: "/opt/homebrew/Cellar/node/22.0.0",
+      }),
+    );
+
+    expect(method.kind).toBe("npm");
+  });
 });
 
 describe("releaseAssetName", () => {
@@ -156,11 +214,13 @@ describe("upgradeCommand", () => {
     ).toEqual(["mise", "upgrade", "github:n-seiji/nuthatch"]);
   });
 
-  it("npm の場合、npm install -g <package>@latest を返す", () => {
-    expect(upgradeCommand({ kind: "npm" })).toEqual([
+  it("npm の場合、hop が入っている prefix を --prefix で指定した npm install -g を返す", () => {
+    expect(upgradeCommand({ kind: "npm", prefix: "/opt/homebrew" })).toEqual([
       "npm",
       "install",
       "-g",
+      "--prefix",
+      "/opt/homebrew",
       "@n-seiji/nuthatch@latest",
     ]);
   });
@@ -185,9 +245,22 @@ describe("latestChannel", () => {
         assetName: "a",
       }),
     ).toBe("github");
-    expect(latestChannel({ kind: "npm" })).toBe("npm");
+    expect(latestChannel({ kind: "npm", prefix: "/usr/local" })).toBe("npm");
     expect(latestChannel({ kind: "bun" })).toBe("npm");
     expect(latestChannel({ kind: "mise", tool: "npm:x", channel: "npm" })).toBe("npm");
     expect(latestChannel({ kind: "mise", tool: "github:x/y", channel: "github" })).toBe("github");
+  });
+});
+
+describe("preferredProgramDir", () => {
+  it("npm の場合、hop が入っている prefix の bin を返す (その prefix の npm で更新するため)", () => {
+    expect(preferredProgramDir({ kind: "npm", prefix: "/opt/homebrew" })).toBe("/opt/homebrew/bin");
+  });
+
+  it("mise / bun の場合、null を返す (PATH だけで探す)", () => {
+    expect(
+      preferredProgramDir({ kind: "mise", tool: "github:n-seiji/nuthatch", channel: "github" }),
+    ).toBeNull();
+    expect(preferredProgramDir({ kind: "bun" })).toBeNull();
   });
 });

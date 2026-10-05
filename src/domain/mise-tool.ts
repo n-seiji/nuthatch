@@ -62,6 +62,12 @@ export const parseLegacyMiseBackend = (text: string): string | null => {
   return lines.at(-1) ?? null;
 };
 
+/**
+ * A tool id may carry options after it in mise (`github:n-seiji/nuthatch[bin=hop]`);
+ * they say how to install the tool, not which tool it is.
+ */
+export const withoutToolOptions = (backend: string): string => backend.replace(/\[[^\]]*\]$/u, "");
+
 /** True when `backend` (a marker's `full`) names hop rather than some other tool. */
 export const isHopBackend = (backend: string): boolean => HOP_BACKEND_PATTERN.test(backend);
 

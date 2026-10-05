@@ -20,6 +20,16 @@ interface RecordedRequest {
 
 const jsonResponse = (body: unknown, status = 200): Response => Response.json(body, { status });
 
+/** The message of the error `promise` rejects with, for tests that pin it exactly. */
+const rejectionMessage = async (promise: Promise<unknown>): Promise<string> => {
+  try {
+    await promise;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  return "did not reject";
+};
+
 const withUrl = (response: Response, url: string): Response => {
   Object.defineProperty(response, "url", { value: url });
   return response;
@@ -90,6 +100,40 @@ describe("リクエストの失敗", () => {
     await expect(http.latestGithubVersion()).rejects.toThrow(
       `GET ${GITHUB_LATEST_RELEASE_URL} failed: HTTP 403`,
     );
+  });
+
+  it("GitHub API が 403 / 429 で残りの呼び出し回数が 0 の場合、認証なしのレート制限に達したことと、時間を置いて再試行することを伝える", async () => {
+    for (const status of [403, 429]) {
+      const { http } = httpWith(
+        () => new Response("rate limited", { status, headers: { "x-ratelimit-remaining": "0" } }),
+      );
+
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(http.latestGithubVersion()).rejects.toThrow(
+        `GET ${GITHUB_LATEST_RELEASE_URL} failed: HTTP ${status} (the unauthenticated GitHub API rate limit was hit; try again later)`,
+      );
+    }
+  });
+
+  it("403 でもレート制限のヘッダーが無い・残りが 0 でない場合は、レート制限とは言わない", async () => {
+    for (const headers of [{}, { "x-ratelimit-remaining": "12" }]) {
+      const { http } = httpWith(() => new Response("forbidden", { status: 403, headers }));
+
+      // oxlint-disable-next-line no-await-in-loop
+      const message = await rejectionMessage(http.latestGithubVersion());
+
+      expect(message).toBe(`GET ${GITHUB_LATEST_RELEASE_URL} failed: HTTP 403`);
+    }
+  });
+
+  it("GitHub API 以外 (npm レジストリ) の 429 は、同じヘッダーがあってもレート制限の案内を付けない", async () => {
+    const { http } = httpWith(
+      () => new Response("slow down", { status: 429, headers: { "x-ratelimit-remaining": "0" } }),
+    );
+
+    const message = await rejectionMessage(http.latestNpmVersion());
+
+    expect(message).toBe(`GET ${NPM_LATEST_URL} failed: HTTP 429`);
   });
 
   it("接続に失敗した場合、URL と原因を含むエラーにする", async () => {

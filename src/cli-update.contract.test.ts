@@ -83,6 +83,23 @@ describe("hop --update (このソースチェックアウトから)", () => {
   });
 });
 
+describe("hop --update --help", () => {
+  it("--help / -h は更新も確認もせず、hop --help と同じ usage を stderr に出して exit 0 になる", async () => {
+    const plain = await hop(["--help"]);
+
+    for (const args of [
+      ["--update", "--help"],
+      ["--update", "-h"],
+      ["--update", "--check", "--json", "--help"],
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop
+      const result = await hop(args);
+
+      expect(result).toEqual({ exitCode: EXIT_SUCCESS, stdout: "", stderr: plain.stderr });
+    }
+  });
+});
+
 describe("hop --help", () => {
   it("usage に --update / --check / --version が載る", async () => {
     const result = await hop(["--help"]);

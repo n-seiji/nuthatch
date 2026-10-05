@@ -5,7 +5,10 @@
  * URL it was handed. How the install method is decided lives in
  * install-method.ts.
  */
-import { NPM_PACKAGE } from "./install-method.ts";
+
+/** The npm package name hop is published under. */
+export const NPM_PACKAGE = "@n-seiji/nuthatch";
+export const NPM_PACKAGE_LATEST = `${NPM_PACKAGE}@latest`;
 
 const GITHUB_REPO = "n-seiji/nuthatch";
 
@@ -61,32 +64,59 @@ export const versionFromTag = (tag: string): string => {
   return version;
 };
 
+/** What a release's `.sha256` file says: the digest to expect, or why it cannot be trusted. */
+export type ChecksumFile =
+  | { readonly ok: true; readonly digest: string }
+  | { readonly ok: false; readonly reason: string };
+
 /**
- * The expected digest out of a release's `.sha256` file. The workflow writes
- * `sha256sum` output (`<hex>  out/hop-linux-x64\n`), so only the first
- * whitespace-separated token counts. Null when it is not a 64-digit hex
- * string, which callers treat as "cannot verify" rather than "no checksum".
+ * The expected digest out of the `.sha256` file for `assetName`. The workflow
+ * writes `sha256sum` output (`<hex>  out/hop-linux-x64\n`), so only the first
+ * two whitespace-separated tokens count: the digest, then the file it is for
+ * (a leading `*` is sha256sum's binary-mode marker). When a file is named it
+ * must be this asset, since a digest of some other file proves nothing about
+ * this one; a bare digest is accepted. Anything else is "cannot verify", not
+ * "no checksum".
  */
-export const parseChecksumFile = (text: string): string | null => {
-  const [first] = text.trim().split(/\s+/u);
-  return first !== undefined && SHA256_HEX_PATTERN.test(first) ? first.toLowerCase() : null;
+export const parseChecksumFile = (text: string, assetName: string): ChecksumFile => {
+  const [digest, file] = text.trim().split(/\s+/u);
+  if (digest === undefined || !SHA256_HEX_PATTERN.test(digest)) {
+    return { ok: false, reason: "is malformed" };
+  }
+  const named = file?.replace(/^\*/u, "");
+  if (named !== undefined && named !== assetName && !named.endsWith(`/${assetName}`)) {
+    return { ok: false, reason: `is for "${named}", not ${assetName}` };
+  }
+  return { ok: true, digest: digest.toLowerCase() };
 };
 
 /**
- * Absolute candidate paths for `name`, in PATH order. A relative PATH entry
- * is dropped rather than resolved against the cwd, for the same reason as
- * git's (git-executable.ts): hop must never run a program out of whatever
+ * Absolute candidate paths for `name`: `preferredDir` first when there is
+ * one, then the PATH entries in order. A relative entry is dropped rather
+ * than resolved against the cwd, for the same reason as git's
+ * (git-executable.ts): hop must never run a program out of whatever
  * directory it happens to be started in. No fallback directories here — an
- * upgrade command that is not on PATH is reported, not guessed.
+ * upgrade command that is not found is reported, not guessed.
  */
-export const pathExecutableCandidates = (name: string, pathEnv?: string): readonly string[] => {
-  const dirs = (pathEnv ?? "")
-    .split(PATH_SEPARATOR)
+export const pathExecutableCandidates = (
+  name: string,
+  pathEnv?: string,
+  preferredDir: string | null = null,
+): readonly string[] => {
+  const dirs = [
+    ...(preferredDir === null ? [] : [preferredDir]),
+    ...(pathEnv ?? "").split(PATH_SEPARATOR),
+  ]
     .map((entry) => entry.trim())
     .filter((entry) => entry.startsWith("/"));
   return [...new Set(dirs.map((dir) => `${dir.endsWith("/") ? dir.slice(0, -1) : dir}/${name}`))];
 };
 
-/** An fs error saying hop may not write where it needs to (EACCES / EPERM). */
-export const isPermissionDenied = (error: unknown): boolean =>
-  error instanceof Error && "code" in error && (error.code === "EACCES" || error.code === "EPERM");
+/**
+ * An fs error saying hop may not write where it needs to: no permission
+ * (EACCES / EPERM) or a read-only filesystem (EROFS).
+ */
+export const isWriteDenied = (error: unknown): boolean =>
+  error instanceof Error &&
+  "code" in error &&
+  (error.code === "EACCES" || error.code === "EPERM" || error.code === "EROFS");

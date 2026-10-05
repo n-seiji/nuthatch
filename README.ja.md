@@ -151,15 +151,19 @@ hop --version         # 今どの version か
 ```
 
 `hop --update` は hop のインストール方法を判定する。`install.sh` で入れた
-バイナリ (など compile 済みの `hop`) は、リリースに添付された `.sha256` と
-SHA-256 が一致した場合にだけその場で差し替える — 不一致なら何も置換しない。
+バイナリ (など compile 済みの `hop`) は、置き場のディレクトリに書き込めて
+(ダウンロードの前に確認する)、かつリリースに添付された `.sha256` と SHA-256 が
+一致した場合にだけその場で差し替える — 不一致なら何も置換しない。
 mise / npm / bun 経由の install は、そのツール自身の upgrade コマンド
-(`mise upgrade …`、`npm install -g @n-seiji/nuthatch@latest`、
+(`mise upgrade …`、
+`npm install -g --prefix <hop が入っている prefix> @n-seiji/nuthatch@latest`、
 `bun add -g @n-seiji/nuthatch@latest`) を実行して更新するので、version を
-固定した mise の設定が優先される。`npx` / `bunx`、ソースチェックアウト、
-hop が扱わない配置 (pnpm・yarn の global、プロジェクトの依存) は、代わりに
-どうすればよいかを示して拒否する。hop がネットワークに出るのはこれだけで、
-GitHub と npm の固定アドレスへの HTTPS リクエストのみ。
+固定した mise の設定が優先され、npm の更新は hop が今入っている prefix に
+入る。`npx` / `bunx`、ソースチェックアウト、Homebrew・Nix・aqua・proto など
+他のバージョン管理ツールが自分用にコピーを持っているバイナリ、hop が扱わない
+配置 (pnpm・yarn の global、プロジェクトの依存) は、代わりにどうすればよいかを
+示して拒否する。hop がネットワークに出るのはこれだけで、GitHub と npm の固定
+アドレスへの HTTPS リクエストのみ (タイムアウトとサイズ上限つき)。
 
 ## トラブルシューティング
 

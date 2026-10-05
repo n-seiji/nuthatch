@@ -43,6 +43,7 @@ export const createFakeSelfUpdate = (overrides: Partial<SelfUpdatePort> = {}): F
     downloadReleaseAsset: recorded("downloadReleaseAsset", calls, overrides.downloadReleaseAsset),
     downloadReleaseText: recorded("downloadReleaseText", calls, overrides.downloadReleaseText),
     sha256Hex: recorded("sha256Hex", calls, overrides.sha256Hex),
+    assertWritableDir: recorded("assertWritableDir", calls, overrides.assertWritableDir),
     replaceExecutable: recorded("replaceExecutable", calls, overrides.replaceExecutable),
     resolveExecutable: recorded("resolveExecutable", calls, overrides.resolveExecutable),
     runCommand: recorded("runCommand", calls, overrides.runCommand),
@@ -63,6 +64,7 @@ export const installFactsOf = (overrides: Partial<InstallFacts> = {}): InstallFa
   executablePath: null,
   scriptPath: null,
   mise: null,
+  npmGlobalPrefix: null,
   platform: "darwin",
   arch: "arm64",
   ...overrides,
@@ -86,6 +88,7 @@ export const miseFacts = (tool = "github:n-seiji/nuthatch"): InstallFacts => {
 export const npmFacts = (): InstallFacts =>
   installFactsOf({
     scriptPath: "/usr/local/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
+    npmGlobalPrefix: "/usr/local",
   });
 
 export const bunFacts = (): InstallFacts =>

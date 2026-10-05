@@ -1,6 +1,7 @@
 import { readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { InstallFacts } from "../domain/install-method.ts";
+import { npmGlobalPrefixOf } from "../domain/install-script.ts";
 import {
   type MiseToolFacts,
   miseToolDir,
@@ -29,14 +30,17 @@ const MISE_BACKEND_TOML = ".mise.backend.toml";
 /** The plain-text marker older mise versions write instead (some installs carry both). */
 const MISE_BACKEND_LEGACY = ".mise.backend";
 
-/** A path that cannot be resolved is still worth matching against as written. */
-const realpathOrSelf = async (path: string): Promise<string> => {
+const realpathOrNull = async (path: string): Promise<string | null> => {
   try {
     return await realpath(path);
   } catch {
-    return path;
+    return null;
   }
 };
+
+/** A path that cannot be resolved is still worth matching against as written. */
+const realpathOrSelf = async (path: string): Promise<string> =>
+  (await realpathOrNull(path)) ?? path;
 
 const readTextOrNull = async (path: string): Promise<string | null> => {
   try {
@@ -67,6 +71,20 @@ const findMiseTool = async (path: string | null): Promise<MiseToolFacts | null> 
 };
 
 /**
+ * The npm global prefix `scriptPath` really lives in, or null. The path alone
+ * proves nothing (any project can have a `lib/node_modules`): what does is
+ * the `<prefix>/bin/hop` link npm makes, which must lead back to this very
+ * script.
+ */
+const verifiedNpmPrefix = async (scriptPath: string | null): Promise<string | null> => {
+  const prefix = scriptPath === null ? null : npmGlobalPrefixOf(scriptPath);
+  if (prefix === null) {
+    return null;
+  }
+  return (await realpathOrNull(join(prefix, "bin", "hop"))) === scriptPath ? prefix : null;
+};
+
+/**
  * Both paths are realpath'd, because how hop is launched hides where it
  * lives: an npm bin is a symlink (`argv[1]` is the link, not the script), and
  * a mise tool is reached through its `latest` link.
@@ -80,6 +98,7 @@ export const readInstallFacts = async (source: InstallFactsSource): Promise<Inst
     executablePath,
     scriptPath,
     mise: await findMiseTool(executablePath ?? scriptPath),
+    npmGlobalPrefix: await verifiedNpmPrefix(scriptPath),
     platform: source.platform,
     arch: source.arch,
   };

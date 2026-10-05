@@ -1,5 +1,13 @@
-import { type MiseToolFacts, isHopBackend, isHopToolDirName } from "./mise-tool.ts";
+import { managerRootReason } from "./install-roots.ts";
+import { type ScriptInstall, detectScriptInstall } from "./install-script.ts";
+import {
+  type MiseToolFacts,
+  isHopBackend,
+  isHopToolDirName,
+  withoutToolOptions,
+} from "./mise-tool.ts";
 import { baseName, parentDir } from "./posix-path.ts";
+import { NPM_PACKAGE, NPM_PACKAGE_LATEST } from "./self-update.ts";
 
 /**
  * Decides how this hop was installed, and therefore how `hop --update` may
@@ -9,9 +17,6 @@ import { baseName, parentDir } from "./posix-path.ts";
  *
  * Paths are POSIX: hop only ships for darwin/linux.
  */
-
-/** The npm package name hop is published under. */
-export const NPM_PACKAGE = "@n-seiji/nuthatch";
 
 /** Facts about this hop process, gathered once by infra. */
 export interface InstallFacts {
@@ -26,6 +31,13 @@ export interface InstallFacts {
    * necessarily hop's: whether it is hop's is decided here (see mise-tool.ts).
    */
   readonly mise: MiseToolFacts | null;
+  /**
+   * The npm global prefix the script is verified to live in: it sits at
+   * `<prefix>/lib/node_modules/@n-seiji/nuthatch/` and `<prefix>/bin/hop`
+   * links back to this very script. Null for anything else — including a
+   * project's own `lib/node_modules`, which only looks the same.
+   */
+  readonly npmGlobalPrefix: string | null;
   readonly platform: string;
   readonly arch: string;
 }
@@ -45,9 +57,7 @@ export type InstallMethod =
       readonly installDir: string;
       readonly assetName: string;
     }
-  | { readonly kind: "npm" }
-  | { readonly kind: "bun" }
-  | { readonly kind: "unsupported"; readonly reason: string };
+  | ScriptInstall;
 
 export type UpdatableMethod = Exclude<InstallMethod, { readonly kind: "unsupported" }>;
 
@@ -70,16 +80,6 @@ const RELEASE_ASSETS: ReadonlyMap<string, string> = new Map([
 export const releaseAssetName = (platform: string, arch: string): string | null =>
   RELEASE_ASSETS.get(`${platform}-${arch}`) ?? null;
 
-const NPX_MARKER = "/_npx/";
-const BUNX_MARKER = "/bunx-";
-const BUN_GLOBAL_MARKER = "/.bun/install/global/node_modules/";
-/** The npm global prefix layout on unix: `<prefix>/lib/node_modules/<package>`. */
-const NPM_GLOBAL_MARKER = `/lib/node_modules/${NPM_PACKAGE}/`;
-const NODE_MODULES_MARKER = `/node_modules/${NPM_PACKAGE}/`;
-const PNPM_GLOBAL_MARKER = "/pnpm/global/";
-const YARN_GLOBAL_MARKER = "/yarn/global/";
-const NPM_PACKAGE_LATEST = `${NPM_PACKAGE}@latest`;
-
 const GITHUB_BACKEND_PREFIXES = ["github:", "ubi:", "aqua:"] as const;
 const NPM_BACKEND_PREFIX = "npm:";
 
@@ -94,6 +94,11 @@ const miseChannel = (tool: string): ReleaseChannel | null => {
   }
   return GITHUB_BACKEND_PREFIXES.some((prefix) => tool.startsWith(prefix)) ? "github" : null;
 };
+
+const insideVersionManager = (dir: string, marker: string): InstallMethod =>
+  unsupported(
+    `installed under a version manager's install dir (${dir}) ${marker}; update it with the tool that installed it`,
+  );
 
 /**
  * A tool dir whose marker cannot be read. A name that says it is hop's is a
@@ -110,20 +115,21 @@ const detectUnmarkedToolDir = (dir: string, compiled: boolean): InstallMethod | 
       `installed by mise, but its backend is unknown (no readable marker in ${dir}); run "mise upgrade" yourself`,
     );
   }
-  return compiled
-    ? unsupported(
-        `installed under a version manager's install dir (${dir}) without a readable mise marker; update it with the tool that installed it`,
-      )
-    : null;
+  return compiled ? insideVersionManager(dir, "without a readable mise marker") : null;
 };
 
 /**
  * Whether mise installed hop: only if the tool dir hop lives in says so. A
  * readable marker for *another* tool (`core:node`, `core:bun`, …) means hop
- * is merely inside that tool's install — `npm i -g` on a mise-managed node —
- * so it is ignored and hop is classified by the other rules, as if mise were
- * not there. It does not mean "keep looking higher up": a path inside one
- * tool dir is never inside a second one that is hop's own.
+ * is merely inside that tool's install. For a script (`npm i -g` on a
+ * mise-managed node) that marker is ignored and hop is classified by the
+ * other rules, as if mise were not there; a compiled binary there is the same
+ * case as an unreadable marker and is refused. Neither keeps looking higher
+ * up: a path inside one tool dir is never inside a second one that is hop's
+ * own.
+ *
+ * The marker's id may carry options (`github:n-seiji/nuthatch[bin=hop]`);
+ * they are not part of the tool's name, for matching or for `mise upgrade`.
  *
  * Null: not a mise install of hop, keep classifying.
  */
@@ -134,21 +140,28 @@ const detectMise = ({ mise, compiled }: InstallFacts): InstallMethod | null => {
   if (mise.backend === null) {
     return detectUnmarkedToolDir(mise.dir, compiled);
   }
-  if (!isHopBackend(mise.backend)) {
-    return null;
+  const tool = withoutToolOptions(mise.backend);
+  if (!isHopBackend(tool)) {
+    return compiled
+      ? insideVersionManager(mise.dir, `whose marker names "${tool}", not hop`)
+      : null;
   }
-  const channel = miseChannel(mise.backend);
+  const channel = miseChannel(tool);
   return channel === null
     ? unsupported(
-        `mise installed hop through "${mise.backend}", which is neither a GitHub nor an npm backend; run "mise upgrade ${mise.backend}" yourself`,
+        `mise installed hop through "${tool}", which is neither a GitHub nor an npm backend; run "mise upgrade ${tool}" yourself`,
       )
-    : { kind: "mise", tool: mise.backend, channel };
+    : { kind: "mise", tool, channel };
 };
 
 const detectStandalone = (facts: InstallFacts): InstallMethod => {
   const { executablePath, platform, arch } = facts;
   if (executablePath === null) {
     return unsupported("cannot tell where the hop binary is installed");
+  }
+  const managedBy = managerRootReason(executablePath);
+  if (managedBy !== null) {
+    return unsupported(managedBy);
   }
   const assetName = releaseAssetName(platform, arch);
   if (assetName === null) {
@@ -165,51 +178,13 @@ const detectStandalone = (facts: InstallFacts): InstallMethod => {
 };
 
 /**
- * A `node_modules/@n-seiji/nuthatch` that is not npm's global prefix layout:
- * pnpm's and yarn's globals (named, with their command, when the path shows
- * which one) or a dependency of some project. None of them is something
- * `npm install -g` would update.
- */
-const otherNodeModulesReason = (scriptPath: string): string => {
-  if (scriptPath.includes(PNPM_GLOBAL_MARKER)) {
-    return `installed globally with pnpm, which hop does not drive; run "pnpm add -g ${NPM_PACKAGE_LATEST}" yourself`;
-  }
-  if (scriptPath.includes(YARN_GLOBAL_MARKER)) {
-    return `installed globally with yarn, which hop does not drive; run "yarn global add ${NPM_PACKAGE_LATEST}" yourself`;
-  }
-  return "installed as a project dependency (a local node_modules); update it in that project";
-};
-
-const detectPackageInstall = (scriptPath: string): InstallMethod => {
-  if (scriptPath.includes(NPX_MARKER)) {
-    return unsupported(
-      "running through npx, which already fetches the published version on every run",
-    );
-  }
-  if (scriptPath.includes(BUNX_MARKER)) {
-    return unsupported(
-      "running through bunx, which already fetches the published version on every run",
-    );
-  }
-  if (scriptPath.includes(BUN_GLOBAL_MARKER)) {
-    return { kind: "bun" };
-  }
-  if (scriptPath.includes(NPM_GLOBAL_MARKER)) {
-    return { kind: "npm" };
-  }
-  if (scriptPath.includes(NODE_MODULES_MARKER)) {
-    return unsupported(otherNodeModulesReason(scriptPath));
-  }
-  return unsupported("running from a source checkout; update it with git (git pull)");
-};
-
-/**
  * First match wins, in this order: the mise tool dir hop lives in (a marker
- * that names hop; or, with no readable marker, a refusal for a hop-named dir
- * or a compiled binary — all of it beats the compiled / script heuristics,
- * since a mise install is itself a compiled binary or an npm package),
- * standalone binary, npx, bunx, bun global, npm global, any other
- * `node_modules` copy (refused), source checkout.
+ * that names hop; or, for a compiled binary, a refusal whenever it is not
+ * hop's own marker — all of it beats the compiled / script heuristics, since a
+ * mise install is itself a compiled binary or an npm package), a compiled
+ * binary inside a package manager's own tree (refused), standalone binary,
+ * npx, bunx, bun global, verified npm global, any other `node_modules` copy
+ * (refused), source checkout.
  */
 export const detectInstallMethod = (facts: InstallFacts): InstallMethod => {
   const mise = detectMise(facts);
@@ -217,7 +192,9 @@ export const detectInstallMethod = (facts: InstallFacts): InstallMethod => {
     return mise;
   }
   // No script path at all reads as a source checkout, like any unrecognised path.
-  return facts.compiled ? detectStandalone(facts) : detectPackageInstall(facts.scriptPath ?? "");
+  return facts.compiled
+    ? detectStandalone(facts)
+    : detectScriptInstall(facts.scriptPath ?? "", facts.npmGlobalPrefix);
 };
 
 export const latestChannel = (method: UpdatableMethod): ReleaseChannel => {
@@ -227,12 +204,25 @@ export const latestChannel = (method: UpdatableMethod): ReleaseChannel => {
   return method.kind === "standalone" ? "github" : "npm";
 };
 
-/** The package manager's own upgrade command, as the user could type it. */
+/**
+ * The package manager's own upgrade command, as the user could type it. npm
+ * gets the prefix hop lives in explicitly: a bare `npm install -g` lands in
+ * the prefix of whichever `npm` runs, which with several nodes installed (nvm,
+ * mise, Homebrew) need not be hop's, leaving the old hop in place.
+ */
 export const upgradeCommand = (method: DelegatedMethod): CommandArgv => {
   if (method.kind === "mise") {
     return ["mise", "upgrade", method.tool];
   }
   return method.kind === "npm"
-    ? ["npm", "install", "-g", NPM_PACKAGE_LATEST]
+    ? ["npm", "install", "-g", "--prefix", method.prefix, NPM_PACKAGE_LATEST]
     : ["bun", "add", "-g", NPM_PACKAGE_LATEST];
 };
+
+/**
+ * Where to look for the upgrade command's program before PATH: npm's own
+ * `bin`, so the `npm` that runs is the one belonging to the node hop's
+ * prefix came from.
+ */
+export const preferredProgramDir = (method: DelegatedMethod): string | null =>
+  method.kind === "npm" ? `${method.prefix}/bin` : null;

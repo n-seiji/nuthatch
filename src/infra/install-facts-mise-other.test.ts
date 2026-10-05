@@ -55,28 +55,31 @@ describe("readInstallFacts: hop のものではない mise のマーカー", () 
 
     expect(facts.scriptPath).toBe(script);
     expect(facts.mise).toEqual({ dir: nodeDir, backend: "core:node" });
-    expect(detectInstallMethod(facts)).toEqual({ kind: "npm" });
+    expect(detectInstallMethod(facts)).toEqual({ kind: "npm", prefix: join(nodeDir, "25.6.1") });
   });
 
-  it("別ツール (core:bun) のマーカー配下に置かれたコンパイル済みバイナリも、マーカーは無視して standalone と判定する", async () => {
+  it("別ツール (core:bun) のマーカー配下に置かれたコンパイル済みバイナリは、standalone にせず、バージョンマネージャ配下として unsupported と判定する", async () => {
     const bunDir = join(installs(), "bun");
     await touch(join(bunDir, ".mise.backend.toml"), 'short = "bun"\nfull = "core:bun"\n');
     await touch(join(bunDir, "1.2.0", "bin", "hop"));
 
-    const method = await methodOf(
+    const reason = await refusalOf(
       installSourceOf({
         compiled: true,
         execPath: join(bunDir, "1.2.0", "bin", "hop"),
       }),
     );
 
-    expect(method.kind).toBe("standalone");
+    expect(reason).toContain("installed under a version manager's install dir");
+    expect(reason).toContain(bunDir);
+    expect(reason).toContain('names "core:bun", not hop');
   });
 
   it("別ツールのマーカーで止まり、その上 (8 階層以内) にある hop 自身のツールディレクトリは見に行かない", async () => {
     /*
      * Hop's own tool dir is within reach above the node dir, but the nearest
-     * tool dir is the whole answer: walking on would turn this into `mise`.
+     * tool dir is the whole answer: walking on would turn this into `mise`
+     * (it is refused instead, for sitting in another tool's dir).
      */
     const hopDir = join(installs(), "github-n-seiji-nuthatch");
     await touch(join(hopDir, ".mise.backend.toml"), miseBackendToml("github:n-seiji/nuthatch"));
@@ -92,7 +95,11 @@ describe("readInstallFacts: hop のものではない mise のマーカー", () 
     );
 
     expect(facts.mise).toEqual({ dir: innerNode, backend: "core:node" });
-    expect(detectInstallMethod(facts).kind).toBe("standalone");
+    const method = detectInstallMethod(facts);
+    expect(method).toEqual({
+      kind: "unsupported",
+      reason: expect.stringContaining(innerNode),
+    });
   });
 });
 
@@ -118,11 +125,12 @@ describe("readInstallFacts: マーカーが読めない mise のツールディ�
   });
 
   it("名前が hop のものでなければ、script はマーカーが無くても無視する (asdf の installs/nodejs の npm global など)", async () => {
-    const { bin } = await createNpmGlobalHop(join(installs(), "nodejs", "22.0.0"));
+    const prefix = join(installs(), "nodejs", "22.0.0");
+    const { bin } = await createNpmGlobalHop(prefix);
 
     const method = await methodOf(installSourceOf({ argv1: bin }));
 
-    expect(method).toEqual({ kind: "npm" });
+    expect(method).toEqual({ kind: "npm", prefix });
   });
 
   it("マーカーの無い <tmp>/installs/hop/ (別名) のコンパイル済みバイナリは、standalone にせずバージョンマネージャ配下として unsupported にする", async () => {

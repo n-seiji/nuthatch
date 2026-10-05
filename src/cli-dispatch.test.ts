@@ -62,6 +62,21 @@ describe("cli dispatch", () => {
     expect(isHelpRequest([])).toBe(false);
   });
 
+  it("--update の後ろに --help / -h がある場合も help 扱いにする (更新は実行しない)", () => {
+    expect(isHelpRequest(["--update", "--help"])).toBe(true);
+    expect(isHelpRequest(["--update", "-h"])).toBe(true);
+    expect(isHelpRequest(["--update", "--check", "--help"])).toBe(true);
+    expect(isHelpRequest(["--update", "--json", "-h"])).toBe(true);
+  });
+
+  it("--update に help が無い場合や、--update が先頭でない場合は help 扱いしない", () => {
+    expect(isHelpRequest(["--update"])).toBe(false);
+    expect(isHelpRequest(["--update", "--check", "--json"])).toBe(false);
+    expect(isHelpRequest(["--update", "help"])).toBe(false);
+    expect(isHelpRequest(["--", "--update", "--help"])).toBe(false);
+    expect(isHelpRequest(["feature", "--help"])).toBe(false);
+  });
+
   it("--update を先頭 token で検出する (後ろのフラグは問わない)", () => {
     expect(isUpdateRequest(["--update"])).toBe(true);
     expect(isUpdateRequest(["--update", "--check", "--json"])).toBe(true);

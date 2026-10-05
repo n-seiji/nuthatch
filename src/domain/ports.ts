@@ -100,17 +100,28 @@ export interface SelfUpdatePort {
   /** Lowercase hex SHA-256 of `bytes`. */
   sha256Hex: (bytes: Uint8Array) => string;
   /**
+   * Resolves when files can be created in `dir`; rejects with the underlying
+   * fs error (e.g. `code: "EACCES"` or `"EROFS"`) when they cannot. A cheap
+   * early answer, not a promise: `replaceExecutable` can still fail.
+   */
+  assertWritableDir: (dir: string) => Promise<void>;
+  /**
    * Atomically replaces the executable at `path` (through a symlink, the
    * link's target) with `bytes`, mode 0755. Rejects with the underlying fs
    * error (e.g. `code: "EACCES"`) when it cannot, leaving nothing behind.
    */
   replaceExecutable: (path: string, bytes: Uint8Array) => Promise<void>;
-  /** Absolute path of `name` on PATH (absolute PATH entries only), or null if it is not there. */
-  resolveExecutable: (name: string) => Promise<string | null>;
+  /**
+   * Absolute path of the executable `name`: in `preferredDir` if it is there
+   * (null: no preference), else in the first absolute PATH entry that has it;
+   * null if it is in neither.
+   */
+  resolveExecutable: (name: string, preferredDir: string | null) => Promise<string | null>;
   /**
    * Runs `argv` (a program by absolute path, then its arguments) with stdin
    * inherited and both of the child's output streams sent to hop's stderr,
-   * and resolves to its exit code. Rejects if the process cannot be started.
+   * and resolves to its exit code. Rejects if the process cannot be started
+   * or is killed by a signal (the message names the signal).
    */
   runCommand: (argv: CommandArgv) => Promise<number>;
 }

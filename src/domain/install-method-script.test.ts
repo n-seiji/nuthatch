@@ -2,12 +2,16 @@ import { describe, expect, it } from "bun:test";
 import { installFactsOf } from "../testing/self-update-port.ts";
 import { detectInstallMethod } from "./install-method.ts";
 
-/** What an uncompiled hop running `scriptPath` is classified as. */
-const methodOf = (scriptPath: string) => detectInstallMethod(installFactsOf({ scriptPath }));
+/**
+ * What an uncompiled hop running `scriptPath` is classified as.
+ * `npmGlobalPrefix` is the fact infra verifies; null unless a test is about npm.
+ */
+const methodOf = (scriptPath: string, npmGlobalPrefix: string | null = null) =>
+  detectInstallMethod(installFactsOf({ scriptPath, npmGlobalPrefix }));
 
 /** The reason an install is refused; throws if it is not refused at all. */
-const reasonOf = (scriptPath: string): string => {
-  const method = methodOf(scriptPath);
+const reasonOf = (scriptPath: string, npmGlobalPrefix: string | null = null): string => {
+  const method = methodOf(scriptPath, npmGlobalPrefix);
   if (method.kind !== "unsupported") {
     throw new Error(`expected an unsupported install, got ${method.kind}`);
   }
@@ -38,16 +42,32 @@ describe("detectInstallMethod: グローバルインストール", () => {
     expect(methodOf(script)).toEqual({ kind: "bun" });
   });
 
-  it("npm のグローバル prefix (…/lib/node_modules/@n-seiji/nuthatch) は、置き場が何であれ npm になる", () => {
-    for (const script of [
-      "/usr/local/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
-      "/opt/homebrew/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
-      "/home/u/.nvm/versions/node/v22.0.0/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
-      "/home/u/.npm-global/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
-      "/home/u/.local/share/mise/installs/node/25.6.1/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
-    ]) {
-      expect(methodOf(script)).toEqual({ kind: "npm" });
+  it("npm のグローバル prefix を確認できた場合、置き場が何であれ、その prefix を持つ npm になる", () => {
+    for (const [script, prefix] of [
+      ["/usr/local/lib/node_modules/@n-seiji/nuthatch/dist/cli.js", "/usr/local"],
+      ["/opt/homebrew/lib/node_modules/@n-seiji/nuthatch/dist/cli.js", "/opt/homebrew"],
+      [
+        "/home/u/.nvm/versions/node/v22.0.0/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
+        "/home/u/.nvm/versions/node/v22.0.0",
+      ],
+      ["/home/u/.npm-global/lib/node_modules/@n-seiji/nuthatch/dist/cli.js", "/home/u/.npm-global"],
+      [
+        "/home/u/.local/share/mise/installs/node/25.6.1/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
+        "/home/u/.local/share/mise/installs/node/25.6.1",
+      ],
+    ] as const) {
+      expect(methodOf(script, prefix)).toEqual({ kind: "npm", prefix });
     }
+  });
+
+  it("npm のグローバル配置に見えても prefix を確認できない場合、プロジェクト依存として unsupported になる (npm i -g を実行しない)", () => {
+    const reason = reasonOf(
+      "/home/u/repo/packages/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
+      null,
+    );
+
+    expect(reason).toContain("project dependency");
+    expect(reason).toContain("update it in that project");
   });
 });
 

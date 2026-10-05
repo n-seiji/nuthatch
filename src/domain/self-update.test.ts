@@ -3,7 +3,7 @@ import {
   GITHUB_LATEST_RELEASE_URL,
   NPM_LATEST_URL,
   compareVersions,
-  isPermissionDenied,
+  isWriteDenied,
   parseChecksumFile,
   pathExecutableCandidates,
   releaseAssetUrl,
@@ -62,30 +62,60 @@ describe("requireVersion", () => {
 });
 
 describe("parseChecksumFile", () => {
+  const ASSET = "hop-linux-x64";
+  const digestOf = (text: string) => parseChecksumFile(text, ASSET);
+
   it("sha256sum の出力 (<hex>  out/hop-linux-x64 + 改行) の場合、先頭トークンの hex を返す", () => {
-    expect(parseChecksumFile(`${HEX}  out/hop-linux-x64\n`)).toBe(HEX);
+    expect(digestOf(`${HEX}  out/hop-linux-x64\n`)).toEqual({ ok: true, digest: HEX });
   });
 
   it("大文字の hex の場合、小文字に揃えて返す", () => {
-    expect(parseChecksumFile(`${HEX.toUpperCase()}  hop\n`)).toBe(HEX);
+    expect(digestOf(`${HEX.toUpperCase()}  ${ASSET}\n`)).toEqual({ ok: true, digest: HEX });
   });
 
-  it("hex だけ・前後に空白や空行がある場合でも、hex を返す", () => {
-    expect(parseChecksumFile(HEX)).toBe(HEX);
-    expect(parseChecksumFile(`\n  ${HEX} *hop\n\n`)).toBe(HEX);
+  it("hex だけ (ファイル名なし)・前後に空白や空行がある場合でも、hex を返す", () => {
+    expect(digestOf(HEX)).toEqual({ ok: true, digest: HEX });
+    expect(digestOf(`\n  ${HEX}\n\n`)).toEqual({ ok: true, digest: HEX });
+  });
+
+  it("ファイル名が asset 名そのもの・バイナリモードの * 付きでも、hex を返す", () => {
+    expect(digestOf(`${HEX} ${ASSET}`)).toEqual({ ok: true, digest: HEX });
+    expect(digestOf(`\n  ${HEX} *out/${ASSET}\n\n`)).toEqual({ ok: true, digest: HEX });
+  });
+
+  it("ファイル名が別の asset を指している場合、ファイル名と asset 名を含む理由で検証できないとする", () => {
+    for (const file of [
+      "out/hop-darwin-arm64",
+      "hop",
+      "out/xhop-linux-x64",
+      "out/hop-linux-x64.tar",
+      "hop-linux-x64/hop",
+    ]) {
+      const parsed = digestOf(`${HEX}  ${file}\n`);
+
+      expect(parsed).toEqual({ ok: false, reason: expect.stringContaining(`"${file}"`) });
+      expect(parsed.ok ? "" : parsed.reason).toContain(ASSET);
+    }
   });
 
   it("先頭トークンしか見ない (2 行目以降の hex は採用しない)", () => {
-    expect(parseChecksumFile(`not-a-hash\n${HEX}  hop\n`)).toBeNull();
+    expect(digestOf(`not-a-hash\n${HEX}  ${ASSET}\n`)).toEqual({
+      ok: false,
+      reason: expect.stringContaining("malformed"),
+    });
   });
 
-  it("64 桁の hex でない場合、null を返す", () => {
-    expect(parseChecksumFile("")).toBeNull();
-    expect(parseChecksumFile("   \n")).toBeNull();
-    expect(parseChecksumFile(`${HEX.slice(1)}  hop`)).toBeNull();
-    expect(parseChecksumFile(`${HEX}0  hop`)).toBeNull();
-    expect(parseChecksumFile(`${"g".repeat(64)}  hop`)).toBeNull();
-    expect(parseChecksumFile("<html>404</html>")).toBeNull();
+  it("64 桁の hex でない場合、malformed として検証できないとする", () => {
+    for (const text of [
+      "",
+      "   \n",
+      `${HEX.slice(1)}  ${ASSET}`,
+      `${HEX}0  ${ASSET}`,
+      `${"g".repeat(64)}  ${ASSET}`,
+      "<html>404</html>",
+    ]) {
+      expect(digestOf(text)).toEqual({ ok: false, reason: expect.stringContaining("malformed") });
+    }
   });
 });
 
@@ -111,19 +141,41 @@ describe("pathExecutableCandidates", () => {
     expect(pathExecutableCandidates("mise")).toEqual([]);
     expect(pathExecutableCandidates("mise", "")).toEqual([]);
   });
+
+  it("優先ディレクトリがある場合、PATH より先に並べる (PATH にも同じ場所があれば 1 度だけ)", () => {
+    expect(pathExecutableCandidates("npm", "/usr/bin:/opt/bin", "/p/bin")).toEqual([
+      "/p/bin/npm",
+      "/usr/bin/npm",
+      "/opt/bin/npm",
+    ]);
+    expect(pathExecutableCandidates("npm", "/usr/bin:/p/bin", "/p/bin")).toEqual([
+      "/p/bin/npm",
+      "/usr/bin/npm",
+    ]);
+  });
+
+  it("優先ディレクトリが絶対パスでない・null の場合、PATH だけから候補を作る", () => {
+    expect(pathExecutableCandidates("npm", "/usr/bin", "relative/bin")).toEqual(["/usr/bin/npm"]);
+    expect(pathExecutableCandidates("npm", "/usr/bin", null)).toEqual(["/usr/bin/npm"]);
+  });
+
+  it("PATH が空でも、優先ディレクトリの候補は返す", () => {
+    expect(pathExecutableCandidates("npm", "", "/p/bin")).toEqual(["/p/bin/npm"]);
+  });
 });
 
-describe("isPermissionDenied", () => {
-  it("EACCES / EPERM の fs エラーの場合、true を返す", () => {
-    expect(isPermissionDenied(errorWithCode("EACCES"))).toBe(true);
-    expect(isPermissionDenied(errorWithCode("EPERM"))).toBe(true);
+describe("isWriteDenied", () => {
+  it("EACCES / EPERM / EROFS (権限なし・読み取り専用ファイルシステム) の fs エラーの場合、true を返す", () => {
+    expect(isWriteDenied(errorWithCode("EACCES"))).toBe(true);
+    expect(isWriteDenied(errorWithCode("EPERM"))).toBe(true);
+    expect(isWriteDenied(errorWithCode("EROFS"))).toBe(true);
   });
 
   it("それ以外のエラーや、エラーでない値の場合、false を返す", () => {
-    expect(isPermissionDenied(errorWithCode("ENOSPC"))).toBe(false);
-    expect(isPermissionDenied(new Error("EACCES"))).toBe(false);
-    expect(isPermissionDenied("EACCES")).toBe(false);
-    expect(isPermissionDenied(null)).toBe(false);
+    expect(isWriteDenied(errorWithCode("ENOSPC"))).toBe(false);
+    expect(isWriteDenied(new Error("EACCES"))).toBe(false);
+    expect(isWriteDenied("EACCES")).toBe(false);
+    expect(isWriteDenied(null)).toBe(false);
   });
 });
 

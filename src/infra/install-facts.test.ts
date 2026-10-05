@@ -45,13 +45,15 @@ describe("readInstallFacts", () => {
       executablePath: real,
       scriptPath: null,
       mise: null,
+      npmGlobalPrefix: null,
       platform: "darwin",
       arch: "x64",
     });
   });
 
-  it("npm のグローバルインストール (bin のリンク経由) の場合、scriptPath を実体のパスで返す", async () => {
-    const { script, bin } = await createNpmGlobalHop(join(sandbox, "prefix"));
+  it("npm のグローバルインストール (bin のリンク経由) の場合、scriptPath を実体のパスで、npmGlobalPrefix を確認済みの prefix で返す", async () => {
+    const prefix = join(sandbox, "prefix");
+    const { script, bin } = await createNpmGlobalHop(prefix);
 
     const facts = await readInstallFacts(installSourceOf({ argv1: bin }));
 
@@ -60,8 +62,46 @@ describe("readInstallFacts", () => {
       executablePath: null,
       scriptPath: script,
       mise: null,
+      npmGlobalPrefix: prefix,
     });
-    expect(detectInstallMethod(facts)).toEqual({ kind: "npm" });
+    expect(detectInstallMethod(facts)).toEqual({ kind: "npm", prefix });
+  });
+
+  it("<prefix>/bin/hop が無い場合 (プロジェクトの lib/node_modules など)、npmGlobalPrefix は null で、プロジェクト依存として unsupported になる", async () => {
+    const script = join(sandbox, "repo/packages/lib/node_modules/@n-seiji/nuthatch/dist/cli.js");
+    await touch(script);
+
+    const facts = await readInstallFacts(installSourceOf({ argv1: script }));
+
+    expect(facts.npmGlobalPrefix).toBeNull();
+    expect(detectInstallMethod(facts)).toEqual({
+      kind: "unsupported",
+      reason: expect.stringContaining("project dependency"),
+    });
+  });
+
+  it("<prefix>/bin/hop が別のスクリプトを指している場合、npmGlobalPrefix は null になる (動いている hop の prefix ではない)", async () => {
+    const { script: other } = await createNpmGlobalHop(join(sandbox, "installed"));
+    const prefix = join(sandbox, "copy");
+    const script = join(prefix, "lib/node_modules/@n-seiji/nuthatch/dist/cli.js");
+    await touch(script);
+    await mkdir(join(prefix, "bin"), { recursive: true });
+    await symlink(other, join(prefix, "bin", "hop"));
+
+    const facts = await readInstallFacts(installSourceOf({ argv1: script }));
+
+    expect(facts.scriptPath).toBe(script);
+    expect(facts.npmGlobalPrefix).toBeNull();
+  });
+
+  it("<prefix>/bin/hop が壊れたリンクの場合、npmGlobalPrefix は null になる", async () => {
+    const { script, bin } = await createNpmGlobalHop(join(sandbox, "prefix"));
+    await rm(bin);
+    await symlink(join(sandbox, "gone"), bin);
+
+    const facts = await readInstallFacts(installSourceOf({ argv1: script }));
+
+    expect(facts.npmGlobalPrefix).toBeNull();
   });
 
   it("ソースチェックアウトの場合、scriptPath はそのままで、source checkout と判定される", async () => {

@@ -160,15 +160,19 @@ hop --version         # which version do I have?
 ```
 
 `hop --update` detects how hop was installed. A binary from `install.sh` (or
-any compiled `hop`) is replaced in place, but only after its SHA-256 matches
-the `.sha256` attached to the release — on a mismatch nothing is replaced. A
-mise / npm / bun install is updated by running that tool's own upgrade command
-(`mise upgrade …`, `npm install -g @n-seiji/nuthatch@latest`,
+any compiled `hop`) is replaced in place, but only if its directory is
+writable (checked before anything is downloaded) and only after its SHA-256
+matches the `.sha256` attached to the release — on a mismatch nothing is
+replaced. A mise / npm / bun install is updated by running that tool's own
+upgrade command (`mise upgrade …`,
+`npm install -g --prefix <the prefix hop lives in> @n-seiji/nuthatch@latest`,
 `bun add -g @n-seiji/nuthatch@latest`), so a mise config that pins a version
-still wins. `npx` / `bunx`, a source checkout, and layouts hop does not drive
-(a pnpm or yarn global, a project dependency) are refused with a note on what
-to do instead. This is the only thing hop does over the network: HTTPS
-requests to fixed GitHub and npm addresses.
+still wins, and an npm update lands in the prefix hop is already in. `npx` /
+`bunx`, a source checkout, a binary that Homebrew, Nix, aqua, proto or another
+version manager keeps its own copy of, and layouts hop does not drive (a pnpm
+or yarn global, a project dependency) are refused with a note on what to do
+instead. This is the only thing hop does over the network: HTTPS requests to
+fixed GitHub and npm addresses, each with a timeout and a size cap.
 
 ## Troubleshooting
 

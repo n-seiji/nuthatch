@@ -3,6 +3,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readdir,
   readFile,
   readlink,
@@ -13,8 +14,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { replaceExecutable, sha256Hex } from "./release-binary.ts";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { assertWritableDir, replaceExecutable, sha256Hex } from "./release-binary.ts";
 
 const bytesOf = (text: string): Uint8Array => new TextEncoder().encode(text);
 const PERMISSION_BITS = 0o777;
@@ -138,6 +139,105 @@ describe("replaceExecutable", () => {
 
       expect(await readFile(target, "utf8")).toBe("old");
       expect(await readdir(dir)).toEqual(["hop"]);
+    },
+  );
+});
+
+/**
+ * `FileHandle.prototype.sync`, instrumented: what the directory and the
+ * target look like at the moment the temp file is fsynced, which is the only
+ * moment its name and the "before the rename" ordering can be seen from
+ * outside. The returned `restore` must run (the prototype is process-wide).
+ */
+const spyOnFsync = async (dir: string, target: string, behavior: "pass-through" | "fail") => {
+  const probePath = join(dir, ".probe");
+  const probe = await open(probePath, "w");
+  const prototype = Object.getPrototypeOf(probe);
+  await probe.close();
+  await rm(probePath);
+  const original = prototype.sync as (this: unknown) => Promise<void>;
+  const seen: { entries: string[]; target: string }[] = [];
+  // A function expression, not an arrow: the real `sync` must run on the handle it was called on.
+  const spy = spyOn(prototype, "sync").mockImplementation(async function fsyncSpy(this: unknown) {
+    seen.push({ entries: await readdir(dir), target: await readFile(target, "utf8") });
+    if (behavior === "fail") {
+      throw new Error("EIO: input/output error");
+    }
+    return original.call(this);
+  });
+  return { seen, restore: () => spy.mockRestore() };
+};
+
+describe("replaceExecutable: 耐久性", () => {
+  it("rename の前に、隠しファイル名 (.hop.update-<hex>) の一時ファイルを fsync する", async () => {
+    const target = join(sandbox, "hop");
+    await writeFile(target, "old", { mode: 0o755 });
+    const fsync = await spyOnFsync(sandbox, target, "pass-through");
+
+    try {
+      await replaceExecutable(target, bytesOf("new binary"));
+    } finally {
+      fsync.restore();
+    }
+
+    expect(fsync.seen).toHaveLength(1);
+    expect(fsync.seen[0]?.target).toBe("old");
+    const temps = fsync.seen[0]?.entries.filter((name) => name !== "hop");
+    expect(temps).toHaveLength(1);
+    expect(temps?.[0]).toMatch(/^\.hop\.update-[0-9a-f]+$/u);
+    expect(await readFile(target, "utf8")).toBe("new binary");
+    expect(await readdir(sandbox)).toEqual(["hop"]);
+  });
+
+  it("fsync に失敗した場合、エラーを投げ、元のバイナリを触らず、一時ファイルを残さない", async () => {
+    const target = join(sandbox, "hop");
+    await writeFile(target, "old", { mode: 0o755 });
+    const fsync = await spyOnFsync(sandbox, target, "fail");
+
+    try {
+      await expect(replaceExecutable(target, bytesOf("new binary"))).rejects.toThrow("EIO");
+    } finally {
+      fsync.restore();
+    }
+
+    expect(await readFile(target, "utf8")).toBe("old");
+    expect(await readdir(sandbox)).toEqual(["hop"]);
+  });
+});
+
+describe("assertWritableDir", () => {
+  it("書き込めるディレクトリの場合、何も作らずに解決する", async () => {
+    await assertWritableDir(sandbox);
+
+    expect(await readdir(sandbox)).toEqual([]);
+  });
+
+  it("存在しないディレクトリの場合、ENOENT で reject する", async () => {
+    await expect(assertWritableDir(join(sandbox, "nowhere"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  // Root ignores directory permission bits, so this cannot fail for it.
+  const itUnlessRoot = process.getuid?.() === 0 ? it.skip : it;
+
+  itUnlessRoot(
+    "書き込めない・入れないディレクトリの場合、code が EACCES で reject する",
+    async () => {
+      const readOnly = join(sandbox, "readonly");
+      const noSearch = join(sandbox, "nosearch");
+      await mkdir(readOnly);
+      await mkdir(noSearch);
+      await chmod(readOnly, 0o555);
+      await chmod(noSearch, 0o666);
+
+      try {
+        await expect(assertWritableDir(readOnly)).rejects.toMatchObject({ code: "EACCES" });
+        await expect(assertWritableDir(noSearch)).rejects.toMatchObject({ code: "EACCES" });
+      } finally {
+        await chmod(readOnly, 0o755);
+        await chmod(noSearch, 0o755);
+      }
     },
   );
 });

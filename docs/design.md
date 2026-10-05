@@ -61,7 +61,7 @@ auto-`cd`. `--update` and `--version` are flags, not reserved words (see
 | Command | Behavior |
 |---|---|
 | `hop --update` | Updates hop to the latest release **the way it was installed** — detected, never asked (table below) |
-| `hop --update --check` | Reports only: `current`, `latest`, `method`, and the package-manager command `--update` would run. It reads the install facts and asks for the latest version, nothing else: it never looks for `mise` / `npm` / `bun` on `PATH` (a missing package manager must not fail a check), never spawns, never downloads a binary, never writes |
+| `hop --update --check` | Reports only: `current`, `latest`, `method`, and the package-manager command `--update` would run. It reads the install facts and asks for the latest version, nothing else: it never looks for `mise` / `npm` / `bun` on `PATH` (a missing package manager must not fail a check), never spawns, never downloads a binary, never writes (so it never checks that the install dir is writable either) |
 | `hop --version` | Prints hop's version (`package.json`'s, e.g. `0.1.5`) on stdout, exit 0 |
 
 `--update` and `--version` are **flags, not reserved words**: a git branch name
@@ -69,7 +69,9 @@ cannot start with `-`, so the five reserved names stay five and no `--`
 escape is needed. Like `--help`, only the first argument counts (`hop --
 --update` is still an escaped jump). After `--update` only `--check` and
 `--json` are accepted; anything else is a usage error (exit 2), so a typo such
-as `--chek` can never turn a read-only check into a real update.
+as `--chek` can never turn a read-only check into a real update. The exception
+is `--help` / `-h` anywhere after `--update`: it prints the usage like `hop
+--help` and exits 0, without checking or updating anything.
 
 **How hop was installed** is decided before anything goes over the network,
 from facts gathered once (`src/infra/install-facts.ts` gathers them,
@@ -80,37 +82,62 @@ match wins:
 | # | Facts | Method | `--update` does |
 |---|---|---|---|
 | 1 | hop lives in a mise tool dir whose marker names hop (below) with a `github:` / `ubi:` / `aqua:` backend (latest from GitHub) or an `npm:` one (latest from npm) | `mise` | `mise upgrade <tool>` |
-| 1' | same, but any other backend naming hop | refused | tells you to run `mise upgrade <tool>` yourself |
-| 1'' | a mise tool dir named like hop's (`…n-seiji-nuthatch`) whose marker cannot be read | refused | "installed by mise; run `mise upgrade` yourself" |
-| 1''' | a **compiled binary** in any other tool dir (parent named `installs`) whose marker cannot be read — an alias like `installs/hop/`, an asdf-style layout | refused | "installed under a version manager's install dir; update it with the tool that installed it" (replacing a binary there would desync that manager's bookkeeping) |
-| 2 | a compiled binary (`bun build --compile`) on darwin-arm64 / darwin-x64 / linux-x64 | `standalone` | replaces the binary (below) |
-| 2' | a compiled binary on a platform with no prebuilt binary (e.g. linux-arm64) | refused | tells you to install with npm |
-| 3 | script path contains `/_npx/` or `/bunx-` | refused | npx / bunx already fetch the published version on every run |
-| 4 | script path contains `/.bun/install/global/node_modules/` | `bun` | `bun add -g @n-seiji/nuthatch@latest` |
-| 5 | script path contains `/lib/node_modules/@n-seiji/nuthatch/` — npm's global prefix layout (Homebrew, nvm, a custom prefix, a mise-managed node, …) | `npm` | `npm install -g @n-seiji/nuthatch@latest` |
-| 5' | any other `node_modules/@n-seiji/nuthatch/`: a pnpm global (`/pnpm/global/`), a yarn global (`/yarn/global/`), or a project dependency | refused | names the `pnpm add -g` / `yarn global add` command, or says to update it in that project |
-| 6 | anything else, including `bun run src/cli.ts` | refused | "running from a source checkout; update it with git" |
+| 1a | same, but any other backend naming hop | refused | tells you to run `mise upgrade <tool>` yourself |
+| 1b | a mise tool dir named like hop's (`…n-seiji-nuthatch`) whose marker cannot be read | refused | "installed by mise; run `mise upgrade` yourself" |
+| 1c | a **compiled binary** in any other tool dir (parent named `installs`) whose marker cannot be read or names another tool (`core:bun`, …) — an alias like `installs/hop/`, an asdf-style layout, a binary dropped into another tool's install | refused | "installed under a version manager's install dir; update it with the tool that installed it" (replacing a binary there would desync that manager's bookkeeping) |
+| 2 | a compiled binary whose real path is inside a package manager's own tree: `/Cellar/` (Homebrew), `/nix/store/` (Nix), `/aquaproj-aqua/` or `/aqua/pkgs/` (aqua), `/.proto/tools/` (proto) | refused | names the manager that owns the binary (and, for Homebrew, `brew upgrade`) and says to update it there |
+| 3 | a compiled binary (`bun build --compile`) on darwin-arm64 / darwin-x64 / linux-x64 | `standalone` | replaces the binary (below) |
+| 3a | a compiled binary on a platform with no prebuilt binary (e.g. linux-arm64) | refused | tells you to install with npm |
+| 4 | script path contains `/_npx/` or `/bunx-` | refused | npx / bunx already fetch the published version on every run |
+| 5 | script path contains `/.bun/install/global/node_modules/` | `bun` | `bun add -g @n-seiji/nuthatch@latest` |
+| 6 | npm's global prefix layout, **verified**: the script sits at `<prefix>/lib/node_modules/@n-seiji/nuthatch/` and `<prefix>/bin/hop` is a link that resolves to this very script (Homebrew, nvm, a custom prefix, a mise-managed node, …) | `npm` | `npm install -g --prefix <prefix> @n-seiji/nuthatch@latest`, run with `<prefix>/bin/npm` when that is an executable file |
+| 6a | any other `node_modules/@n-seiji/nuthatch/`: a pnpm global (`/pnpm/global/`), a yarn global (`/yarn/global/`), or a project dependency — including a `lib/node_modules` that only looks like npm's global layout (nothing at `<prefix>/bin/hop` leads back to the script) | refused | names the `pnpm add -g` / `yarn global add` command, or says to update it in that project |
+| 7 | anything else, including `bun run src/cli.ts` | refused | "running from a source checkout; update it with git" |
 
-**The mise rows** (1, 1', 1'', 1''') look at one place: the nearest ancestor of hop
+**The mise rows** (1, 1a, 1b, 1c) look at one place: the nearest ancestor of hop
 (at most 8 levels up) that sits directly in an `installs` directory — the mise
 tool dir hop lives in. Its marker is `.mise.backend.toml` (`full = "…"`), else
 the older plain-text `.mise.backend` (two lines, the short name and then the
-full id — so the **last** line is the id). Only a marker that names hop —
-`<backend>:n-seiji/nuthatch`, or `npm:@n-seiji/nuthatch` — counts. A marker for
-any other tool (`core:node` on a mise-managed node that `npm i -g` put hop
-into, `core:bun`, …) says nothing about hop: it is ignored and hop is
-classified by the rows below as if mise were not there. The walk does not go
-on past it, because a path inside one tool's dir is never inside a second,
-hop's own, one further up. Row 1'' is the case where the dir's *name*
+full id — so the **last** line is the id). The id may carry options
+(`github:n-seiji/nuthatch[bin=hop]`): a trailing `[…]` block is stripped before
+matching, and the tool `mise upgrade` is given is the stripped id. Only a
+marker that names hop — `<backend>:n-seiji/nuthatch`, or
+`npm:@n-seiji/nuthatch` — counts. A marker for any other tool (`core:node` on a
+mise-managed node that `npm i -g` put hop into, `core:bun`, …) says nothing
+about hop, and what follows depends on what hop is: a *script* ignores the
+marker and is classified by rows 4–7 as if mise were not there (an `npm i -g`
+on a mise-managed node is an npm install); a *compiled binary* is refused (row
+1c), because nothing but a version manager's own install puts a binary under
+`installs/<tool>/`. The walk does not go on past the nearest tool dir either
+way, because a path inside one tool's dir is never inside a second, hop's own,
+one further up. Row 1b is the case where the dir's *name*
 (`github-n-seiji-nuthatch`, `npm-n-seiji-nuthatch`: what mise calls an
 explicit-backend tool) says it is hop's but no marker can be read: hop will
-not guess, and does not fall through to rows 2–6, which would pick the wrong
-tool. Row 1''' is the same unreadable marker for a compiled binary under any
-other name: it is still inside a version manager's install dir, and replacing
-it in place would desync that manager's bookkeeping, so it is refused rather
-than treated as `standalone`. A *script* in such a dir (an npm global under
-asdf's `installs/nodejs`) is only inside it, so it still falls through to rows
-3–6; and a readable marker for another tool falls through for both.
+not guess, and does not fall through to rows 2–7, which would pick the wrong
+tool. Row 1c is a compiled binary under any other name, with an unreadable
+marker or another tool's: it is still inside a version manager's install dir,
+and replacing it in place would desync that manager's bookkeeping, so it is
+refused rather than treated as `standalone`. A *script* in a dir whose marker
+cannot be read (an npm global under asdf's `installs/nodejs`) is only inside
+it, so it still falls through to rows 4–7.
+
+**Package-manager trees (row 2).** Homebrew, Nix, aqua and proto keep their own
+copy of a compiled binary; swapping it in place would leave their bookkeeping
+describing a version that is no longer there (and the Nix store is read-only).
+The check is a path-segment match on the binary's real path, so it errs on the
+side of refusing; a binary from `install.sh` or one copied to `~/.local/bin` is
+unaffected.
+
+**The npm rows** (6, 6a). A path containing `/lib/node_modules/@n-seiji/nuthatch/`
+proves nothing — any project can have a `lib/node_modules` — so infra confirms
+that `<prefix>/bin/hop` exists and resolves to the running script, the link
+`npm install -g` creates (`InstallFacts.npmGlobalPrefix`). Without that link the
+copy is a project dependency and is refused. The prefix is then passed to npm
+explicitly: a bare `npm install -g` installs into the prefix of whichever
+`npm` runs, which with several nodes installed (nvm, mise, Homebrew) need not be
+the one hop lives in — a second hop would appear, the old one would stay, and
+hop would report success. For the same reason `<prefix>/bin/npm` is tried
+before `PATH`.
 
 **Latest version.** The standalone binary and mise's `github:` / `ubi:` /
 `aqua:` backends ask GitHub (`GET
@@ -123,33 +150,57 @@ numerically; anything else is an error rather than a guess. An installed
 version that is the same as or newer than the latest is never "updated": no
 downgrade.
 
-**Standalone replacement.** hop downloads `hop-<os>-<arch>` and
-`hop-<os>-<arch>.sha256` from the *resolved* tag
+**Standalone replacement.** Before downloading anything (and never for
+`--check`), hop checks that the binary's directory is writable (write and
+search permission, not a read-only filesystem), so an unwritable install dir is
+learned in milliseconds rather than after tens of MB. It then downloads
+`hop-<os>-<arch>.sha256` and `hop-<os>-<arch>` from the *resolved* tag
 (`…/releases/download/v<latest>/…`, never `latest/download`, so a release
-published between the check and the download cannot swap the binary), compares
-the SHA-256 of the downloaded bytes with the first token of the `.sha256` file
-(the check install.sh makes), and only then replaces the binary: it writes a
-temp file next to the real binary (the realpath, so a `~/.local/bin/hop`
-symlink's target is what changes), mode 0755, then `rename`s it over the
-binary — atomic, and the temp file is removed on any failure. A mismatch, or a
-`.sha256` that cannot be read, refuses the install (exit 3, nothing written).
-A directory hop cannot write to is exit 1 (`Cannot write <dir>; reinstall hop
-somewhere writable (install.sh uses ~/.local/bin).`).
+published between the check and the download cannot swap the binary). The
+SHA-256 of the downloaded bytes must equal the digest in the `.sha256` file
+(the check install.sh makes): its first token is the digest, and if a second
+token names a file (`sha256sum` writes `out/hop-<os>-<arch>`) that file must be
+this asset, since a digest of some other file cannot verify this one — a digest
+alone is accepted. Only then is the binary replaced: hop writes a hidden temp
+file next to the real binary (`.hop.update-<hex>` in the realpath's directory,
+so a `~/.local/bin/hop` symlink's target is what changes), mode 0755, `fsync`s
+it, then `rename`s it over the binary — atomic, and the temp file is removed on
+any failure. A mismatch, or a `.sha256` that is malformed or names a different
+file, refuses the install (exit 3, nothing written); a `.sha256` or binary that
+cannot be downloaded at all (a 404, a timeout) is a network failure, exit 1. A
+directory hop cannot write to is exit 1 (`Cannot write <dir>; reinstall hop
+somewhere writable (install.sh uses ~/.local/bin).`), whether it is
+permissions (EACCES / EPERM) or a read-only filesystem (EROFS).
 
 **Package-manager delegation** (`mise` / `npm` / `bun`). The program is looked
-up on `PATH` (absolute entries only, like git; a missing one is exit 1 naming
-the exact command to run by hand) and spawned by absolute path with an argv
-array — never a shell string — with stdin inherited and the child's stdout
-*and* stderr both sent to hop's **stderr**, so hop's stdout stays reserved for
-the data. A non-zero exit is exit 1. A zero exit only means the command
-succeeded: the package manager may still decide not to move (e.g. a mise
-config pinned to a version).
+up on `PATH` (absolute entries only, like git; for npm `<prefix>/bin/npm` comes
+first; a missing one is exit 1 naming the exact command to run by hand) and
+spawned by absolute path with an argv array — never a shell string — with stdin
+inherited and the child's stdout *and* stderr both sent to hop's **stderr**, so
+hop's stdout stays reserved for the data. A non-zero exit is exit 1, and so is
+a child killed by a signal (the message names the signal). A zero exit only
+means the command succeeded: the package manager may still decide not to move
+(e.g. a mise config pinned to a version).
 
-**Output.** stdout carries only the data — pretty JSON like `hop rm`, or the
-`--json` envelope:
+**Output.** stdout carries only the data. Plain, it is the data as 2-space
+pretty JSON, like `hop rm`:
 
 ```json
-{"current":"0.1.4","latest":"0.1.5","updateAvailable":true,"method":"standalone","action":"replaced","command":null}
+{
+  "current": "0.1.4",
+  "latest": "0.1.5",
+  "updateAvailable": true,
+  "method": "standalone",
+  "action": "replaced",
+  "command": null
+}
+```
+
+With `--json` it is the envelope, on one line, with that same object as `data`
+(`warnings` is `[]`):
+
+```json
+{"schemaVersion":1,"command":"update","data":{"current":"0.1.4","latest":"0.1.5","updateAvailable":true,"method":"standalone","action":"replaced","command":null},"warnings":[]}
 ```
 
 `method` is `standalone` / `mise` / `npm` / `bun`. `action` is what hop itself
@@ -157,9 +208,12 @@ did: `none` (already up to date, or `--check`), `replaced` (the standalone
 binary was swapped), or `delegated` (the package manager's own command ran and
 exited 0). `command` is the package-manager argv that ran or — for `--check`
 with an update available — would run, with the bare program name (e.g.
-`["mise","upgrade","github:n-seiji/nuthatch"]`); otherwise `null`, always for
-`standalone`. Progress (`Checking…`, `Downloading…`, `Running: …`) goes to
-stderr. The zsh wrapper needs no change: `--*` already means "don't `cd`".
+`["mise","upgrade","github:n-seiji/nuthatch"]`, or
+`["npm","install","-g","--prefix","/opt/homebrew","@n-seiji/nuthatch@latest"]`);
+otherwise `null`, always for `standalone`. Progress (`Checking…`,
+`Downloading…`, `Running: …`) goes to stderr. A failure leaves `data` out of
+the envelope and puts the message on stderr. The zsh wrapper needs no change:
+`--*` already means "don't `cd`".
 
 ## The 3 worktree categories
 
@@ -255,20 +309,30 @@ clone.
   shell wrapper preserves the exit code and `cd`s only when rc=0 and stdout
   is non-empty. For `hop --update`: 0=updated, already up to date (never a
   downgrade), or `--check`; 1=an install hop cannot update (source checkout,
-  npx / bunx, a pnpm / yarn global or a project dependency, a mise install
+  npx / bunx, a pnpm / yarn global or a project dependency — including a
+  `lib/node_modules` that is not verified as npm's global —, a mise install
   whose backend is unknown, a binary inside a version manager's install dir
-  without a readable marker, no prebuilt binary for the platform), a network /
-  HTTP failure, a package manager that failed or is not on `PATH`, or a
-  binary directory it cannot write; 3=a downloaded binary that fails its
-  checksum (or whose checksum file cannot be read) — hop refuses to install
-  an unverified binary, and nothing is written.
+  or a package manager's own tree, no prebuilt binary for the platform), a
+  network / HTTP failure (including a download that cannot be fetched at all,
+  such as a missing `.sha256`, a response over its size cap, and GitHub's API
+  rate limit), a package manager that failed, was killed by a signal, or is
+  not on `PATH`, or a binary directory it cannot write; 3=a downloaded binary
+  that fails its checksum, or whose `.sha256` is malformed or names a
+  different file — hop refuses to install an unverified binary, and nothing
+  is written.
 - **network access**: `hop --update` is the only thing hop does over the
   network: HTTPS GETs to fixed GitHub / npm URLs (never a user-supplied URL;
   a redirect to plain HTTP is refused), each with a timeout (15 s for
-  metadata, 5 min for the binary). A downloaded binary is verified against
-  the `.sha256` attached to the same release before it replaces anything —
-  the check install.sh makes, with the same trust root: it catches a corrupt
-  or truncated download, not a compromised release.
+  metadata, 5 min for the binary) and a size cap on what it will read (1 MiB
+  for the JSON metadata, 4 KiB for a `.sha256`, 256 MiB for a binary): a
+  `Content-Length` over the cap is refused before a byte is read, and the
+  bytes actually received are counted too, so a missing or wrong header does
+  not lift the cap. A GitHub API refusal that is the exhausted anonymous quota
+  (403 / 429 with `x-ratelimit-remaining: 0`) says so and to retry later. A
+  downloaded binary is verified against the `.sha256` attached to the same
+  release before it replaces anything — the check install.sh makes, with the
+  same trust root: it catches a corrupt or truncated download, not a
+  compromised release.
 - **mutation exclusivity**: every mutation (create / rm / clean / switching
   root) runs "re-validate → execute" inside a per-repo, cross-process lock.
   The lock is created with `mkdir` under the git common dir, records PID,
@@ -317,9 +381,11 @@ src/
 │   ├── garbage.ts       #   garbage detection for clean
 │   ├── git-executable.ts #  where the git binary may live (candidate list)
 │   ├── install-method.ts #  how this hop was installed → how --update updates it
+│   ├── install-script.ts #  script path → npm / bun / refused (and the npm prefix it implies)
+│   ├── install-roots.ts #   compiled binaries inside Homebrew / Nix / aqua / proto trees
 │   ├── mise-tool.ts     #   mise tool dir, its two marker formats, "is that tool hop?"
 │   ├── posix-path.ts    #   parentDir / baseName (domain cannot import node:path)
-│   ├── self-update.ts   #   versions, checksum file, fixed release URLs, PATH candidates
+│   ├── self-update.ts   #   versions, checksum file, fixed release URLs, npm package name, PATH candidates
 │   └── fatal-error.ts   #   escaped error → message + exit code
 ├── infra/               # The only place with external dependencies. Implements domain's ports
 │   ├── git.ts           #   node:child_process execFile (argv array only)
@@ -328,10 +394,11 @@ src/
 │   ├── repo.ts          #   classified worktree list, dirty check, how to check out a branch
 │   ├── lock.ts          #   per-repo mutation lock (withRepoLock)
 │   ├── term.ts          #   TTY detection, stderr logging
-│   ├── install-facts.ts #   realpath + mise marker → the facts install-method.ts decides on
+│   ├── install-facts.ts #   realpath + mise marker + verified npm prefix → the facts install-method.ts decides on
 │   ├── release-http.ts  #   --update's only network access: fixed GitHub / npm HTTPS GETs
-│   ├── release-binary.ts #  sha256 + atomic replacement of the running binary
-│   ├── package-manager.ts # mise / npm / bun lookup on PATH + spawn (output to stderr)
+│   ├── capped-body.ts   #   reads a response body up to a size cap (Content-Length + counted bytes)
+│   ├── release-binary.ts #  sha256, writability check, atomic fsynced replacement of the running binary
+│   ├── package-manager.ts # mise / npm / bun lookup (PATH, npm's prefix first) + spawn (output to stderr)
 │   └── self-update.ts   #   assembles the four above into the SelfUpdatePort
 ├── cli-fatal.ts         # cli.ts only: renders an escaped error (hop: … + envelope)
 ├── cli-update.ts        # cli.ts only: `--update` argument parsing, wiring, reporting

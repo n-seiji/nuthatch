@@ -11,14 +11,17 @@ const mise: DelegatedMethod = {
   channel: "github",
 };
 
-/** A port where `program` is at /opt/bin/<program> and every command exits with `exitCode`. */
+/**
+ * A port where `program` is in the preferred dir it is asked to try first, else
+ * at /opt/bin/<program>, and every command exits with `exitCode`.
+ */
 const portFor = (exitCode: number, overrides: Partial<SelfUpdatePort> = {}) => {
   const ran: (readonly string[])[] = [];
-  const resolved: string[] = [];
+  const resolved: (readonly [string, string | null])[] = [];
   const fake = createFakeSelfUpdate({
-    resolveExecutable: (name) => {
-      resolved.push(name);
-      return Promise.resolve(`/opt/bin/${name}`);
+    resolveExecutable: (name, preferredDir) => {
+      resolved.push([name, preferredDir]);
+      return Promise.resolve(`${preferredDir ?? "/opt/bin"}/${name}`);
     },
     runCommand: (argv) => {
       ran.push(argv);
@@ -43,25 +46,35 @@ describe("runDelegated", () => {
         command: ["mise", "upgrade", "github:n-seiji/nuthatch"],
       }),
     );
-    expect(resolved).toEqual(["mise"]);
+    expect(resolved).toEqual([["mise", null]]);
     expect(ran).toEqual([["/opt/bin/mise", "upgrade", "github:n-seiji/nuthatch"]]);
   });
 
-  it("npm の場合、npm install -g @n-seiji/nuthatch@latest を実行する", async () => {
-    const { fake, ran } = portFor(0);
+  it("npm の場合、hop が入っている prefix の bin から npm を探し、その prefix を --prefix に渡して実行する", async () => {
+    const { fake, ran, resolved } = portFor(0);
 
     const result = await runDelegated(
       fake.port,
       fake.term,
-      { kind: "npm" },
+      { kind: "npm", prefix: "/opt/homebrew" },
       updateDataOf({ method: "npm" }),
     );
 
-    expect(ran).toEqual([["/opt/bin/npm", "install", "-g", "@n-seiji/nuthatch@latest"]]);
+    expect(resolved).toEqual([["npm", "/opt/homebrew/bin"]]);
+    expect(ran).toEqual([
+      [
+        "/opt/homebrew/bin/npm",
+        "install",
+        "-g",
+        "--prefix",
+        "/opt/homebrew",
+        "@n-seiji/nuthatch@latest",
+      ],
+    ]);
     expect(result.data).toMatchObject({
       method: "npm",
       action: "delegated",
-      command: ["npm", "install", "-g", "@n-seiji/nuthatch@latest"],
+      command: ["npm", "install", "-g", "--prefix", "/opt/homebrew", "@n-seiji/nuthatch@latest"],
     });
   });
 
@@ -77,6 +90,7 @@ describe("runDelegated", () => {
 
     expect(ran).toEqual([["/opt/bin/bun", "add", "-g", "@n-seiji/nuthatch@latest"]]);
     expect(result.data).toMatchObject({ method: "bun", action: "delegated" });
+    expect(fake.calls).toEqual(["resolveExecutable", "runCommand"]);
   });
 
   it("コマンドが非 0 で終わった場合、コマンドと終了コードを含めて exit 1 になる", async () => {
@@ -112,13 +126,26 @@ describe("runDelegated", () => {
     const result = await runDelegated(
       fake.port,
       fake.term,
-      { kind: "npm" },
+      { kind: "npm", prefix: "/usr/local" },
       updateDataOf({ method: "npm" }),
     );
 
     expect(result).toMatchObject({ ok: false, exitCode: EXIT_GENERAL_ERROR });
     expect(result.errorMessage).toContain("npm install -g");
     expect(result.errorMessage).toContain("spawn EACCES");
+  });
+
+  it("コマンドがシグナルで終了した場合、コマンドとシグナル名を含めて exit 1 になる (終了コードのように扱わない)", async () => {
+    const { fake } = portFor(0, {
+      runCommand: () => Promise.reject(new Error("mise was killed by signal SIGTERM")),
+    });
+
+    const result = await runDelegated(fake.port, fake.term, mise, updateDataOf({ method: "mise" }));
+
+    expect(result).toMatchObject({ ok: false, exitCode: EXIT_GENERAL_ERROR });
+    expect(result.errorMessage).toBe(
+      "Failed to run mise upgrade github:n-seiji/nuthatch: mise was killed by signal SIGTERM",
+    );
   });
 
   it("実行するコマンドを stderr に出す", async () => {

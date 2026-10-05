@@ -118,7 +118,11 @@ describe("selfUpdate --check", () => {
 
   it("npm / bun の場合、最新版は npm から取り、npm install -g / bun add -g を報告する", async () => {
     for (const [value, method, command] of [
-      [npmFacts(), "npm", ["npm", "install", "-g", "@n-seiji/nuthatch@latest"]],
+      [
+        npmFacts(),
+        "npm",
+        ["npm", "install", "-g", "--prefix", "/usr/local", "@n-seiji/nuthatch@latest"],
+      ],
       [bunFacts(), "bun", ["bun", "add", "-g", "@n-seiji/nuthatch@latest"]],
     ] as const) {
       const fake = createFakeSelfUpdate({
@@ -174,6 +178,7 @@ describe("selfUpdate: 更新の実行を委譲する", () => {
     const fake = createFakeSelfUpdate({
       ...facts(standaloneFacts("/home/u/.local/bin/hop")),
       latestGithubVersion: () => Promise.resolve(LATEST),
+      assertWritableDir: () => Promise.resolve(),
       downloadReleaseText: () => Promise.resolve(`${digest}  out/hop-darwin-arm64\n`),
       downloadReleaseAsset: () => Promise.resolve(new TextEncoder().encode("new binary")),
       sha256Hex: () => digest,

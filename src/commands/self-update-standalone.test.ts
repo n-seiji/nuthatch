@@ -24,7 +24,12 @@ interface Replacement {
 const portFor = (expected: string, overrides: Partial<SelfUpdatePort> = {}) => {
   const replaced: Replacement[] = [];
   const downloads: string[] = [];
+  const checkedDirs: string[] = [];
   const fake = createFakeSelfUpdate({
+    assertWritableDir: (dir) => {
+      checkedDirs.push(dir);
+      return Promise.resolve();
+    },
     downloadReleaseText: (version, name) => {
       downloads.push(`text ${version} ${name}`);
       return Promise.resolve(`${expected}  out/hop-darwin-arm64\n`);
@@ -40,7 +45,7 @@ const portFor = (expected: string, overrides: Partial<SelfUpdatePort> = {}) => {
     },
     ...overrides,
   });
-  return { fake, replaced, downloads };
+  return { fake, replaced, downloads, checkedDirs };
 };
 
 describe("replaceStandalone", () => {
@@ -58,12 +63,14 @@ describe("replaceStandalone", () => {
     ]);
   });
 
-  it("置換は検証の後に行う (チェックサム → 本体 → 検証 → 置換の順)", async () => {
-    const { fake } = portFor(DIGEST);
+  it("置換は検証の後に行う (書き込み確認 → チェックサム → 本体 → 検証 → 置換の順)", async () => {
+    const { fake, checkedDirs } = portFor(DIGEST);
 
     await replaceStandalone(fake.port, fake.term, method, updateDataOf());
 
+    expect(checkedDirs).toEqual(["/home/u/.local/bin"]);
     expect(fake.calls).toEqual([
+      "assertWritableDir",
       "downloadReleaseText",
       "downloadReleaseAsset",
       "sha256Hex",
@@ -104,6 +111,21 @@ describe("replaceStandalone", () => {
     expect(replaced).toEqual([]);
   });
 
+  it("チェックサムファイルが別の asset のファイル名を指している場合、検証できないので exit 3 で拒否し、何も置換しない", async () => {
+    const { fake, replaced } = portFor(DIGEST, {
+      downloadReleaseText: () => Promise.resolve(`${DIGEST}  out/hop-linux-x64\n`),
+    });
+
+    const result = await replaceStandalone(fake.port, fake.term, method, updateDataOf());
+
+    expect(result).toMatchObject({ ok: false, exitCode: EXIT_SAFE_REJECTION });
+    expect(result.errorMessage).toContain("hop-darwin-arm64.sha256");
+    expect(result.errorMessage).toContain('"out/hop-linux-x64"');
+    expect(result.errorMessage).toContain("unverified");
+    expect(replaced).toEqual([]);
+    expect(fake.calls).not.toContain("replaceExecutable");
+  });
+
   it("チェックサムの取得に失敗した場合、exit 1 になり、本体はダウンロードしない", async () => {
     const { fake } = portFor(DIGEST, {
       downloadReleaseText: () => Promise.reject(new Error("GET https://x failed: HTTP 404")),
@@ -114,7 +136,7 @@ describe("replaceStandalone", () => {
     expect(result).toMatchObject({ ok: false, exitCode: EXIT_GENERAL_ERROR });
     expect(result.errorMessage).toContain("hop-darwin-arm64.sha256");
     expect(result.errorMessage).toContain("HTTP 404");
-    expect(fake.calls).toEqual(["downloadReleaseText"]);
+    expect(fake.calls).toEqual(["assertWritableDir", "downloadReleaseText"]);
   });
 
   it("本体の取得に失敗した場合、exit 1 になり、何も置換しない", async () => {
@@ -129,8 +151,40 @@ describe("replaceStandalone", () => {
     expect(replaced).toEqual([]);
   });
 
-  it("書き込めないディレクトリ (EACCES / EPERM) の場合、書き込み可能な場所への入れ直しを案内して exit 1 になる", async () => {
-    for (const code of ["EACCES", "EPERM"]) {
+  it("書き込めないことが分かっているディレクトリ (EACCES / EPERM / EROFS) の場合、何もダウンロードせずに、書き込み可能な場所への入れ直しを案内して exit 1 になる", async () => {
+    for (const code of ["EACCES", "EPERM", "EROFS"]) {
+      const { fake, downloads } = portFor(DIGEST, {
+        assertWritableDir: () => Promise.reject(Object.assign(new Error(code), { code })),
+      });
+
+      // oxlint-disable-next-line no-await-in-loop
+      const result = await replaceStandalone(fake.port, fake.term, method, updateDataOf());
+
+      expect(result).toMatchObject({ ok: false, exitCode: EXIT_GENERAL_ERROR });
+      expect(result.errorMessage).toBe(
+        "Cannot write /home/u/.local/bin; reinstall hop somewhere writable (install.sh uses ~/.local/bin).",
+      );
+      expect(downloads).toEqual([]);
+      expect(fake.calls).toEqual(["assertWritableDir"]);
+    }
+  });
+
+  it("書き込み確認が権限以外で失敗した場合、対象のパスと原因を含めて exit 1 になり、何もダウンロードしない", async () => {
+    const { fake, downloads } = portFor(DIGEST, {
+      assertWritableDir: () =>
+        Promise.reject(Object.assign(new Error("ENOENT: no such directory"), { code: "ENOENT" })),
+    });
+
+    const result = await replaceStandalone(fake.port, fake.term, method, updateDataOf());
+
+    expect(result).toMatchObject({ ok: false, exitCode: EXIT_GENERAL_ERROR });
+    expect(result.errorMessage).toContain("/home/u/.local/bin/hop");
+    expect(result.errorMessage).toContain("ENOENT");
+    expect(downloads).toEqual([]);
+  });
+
+  it("置換の直前に書き込めなくなった場合 (EACCES / EPERM / EROFS) も、同じ案内で exit 1 になる", async () => {
+    for (const code of ["EACCES", "EPERM", "EROFS"]) {
       const { fake } = portFor(DIGEST, {
         replaceExecutable: () => Promise.reject(Object.assign(new Error(code), { code })),
       });

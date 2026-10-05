@@ -5,6 +5,7 @@ import {
   miseToolDir,
   parseLegacyMiseBackend,
   parseMiseBackendToml,
+  withoutToolOptions,
 } from "./mise-tool.ts";
 
 describe("parseMiseBackendToml", () => {
@@ -66,6 +67,19 @@ describe("parseLegacyMiseBackend", () => {
   it("空の場合、null を返す", () => {
     expect(parseLegacyMiseBackend("")).toBeNull();
     expect(parseLegacyMiseBackend("  \n\r\n")).toBeNull();
+  });
+});
+
+describe("withoutToolOptions", () => {
+  it("末尾に [key=value,…] のオプションが付いている場合、それを除いた id を返す", () => {
+    expect(withoutToolOptions("github:n-seiji/nuthatch[bin=hop]")).toBe("github:n-seiji/nuthatch");
+    expect(withoutToolOptions("npm:@n-seiji/nuthatch[a=b,c=d]")).toBe("npm:@n-seiji/nuthatch");
+  });
+
+  it("オプションが無い・末尾でない [] の場合、そのまま返す", () => {
+    expect(withoutToolOptions("github:n-seiji/nuthatch")).toBe("github:n-seiji/nuthatch");
+    expect(withoutToolOptions("core:node")).toBe("core:node");
+    expect(withoutToolOptions("a[b]c")).toBe("a[b]c");
   });
 });
 

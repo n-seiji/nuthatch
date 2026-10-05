@@ -1,5 +1,9 @@
 import { messageOf } from "../domain/fatal-error.ts";
-import { type DelegatedMethod, upgradeCommand } from "../domain/install-method.ts";
+import {
+  type DelegatedMethod,
+  preferredProgramDir,
+  upgradeCommand,
+} from "../domain/install-method.ts";
 import type { SelfUpdatePort, TermPort } from "../domain/ports.ts";
 import { type CommandResult, EXIT_GENERAL_ERROR, fail, ok } from "../domain/result.ts";
 import type { UpdateData } from "../domain/schema.ts";
@@ -22,7 +26,7 @@ export const runDelegated = async (
   const [program, ...args] = argv;
   const command = argv.join(" ");
 
-  const executable = await port.resolveExecutable(program);
+  const executable = await port.resolveExecutable(program, preferredProgramDir(method));
   if (executable === null) {
     return fail(
       EXIT_GENERAL_ERROR,

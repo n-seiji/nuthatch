@@ -11,6 +11,7 @@ import type { MiseToolFacts } from "./mise-tool.ts";
 
 const INSTALLS = "/home/u/.local/share/mise/installs";
 const NPM_GLOBAL_SCRIPT = "/usr/local/lib/node_modules/@n-seiji/nuthatch/dist/cli.js";
+const NPM_GLOBAL_PREFIX = "/usr/local";
 
 /** A mise tool dir named `name` whose marker records `backend` (null: no readable marker). */
 const miseDir = (name: string, backend: string | null): MiseToolFacts => ({
@@ -28,19 +29,20 @@ const reasonOf = (value: InstallFacts): string => {
 };
 
 describe("detectInstallMethod: mise のマーカーが hop のものでない場合", () => {
-  it("mise の node (core:node) 配下に npm i -g した場合、そのマーカーは無視して npm になる", () => {
+  it("mise の node (core:node) 配下に npm i -g した場合、そのマーカーは無視して、node の prefix を持つ npm になる", () => {
     const method = detectInstallMethod(
       installFactsOf({
         scriptPath: `${INSTALLS}/node/25.6.1/lib/node_modules/@n-seiji/nuthatch/dist/cli.js`,
+        npmGlobalPrefix: `${INSTALLS}/node/25.6.1`,
         mise: miseDir("node", "core:node"),
       }),
     );
 
-    expect(method).toEqual({ kind: "npm" });
+    expect(method).toEqual({ kind: "npm", prefix: `${INSTALLS}/node/25.6.1` });
   });
 
-  it("別ツールのマーカー配下のコンパイル済みバイナリは、マーカーを無視して standalone になる", () => {
-    const method = detectInstallMethod(
+  it("別ツール (core:bun) のマーカー配下のコンパイル済みバイナリは、standalone にせず、バージョンマネージャ配下として unsupported になる", () => {
+    const reason = reasonOf(
       installFactsOf({
         compiled: true,
         executablePath: `${INSTALLS}/bun/1.2.0/bin/hop`,
@@ -48,7 +50,22 @@ describe("detectInstallMethod: mise のマーカーが hop のものでない場
       }),
     );
 
-    expect(method.kind).toBe("standalone");
+    expect(reason).toContain("installed under a version manager's install dir");
+    expect(reason).toContain(`${INSTALLS}/bun`);
+    expect(reason).toContain('names "core:bun", not hop');
+    expect(reason).toContain("update it with the tool that installed it");
+  });
+
+  it("別ツールのマーカーにオプションが付いている場合も、オプションを除いた id で案内する", () => {
+    const reason = reasonOf(
+      installFactsOf({
+        compiled: true,
+        executablePath: `${INSTALLS}/bun/1.2.0/bin/hop`,
+        mise: miseDir("bun", "core:bun[x=y]"),
+      }),
+    );
+
+    expect(reason).toContain('names "core:bun", not hop');
   });
 
   it("別ツールのマーカーを無視した先でも、他のルールは通常どおり効く (ソースチェックアウトは拒否のまま)", () => {
@@ -66,11 +83,12 @@ describe("detectInstallMethod: mise のマーカーが hop のものでない場
     const method = detectInstallMethod(
       installFactsOf({
         scriptPath: NPM_GLOBAL_SCRIPT,
+        npmGlobalPrefix: NPM_GLOBAL_PREFIX,
         mise: miseDir("npm-n-seiji-nuthatch", "core:node"),
       }),
     );
 
-    expect(method).toEqual({ kind: "npm" });
+    expect(method).toEqual({ kind: "npm", prefix: NPM_GLOBAL_PREFIX });
   });
 });
 
@@ -116,11 +134,12 @@ describe("detectInstallMethod: mise のツールディレクトリだがマー�
       const method = detectInstallMethod(
         installFactsOf({
           scriptPath: NPM_GLOBAL_SCRIPT,
+          npmGlobalPrefix: NPM_GLOBAL_PREFIX,
           mise: miseDir(name, null),
         }),
       );
 
-      expect(method).toEqual({ kind: "npm" });
+      expect(method).toEqual({ kind: "npm", prefix: NPM_GLOBAL_PREFIX });
     }
   });
 });

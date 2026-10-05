@@ -9,14 +9,14 @@ import {
   ok,
 } from "../domain/result.ts";
 import type { UpdateData } from "../domain/schema.ts";
-import { isPermissionDenied, parseChecksumFile } from "../domain/self-update.ts";
+import { isWriteDenied, parseChecksumFile } from "../domain/self-update.ts";
 import { attempt } from "./self-update-attempt.ts";
 
 /**
- * Compares the downloaded bytes with the release's published SHA-256. Both a
- * mismatch and an unreadable checksum file refuse the install (exit 3, a
- * safety rejection): without a verified digest the binary is untrusted, and
- * nothing has been written yet.
+ * Compares the downloaded bytes with the release's published SHA-256. A
+ * mismatch, a checksum file that cannot be read, and one that is for another
+ * file all refuse the install (exit 3, a safety rejection): without a
+ * verified digest the binary is untrusted, and nothing has been written yet.
  */
 const checksumRejection = (
   port: SelfUpdatePort,
@@ -24,25 +24,25 @@ const checksumRejection = (
   checksumText: string,
   bytes: Uint8Array,
 ): CommandResult<UpdateData> | null => {
-  const expected = parseChecksumFile(checksumText);
-  if (expected === null) {
+  const expected = parseChecksumFile(checksumText, assetName);
+  if (!expected.ok) {
     return fail(
       EXIT_SAFE_REJECTION,
-      `The checksum file ${assetName}.sha256 is malformed; refusing to install an unverified binary.`,
+      `The checksum file ${assetName}.sha256 ${expected.reason}; refusing to install an unverified binary.`,
     );
   }
   const actual = port.sha256Hex(bytes);
-  if (actual !== expected) {
+  if (actual !== expected.digest) {
     return fail(
       EXIT_SAFE_REJECTION,
-      `Checksum mismatch for ${assetName} (expected ${expected}, got ${actual}); refusing to install it. Nothing was changed.`,
+      `Checksum mismatch for ${assetName} (expected ${expected.digest}, got ${actual}); refusing to install it. Nothing was changed.`,
     );
   }
   return null;
 };
 
 const replaceFailureMessage = (method: StandaloneMethod, error: unknown): string =>
-  isPermissionDenied(error)
+  isWriteDenied(error)
     ? `Cannot write ${method.installDir}; reinstall hop somewhere writable (install.sh uses ~/.local/bin).`
     : `Failed to replace ${method.binaryPath}: ${messageOf(error)}`;
 
@@ -60,6 +60,12 @@ export const replaceStandalone = async (
 ): Promise<CommandResult<UpdateData>> => {
   const { assetName, binaryPath } = method;
   const checksumAsset = `${assetName}.sha256`;
+
+  const writable = await attempt(() => port.assertWritableDir(method.installDir));
+  if (!writable.ok) {
+    return fail(EXIT_GENERAL_ERROR, replaceFailureMessage(method, writable.error));
+  }
+
   term.logStderr(`Downloading ${assetName} v${base.latest}...`);
 
   const checksum = await attempt(() => port.downloadReleaseText(base.latest, checksumAsset));
