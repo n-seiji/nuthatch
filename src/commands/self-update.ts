@@ -57,7 +57,14 @@ export const selfUpdate = async (
   term: TermPort,
   options: SelfUpdateOptions,
 ): Promise<CommandResult<UpdateData>> => {
-  const method = detectInstallMethod(await port.installFacts());
+  const facts = await attempt(() => port.installFacts());
+  if (!facts.ok) {
+    return fail(
+      EXIT_GENERAL_ERROR,
+      `Cannot update hop: could not tell how it was installed (${messageOf(facts.error)}).`,
+    );
+  }
+  const method = detectInstallMethod(facts.value);
   if (method.kind === "unsupported") {
     return fail(EXIT_GENERAL_ERROR, `Cannot update hop: ${method.reason}.`);
   }

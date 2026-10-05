@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename } from "node:path";
 import type { CommandArgv } from "../domain/install-method.ts";
 import { pathExecutableCandidates } from "../domain/self-update.ts";
@@ -52,8 +53,11 @@ export const resolveExecutable = async (
 };
 
 /**
- * Runs `argv` with stdin inherited (a package manager may prompt) and the
- * child's stdout *and* stderr both on hop's stderr: hop's own stdout is
+ * Runs `argv` in the user's home directory, not wherever hop was started: hop
+ * is used inside repositories, and a project's own `mise.toml` (pinning an
+ * older hop), `.npmrc` or `bunfig.toml` would otherwise steer the package
+ * manager's update. Stdin is inherited (a package manager may prompt) and the
+ * child's stdout *and* stderr are both on hop's stderr: hop's own stdout is
  * reserved for the JSON envelope / plain data the shell wrapper captures, so
  * a chatty child must never end up there. Rejects if the process cannot be
  * started or is killed by a signal (the message names it: a signal has no
@@ -63,6 +67,7 @@ export const runCommand = (argv: CommandArgv): Promise<number> =>
   new Promise((resolve, reject) => {
     const [program, ...args] = argv;
     const child = spawn(program, args, {
+      cwd: homedir(),
       stdio: ["inherit", STDERR_FD, STDERR_FD],
     });
     child.once("error", reject);

@@ -74,4 +74,16 @@ describe("npm のグローバルインストールの更新先", () => {
     expect(npm).toBe(pathNpm);
     expect(argv).toContain(prefix);
   });
+
+  it("Homebrew の formula が std_npm_args で入れた keg の libexec は、bin/hop で prefix を確認できても更新せず、brew upgrade を案内する", async () => {
+    const prefix = join(sandbox, "Cellar", "nuthatch", "0.1.5", "libexec");
+    const { bin } = await createNpmGlobalHop(prefix);
+
+    const facts = await readInstallFacts(installSourceOf({ argv1: bin }));
+    const method = detectInstallMethod(facts);
+
+    expect(facts.npmGlobalPrefix).toBe(prefix);
+    expect(method.kind).toBe("unsupported");
+    expect(method.kind === "unsupported" ? method.reason : "").toContain('"brew upgrade"');
+  });
 });

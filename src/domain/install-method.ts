@@ -67,6 +67,9 @@ export type StandaloneMethod = Extract<InstallMethod, { readonly kind: "standalo
 /** The install methods whose update is another tool's own command. */
 export type DelegatedMethod = Extract<InstallMethod, { readonly kind: "mise" | "npm" | "bun" }>;
 
+/** An install that mise put there. */
+export type MiseMethod = Extract<InstallMethod, { readonly kind: "mise" }>;
+
 /** A program plus its arguments; never a shell string. */
 export type CommandArgv = readonly [string, ...string[]];
 
@@ -183,7 +186,8 @@ const detectStandalone = (facts: InstallFacts): InstallMethod => {
  * hop's own marker — all of it beats the compiled / script heuristics, since a
  * mise install is itself a compiled binary or an npm package), a compiled
  * binary inside a package manager's own tree (refused), standalone binary,
- * npx, bunx, bun global, verified npm global, any other `node_modules` copy
+ * npx, bunx, bun global, verified npm global (refused when its prefix is
+ * inside Homebrew's or Nix's own tree), any other `node_modules` copy
  * (refused), source checkout.
  */
 export const detectInstallMethod = (facts: InstallFacts): InstallMethod => {
@@ -218,6 +222,20 @@ export const upgradeCommand = (method: DelegatedMethod): CommandArgv => {
     ? ["npm", "install", "-g", "--prefix", method.prefix, NPM_PACKAGE_LATEST]
     : ["bun", "add", "-g", NPM_PACKAGE_LATEST];
 };
+
+/**
+ * The question to put to mise before `upgradeCommand`, changing nothing:
+ * `mise upgrade` exits 0 whether or not it moved anything (a pinned version,
+ * `minimum_release_age`, a tool outside the active config), while `mise
+ * upgrade --dry-run-code <tool>` exits 1 when it would upgrade the tool and 0
+ * when it would not. npm and bun have no such question.
+ */
+export const miseDryRunCommand = (method: MiseMethod): CommandArgv => [
+  "mise",
+  "upgrade",
+  "--dry-run-code",
+  method.tool,
+];
 
 /**
  * Where to look for the upgrade command's program before PATH: npm's own

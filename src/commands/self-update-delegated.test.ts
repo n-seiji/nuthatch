@@ -11,9 +11,14 @@ const mise: DelegatedMethod = {
   channel: "github",
 };
 
+const DRY_RUN_FLAG = "--dry-run-code";
+/** What `mise upgrade --dry-run-code` exits with when `mise upgrade` would change something. */
+const WOULD_UPGRADE = 1;
+
 /**
  * A port where `program` is in the preferred dir it is asked to try first, else
- * at /opt/bin/<program>, and every command exits with `exitCode`.
+ * at /opt/bin/<program>, and every command exits with `exitCode` — except
+ * mise's `--dry-run-code` question, which always answers "would upgrade".
  */
 const portFor = (exitCode: number, overrides: Partial<SelfUpdatePort> = {}) => {
   const ran: (readonly string[])[] = [];
@@ -25,7 +30,7 @@ const portFor = (exitCode: number, overrides: Partial<SelfUpdatePort> = {}) => {
     },
     runCommand: (argv) => {
       ran.push(argv);
-      return Promise.resolve(exitCode);
+      return Promise.resolve(argv.includes(DRY_RUN_FLAG) ? WOULD_UPGRADE : exitCode);
     },
     ...overrides,
   });
@@ -33,7 +38,7 @@ const portFor = (exitCode: number, overrides: Partial<SelfUpdatePort> = {}) => {
 };
 
 describe("runDelegated", () => {
-  it("mise の場合、解決した絶対パスで mise upgrade <tool> を実行し action: delegated を返す", async () => {
+  it("mise の場合、解決した絶対パスで dry-run の確認のあとに mise upgrade <tool> を実行し action: delegated を返す", async () => {
     const { fake, ran, resolved } = portFor(0);
 
     const result = await runDelegated(fake.port, fake.term, mise, updateDataOf({ method: "mise" }));
@@ -47,7 +52,10 @@ describe("runDelegated", () => {
       }),
     );
     expect(resolved).toEqual([["mise", null]]);
-    expect(ran).toEqual([["/opt/bin/mise", "upgrade", "github:n-seiji/nuthatch"]]);
+    expect(ran).toEqual([
+      ["/opt/bin/mise", "upgrade", "--dry-run-code", "github:n-seiji/nuthatch"],
+      ["/opt/bin/mise", "upgrade", "github:n-seiji/nuthatch"],
+    ]);
   });
 
   it("npm の場合、hop が入っている prefix の bin から npm を探し、その prefix を --prefix に渡して実行する", async () => {
@@ -137,7 +145,10 @@ describe("runDelegated", () => {
 
   it("コマンドがシグナルで終了した場合、コマンドとシグナル名を含めて exit 1 になる (終了コードのように扱わない)", async () => {
     const { fake } = portFor(0, {
-      runCommand: () => Promise.reject(new Error("mise was killed by signal SIGTERM")),
+      runCommand: (argv) =>
+        argv.includes(DRY_RUN_FLAG)
+          ? Promise.resolve(WOULD_UPGRADE)
+          : Promise.reject(new Error("mise was killed by signal SIGTERM")),
     });
 
     const result = await runDelegated(fake.port, fake.term, mise, updateDataOf({ method: "mise" }));
@@ -148,11 +159,20 @@ describe("runDelegated", () => {
     );
   });
 
-  it("実行するコマンドを stderr に出す", async () => {
-    const { fake } = portFor(0);
+  it("実行するコマンドを、解決した絶対パス付きで stderr に出す (どの npm / bun が動いたか分かる)", async () => {
+    for (const [method, running] of [
+      [
+        { kind: "npm", prefix: "/opt/homebrew" },
+        "Running: /opt/homebrew/bin/npm install -g --prefix /opt/homebrew @n-seiji/nuthatch@latest",
+      ],
+      [{ kind: "bun" }, "Running: /opt/bin/bun add -g @n-seiji/nuthatch@latest"],
+    ] as const) {
+      const { fake } = portFor(0);
 
-    await runDelegated(fake.port, fake.term, mise, updateDataOf({ method: "mise" }));
+      // oxlint-disable-next-line no-await-in-loop
+      await runDelegated(fake.port, fake.term, method, updateDataOf({ method: method.kind }));
 
-    expect(fake.logs.join("\n")).toContain("Running: mise upgrade github:n-seiji/nuthatch");
+      expect(fake.logs).toContain(running);
+    }
   });
 });

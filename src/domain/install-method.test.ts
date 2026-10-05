@@ -166,6 +166,7 @@ describe("detectInstallMethod: standalone", () => {
   it("パッケージ管理ツールの置き場 (Homebrew / Nix / aqua / proto) 配下のバイナリの場合、standalone にせず、そのツールを案内する unsupported になる", () => {
     for (const [path, manager] of [
       ["/opt/homebrew/Cellar/nuthatch/0.1.5/bin/hop", "Homebrew"],
+      ["/opt/homebrew/Caskroom/nuthatch/0.1.5/hop", "Homebrew"],
       ["/nix/store/abc123-nuthatch-0.1.5/bin/hop", "Nix"],
       ["/home/u/.local/share/aquaproj-aqua/pkgs/github_release/hop", "aqua"],
       ["/home/u/.proto/tools/hop/0.1.5/hop", "proto"],
@@ -177,16 +178,31 @@ describe("detectInstallMethod: standalone", () => {
     }
   });
 
-  it("管理ツールの置き場でも、script (npm の global など) は影響を受けない", () => {
-    const method = detectInstallMethod(
+  it("Homebrew の formula が std_npm_args で入れた script (Cellar/<formula>/<version>/libexec の npm prefix) の場合、検証済みの prefix でも npm にせず、brew upgrade を案内する unsupported になる", () => {
+    const prefix = "/opt/homebrew/Cellar/nuthatch/0.1.5/libexec";
+    const reason = reasonOf(
       installFactsOf({
-        scriptPath:
-          "/opt/homebrew/Cellar/node/22.0.0/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
-        npmGlobalPrefix: "/opt/homebrew/Cellar/node/22.0.0",
+        scriptPath: `${prefix}/lib/node_modules/@n-seiji/nuthatch/dist/cli.js`,
+        npmGlobalPrefix: prefix,
       }),
     );
 
-    expect(method.kind).toBe("npm");
+    expect(reason).toContain("Homebrew");
+    expect(reason).toContain(prefix);
+    expect(reason).toContain('"brew upgrade"');
+  });
+
+  it("Nix のストアにある script の場合も、検証済みの npm prefix を npm にせず、Nix を案内する unsupported になる", () => {
+    const prefix = "/nix/store/abc123-nuthatch-0.1.5";
+    const reason = reasonOf(
+      installFactsOf({
+        scriptPath: `${prefix}/lib/node_modules/@n-seiji/nuthatch/dist/cli.js`,
+        npmGlobalPrefix: prefix,
+      }),
+    );
+
+    expect(reason).toContain("Nix");
+    expect(reason).toContain(prefix);
   });
 });
 

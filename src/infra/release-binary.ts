@@ -68,9 +68,9 @@ export const replaceExecutable = async (path: string, bytes: Uint8Array): Promis
 
 /**
  * Whether files can be created in `dir` (write and search permission, and not
- * a read-only filesystem), asked before anything is downloaded so that an
- * unwritable install dir is learned in milliseconds instead of after tens of
- * MB.
+ * a read-only filesystem), asked before the binary or its checksum is
+ * downloaded so that an unwritable install dir is learned in milliseconds
+ * instead of after tens of MB.
  */
 export const assertWritableDir = (dir: string): Promise<void> =>
   access(dir, constants.W_OK | constants.X_OK);

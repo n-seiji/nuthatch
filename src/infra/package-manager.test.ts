@@ -1,6 +1,6 @@
 import { execFile as execFileCb } from "node:child_process";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
@@ -111,6 +111,21 @@ describe("runCommand", () => {
 
   it("起動できないプログラムの場合、reject する", async () => {
     await expect(runCommand([join(sandbox, "nowhere", "mise")])).rejects.toThrow();
+  });
+
+  it("子の作業ディレクトリは、hop を起動した場所ではなくホームディレクトリになる (リポジトリの mise.toml などに左右されない)", async () => {
+    // The child's stdout goes to hop's stderr, so it reports where it ran through a file.
+    const reported = join(sandbox, "child-cwd.txt");
+    const launchedFrom = process.cwd();
+    process.chdir(sandbox);
+    try {
+      expect(await runCommand(["/bin/sh", "-c", 'pwd -P > "$0"', reported])).toBe(0);
+    } finally {
+      process.chdir(launchedFrom);
+    }
+
+    const childCwd = await readFile(reported, "utf8");
+    expect(childCwd.trim()).toBe(await realpath(homedir()));
   });
 
   it("子の stdout も stderr も hop の stderr に流れ、hop の stdout は汚れない", async () => {

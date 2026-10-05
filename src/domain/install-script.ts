@@ -1,3 +1,4 @@
+import { managerNpmPrefixReason } from "./install-roots.ts";
 import { NPM_PACKAGE, NPM_PACKAGE_LATEST } from "./self-update.ts";
 
 /**
@@ -55,7 +56,10 @@ const otherNodeModulesReason = (scriptPath: string): string => {
 /**
  * `npmGlobalPrefix` is the prefix infra verified (see InstallFacts), not what
  * the path alone suggests: a path that merely looks like npm's global layout
- * falls through to the `node_modules` refusal below.
+ * falls through to the `node_modules` refusal below. A verified prefix that is
+ * inside Homebrew's or Nix's own tree is refused too, naming the manager
+ * (that is only knowable once the prefix is verified): the formula's
+ * `npm install -g --prefix …/Cellar/…/libexec` would rewrite its keg.
  */
 export const detectScriptInstall = (
   scriptPath: string,
@@ -75,7 +79,8 @@ export const detectScriptInstall = (
     return { kind: "bun" };
   }
   if (npmGlobalPrefix !== null) {
-    return { kind: "npm", prefix: npmGlobalPrefix };
+    const managedBy = managerNpmPrefixReason(npmGlobalPrefix);
+    return managedBy === null ? { kind: "npm", prefix: npmGlobalPrefix } : unsupported(managedBy);
   }
   if (scriptPath.includes(NODE_MODULES_MARKER)) {
     return unsupported(otherNodeModulesReason(scriptPath));

@@ -42,7 +42,7 @@ describe("detectInstallMethod: グローバルインストール", () => {
     expect(methodOf(script)).toEqual({ kind: "bun" });
   });
 
-  it("npm のグローバル prefix を確認できた場合、置き場が何であれ、その prefix を持つ npm になる", () => {
+  it("npm のグローバル prefix を確認できた場合、パッケージ管理ツール自身の置き場 (Homebrew の keg / Nix のストア) でなければ、その prefix を持つ npm になる", () => {
     for (const [script, prefix] of [
       ["/usr/local/lib/node_modules/@n-seiji/nuthatch/dist/cli.js", "/usr/local"],
       ["/opt/homebrew/lib/node_modules/@n-seiji/nuthatch/dist/cli.js", "/opt/homebrew"],
@@ -54,6 +54,10 @@ describe("detectInstallMethod: グローバルインストール", () => {
       [
         "/home/u/.local/share/mise/installs/node/25.6.1/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
         "/home/u/.local/share/mise/installs/node/25.6.1",
+      ],
+      [
+        "/home/u/.proto/tools/node/22.0.0/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
+        "/home/u/.proto/tools/node/22.0.0",
       ],
     ] as const) {
       expect(methodOf(script, prefix)).toEqual({ kind: "npm", prefix });

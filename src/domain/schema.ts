@@ -149,13 +149,15 @@ const UpdateCommandSchema = array(string());
 
 /**
  * `hop --update` data shape. `updateAvailable` is `latest > current`.
- * `action` is what hop itself did: `none` (already up to date, or `--check`),
- * `replaced` (the standalone binary was swapped), or `delegated` (the package
- * manager's own upgrade command ran and exited 0). For `delegated`, hop only
- * knows the command succeeded — the package manager may still decide not to
- * move (e.g. a mise config pinned to a version). `command` is the package
- * manager argv that ran (`delegated`) or that would run (`--check` with an
- * update available on mise/npm/bun); otherwise null, always for standalone.
+ * `action` is what hop itself did: `none` (already up to date, `--check`, or
+ * mise answering, before `mise upgrade` ran, that it would not upgrade hop —
+ * `updateAvailable` is still true then, and a warning says why), `replaced`
+ * (the standalone binary was swapped), or `delegated` (the package manager's
+ * own upgrade command ran and exited 0). For `delegated`, hop only knows the
+ * command succeeded — the package manager may still decide not to move.
+ * `command` is the package manager argv that ran (`delegated`) or that would
+ * run (`--check` with an update available on mise/npm/bun); otherwise null,
+ * always for standalone.
  */
 export const UpdateDataSchema = object({
   current: string(),

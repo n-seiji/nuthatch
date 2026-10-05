@@ -35,6 +35,17 @@ const withUrl = (response: Response, url: string): Response => {
   return response;
 };
 
+/** A response whose body has not been read, recording whether it was cancelled. */
+const unreadBody = (init: ResponseInit) => {
+  const state = { cancelled: false };
+  const body = new ReadableStream<Uint8Array>({
+    cancel() {
+      state.cancelled = true;
+    },
+  });
+  return { response: new Response(body, init), state };
+};
+
 const httpWith = (respond: (url: string) => Response | Promise<Response>) => {
   const requests: RecordedRequest[] = [];
   const http = createReleaseHttp("hop/0.1.5", async (url, init) => {
@@ -156,6 +167,39 @@ describe("リクエストの失敗", () => {
     );
 
     await expect(http.latestGithubVersion()).rejects.toThrow(/not HTTPS/u);
+  });
+});
+
+describe("拒否した応答の本文", () => {
+  it("2xx 以外の場合、本文を読まずに破棄してからエラーにする (接続を掴んだままにしない)", async () => {
+    const { response, state } = unreadBody({ status: 404 });
+    const { http } = httpWith(() => response);
+
+    await expect(http.downloadReleaseAsset("9.9.9", "hop-linux-x64")).rejects.toThrow("HTTP 404");
+
+    expect(state.cancelled).toBe(true);
+  });
+
+  it("HTTPS でない URL へのリダイレクトの場合も、本文を破棄してからエラーにする", async () => {
+    const { response, state } = unreadBody({ status: 200 });
+    const { http } = httpWith(() => withUrl(response, "http://example.com/downgraded"));
+
+    await expect(http.downloadReleaseAsset("0.1.5", "hop-linux-x64")).rejects.toThrow(/not HTTPS/u);
+
+    expect(state.cancelled).toBe(true);
+  });
+
+  it("本文の破棄に失敗しても、拒否した本当の理由 (ステータス) を隠さない", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      cancel() {
+        throw new Error("stream already errored");
+      },
+    });
+    const { http } = httpWith(() => new Response(body, { status: 403 }));
+
+    await expect(http.latestGithubVersion()).rejects.toThrow(
+      `GET ${GITHUB_LATEST_RELEASE_URL} failed: HTTP 403`,
+    );
   });
 });
 

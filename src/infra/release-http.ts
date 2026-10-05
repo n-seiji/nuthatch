@@ -89,13 +89,29 @@ const rateLimitHint = (url: string, response: Response): string => {
     : "";
 };
 
+/**
+ * Releases the connection of a response that is refused unread. A body left
+ * alone holds its socket until the garbage collector gets to it; a cancel that
+ * itself fails (the stream had already errored) must not replace the real
+ * reason the response was refused.
+ */
+const discardBody = async (response: Response): Promise<void> => {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // The refusal that called this is what gets reported.
+  }
+};
+
 const get = async (fetcher: Fetcher, url: string, options: GetOptions): Promise<Response> => {
   const response = await send(fetcher, url, options);
   if (!response.ok) {
+    await discardBody(response);
     throw new Error(`GET ${url} failed: HTTP ${response.status}${rateLimitHint(url, response)}`);
   }
   // Release downloads redirect to a CDN; `fetch` would follow one to plain HTTP.
   if (response.url.startsWith("http://")) {
+    await discardBody(response);
     throw new Error(`GET ${url} failed: redirected to ${response.url}, which is not HTTPS`);
   }
   return response;

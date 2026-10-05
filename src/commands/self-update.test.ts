@@ -198,7 +198,7 @@ describe("selfUpdate: 更新の実行を委譲する", () => {
     expect(replaced).toEqual([{ path: "/home/u/.local/bin/hop", text: "new binary" }]);
   });
 
-  it("mise の場合、PATH で解決した絶対パスで mise upgrade を実行し action: delegated になる", async () => {
+  it("mise の場合、PATH で解決した絶対パスで dry-run の確認のあと mise upgrade を実行し action: delegated になる", async () => {
     const ran: (readonly string[])[] = [];
     const fake = createFakeSelfUpdate({
       ...facts(miseFacts()),
@@ -206,7 +206,7 @@ describe("selfUpdate: 更新の実行を委譲する", () => {
       resolveExecutable: () => Promise.resolve("/opt/bin/mise"),
       runCommand: (argv) => {
         ran.push(argv);
-        return Promise.resolve(0);
+        return Promise.resolve(argv.includes("--dry-run-code") ? 1 : 0);
       },
     });
 
@@ -217,7 +217,10 @@ describe("selfUpdate: 更新の実行を委譲する", () => {
       action: "delegated",
       command: ["mise", "upgrade", "github:n-seiji/nuthatch"],
     });
-    expect(ran).toEqual([["/opt/bin/mise", "upgrade", "github:n-seiji/nuthatch"]]);
+    expect(ran).toEqual([
+      ["/opt/bin/mise", "upgrade", "--dry-run-code", "github:n-seiji/nuthatch"],
+      ["/opt/bin/mise", "upgrade", "github:n-seiji/nuthatch"],
+    ]);
   });
 });
 

@@ -118,7 +118,9 @@ export interface SelfUpdatePort {
    */
   resolveExecutable: (name: string, preferredDir: string | null) => Promise<string | null>;
   /**
-   * Runs `argv` (a program by absolute path, then its arguments) with stdin
+   * Runs `argv` (a program by absolute path, then its arguments) in the
+   * user's home directory — never the directory hop was started in, whose own
+   * project config must not steer a package manager's update — with stdin
    * inherited and both of the child's output streams sent to hop's stderr,
    * and resolves to its exit code. Rejects if the process cannot be started
    * or is killed by a signal (the message names the signal).
