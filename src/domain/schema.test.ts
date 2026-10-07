@@ -7,6 +7,7 @@ import {
   PickEnvelopeSchema,
   RmEnvelopeSchema,
   RootEnvelopeSchema,
+  UpdateEnvelopeSchema,
 } from "./schema.ts";
 
 describe("JSON envelope schemas", () => {
@@ -101,5 +102,73 @@ describe("JSON envelope schemas", () => {
       warnings: [],
     });
     expect(result.success).toBe(true);
+  });
+});
+
+const updateEnvelope = (data: unknown) => ({
+  schemaVersion: 1,
+  command: "update",
+  data,
+  warnings: [],
+});
+
+describe("UpdateEnvelopeSchema", () => {
+  const standaloneData = {
+    current: "0.1.4",
+    latest: "0.1.5",
+    updateAvailable: true,
+    method: "standalone",
+    action: "replaced",
+    command: null,
+  };
+
+  it("standalone のバイナリ置換 (command: null) を受け付ける", () => {
+    expect(safeParse(UpdateEnvelopeSchema, updateEnvelope(standaloneData)).success).toBe(true);
+  });
+
+  it("package manager への委譲 (command: argv 配列) を受け付ける", () => {
+    const result = safeParse(
+      UpdateEnvelopeSchema,
+      updateEnvelope({
+        ...standaloneData,
+        method: "mise",
+        action: "delegated",
+        command: ["mise", "upgrade", "github:n-seiji/nuthatch"],
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("更新なし (action: none) を受け付ける", () => {
+    const result = safeParse(
+      UpdateEnvelopeSchema,
+      updateEnvelope({
+        ...standaloneData,
+        updateAvailable: false,
+        action: "none",
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("失敗時の data 省略でも warnings があれば成功する", () => {
+    const result = safeParse(UpdateEnvelopeSchema, {
+      schemaVersion: 1,
+      command: "update",
+      warnings: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("未知の method / action、欠けたフィールドを拒否する", () => {
+    for (const bad of [
+      { ...standaloneData, method: "pnpm" },
+      { ...standaloneData, action: "installed" },
+      { ...standaloneData, command: "mise upgrade" },
+      { ...standaloneData, updateAvailable: "yes" },
+      { current: "0.1.4", latest: "0.1.5" },
+    ]) {
+      expect(safeParse(UpdateEnvelopeSchema, updateEnvelope(bad)).success).toBe(false);
+    }
   });
 });
