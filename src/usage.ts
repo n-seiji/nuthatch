@@ -16,7 +16,8 @@ export const USAGE = `Usage: hop [command] [options]
   hop init zsh           Print the zsh shell integration (eval "$(hop init zsh)")
 
   hop mcp                Serve read-only worktree tools over MCP (stdio), for AI clients
-  hop mcp install <client>  Register hop's MCP server with claude or codex (--dry-run: only print)
+  hop mcp install <client>  Register hop's MCP server with claude, codex, cursor or opencode
+                         (--dry-run: only report what it would do)
   hop mcp config         Print the mcpServers entry for clients configured by a JSON file
 
   hop --update           Update hop to the latest release, the way it was installed
@@ -43,7 +44,7 @@ Options:
                          remove external worktrees; still gates hop clean's auto-cleanup scope
   --yes                  Skip confirmation and execute (hop clean)
   --dry-run              Only report candidates as JSON, without deleting (hop clean);
-                         only print the client command (hop mcp install)
+                         only report, run and write nothing (hop mcp install)
   --with-branch          Also delete the branch when cleaning (hop clean)
   -h, --help             Show this help and exit
 `;

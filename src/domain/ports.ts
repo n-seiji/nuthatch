@@ -4,6 +4,7 @@
  */
 
 import type { CommandArgv, InstallFacts } from "./install-method.ts";
+import type { McpFileClient } from "./mcp-install.ts";
 import type { StatusCommit } from "./schema.ts";
 
 export interface GitPort {
@@ -137,6 +138,17 @@ export interface SelfUpdatePort {
 
 /** What `hop mcp install` / `hop mcp config` need from outside the process. */
 export interface McpInstallPort {
+  /**
+   * The user-level config file of a client configured by file: cursor's
+   * `~/.cursor/mcp.json`; opencode's `opencode.json` in
+   * `$XDG_CONFIG_HOME/opencode` (default `~/.config/opencode`), or its
+   * `opencode.jsonc` when only that exists.
+   */
+  configPath: (client: McpFileClient) => Promise<string>;
+  /** The file's text, or null if it does not exist; rejects on any other read error. */
+  readTextFile: (path: string) => Promise<string | null>;
+  /** Creates the parent directory if needed, then atomically replaces the file with `text`. */
+  writeTextFile: (path: string, text: string) => Promise<void>;
   /** Absolute path of the executable `name` on PATH, or null. */
   resolveExecutable: (name: string) => Promise<string | null>;
   /**

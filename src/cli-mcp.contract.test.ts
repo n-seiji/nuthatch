@@ -185,7 +185,7 @@ describe("hop status / hop mcp config (CLI contract)", () => {
   });
 
   it("mcp install に知らない client を渡すと usage error (exit 2)", async () => {
-    const run = await runHop(["mcp", "install", "cursor"], repo.repoPath, repo.env);
+    const run = await runHop(["mcp", "install", "vscode"], repo.repoPath, repo.env);
 
     expect(run.exitCode).toBe(2);
     expect(run.stdout).toBe("");

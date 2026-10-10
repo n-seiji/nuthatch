@@ -220,9 +220,15 @@ Register it with one command (pick one — the plugin above already includes it)
 ```sh
 hop mcp install claude      # runs: claude mcp add --scope user hop -- <hop> mcp
 hop mcp install codex       # runs: codex mcp add hop -- <hop> mcp
+hop mcp install cursor      # adds mcpServers.hop to ~/.cursor/mcp.json
+hop mcp install opencode    # adds mcp.hop to ~/.config/opencode/opencode.json
 hop mcp install claude --dry-run  # only print the command
-hop mcp config              # print the mcpServers JSON for Cursor, Claude Desktop, …
+hop mcp config              # print the mcpServers JSON for other clients (Claude Desktop, …)
 ```
+
+For Cursor and OpenCode hop edits the config file itself, but only adds its
+own entry: other settings are kept, and a file with comments or a different
+`hop` entry is left untouched (it tells you to add the entry by hand).
 
 ## Docs
 

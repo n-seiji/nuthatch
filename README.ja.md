@@ -214,9 +214,15 @@ codex plugin install hop
 ```sh
 hop mcp install claude      # 実行内容: claude mcp add --scope user hop -- <hop> mcp
 hop mcp install codex       # 実行内容: codex mcp add hop -- <hop> mcp
+hop mcp install cursor      # ~/.cursor/mcp.json に mcpServers.hop を追加
+hop mcp install opencode    # ~/.config/opencode/opencode.json に mcp.hop を追加
 hop mcp install claude --dry-run  # 実行するコマンドを表示するだけ
-hop mcp config              # Cursor や Claude Desktop 用の mcpServers JSON を表示
+hop mcp config              # その他のクライアント (Claude Desktop など) 用の mcpServers JSON を表示
 ```
+
+Cursor と OpenCode は hop が設定ファイルを直接編集するが、追加するのは自分の
+エントリだけ: 他の設定は残し、コメント入りのファイルや別内容の `hop` エントリが
+あるファイルは触らない (手で追加するよう案内する)。
 
 ## Docs
 

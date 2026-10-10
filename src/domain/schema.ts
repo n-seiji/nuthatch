@@ -178,13 +178,19 @@ export const StatusEnvelopeSchema = jsonEnvelopeSchema(StatusDataSchema);
 export type StatusEnvelope = InferOutput<typeof StatusEnvelopeSchema>;
 
 /**
- * `hop mcp install <client>` data shape. `command` is the client CLI argv
- * that registered hop (or, with `--dry-run`, would); `ran` is false for
- * `--dry-run`.
+ * `hop mcp install <client>` data shape. `method` is how the client is
+ * configured: `cli` (claude / codex: hop runs the client's own `mcp add`,
+ * `command` is that argv, `configPath` null) or `file` (cursor / opencode:
+ * hop edits the client's user-level JSON config at `configPath`, `command`
+ * null). `ran` is whether hop ran the command or wrote the file — false for
+ * `--dry-run`, and for a file that already registers hop exactly so.
  */
+const McpCommandSchema = array(string());
 export const McpInstallDataSchema = object({
-  client: picklist(["claude", "codex"]),
-  command: array(string()),
+  client: picklist(["claude", "codex", "cursor", "opencode"]),
+  method: picklist(["cli", "file"]),
+  command: nullable(McpCommandSchema),
+  configPath: NullableStringSchema,
   ran: boolean(),
 });
 export type McpInstallData = InferOutput<typeof McpInstallDataSchema>;

@@ -296,15 +296,30 @@ dependency.
   - The `hop` plugin (Claude Code / Codex, `plugins/hop/`) ships `.mcp.json`
     starting `hop mcp`, so installing the plugin registers the server along
     with the skill — nothing else to run.
-  - `hop mcp install claude|codex [--dry-run] [--json]` runs the client's own
-    `claude mcp add --scope user hop -- <hop> mcp` / `codex mcp add hop --
-    <hop> mcp` (spawned like `--update`'s package managers: absolute path,
-    argv array, home directory, output on stderr), so the client remains the
-    only writer of its config. `<hop>` is hop's absolute path on `PATH` (a
-    GUI client may not have the user's shell `PATH`), else the bare name.
-    `--dry-run` only reports the command. Data: `{client, command, ran}`. A
-    client missing from `PATH`, or one that exits non-zero, is exit 1; an
-    unknown client is a usage error (exit 2).
+  - `hop mcp install claude|codex|cursor|opencode [--dry-run] [--json]`
+    registers the server user-wide. `<hop>` below is hop's absolute path on
+    `PATH` (a GUI client may not have the user's shell `PATH`), else the bare
+    name. Data: `{client, method, command, configPath, ran}`.
+    - **claude / codex** (`method: "cli"`): runs the client's own `claude mcp
+      add --scope user hop -- <hop> mcp` / `codex mcp add hop -- <hop> mcp`
+      (spawned like `--update`'s package managers: absolute path, argv array,
+      home directory, output on stderr), so the client remains the only
+      writer of its config. `command` is that argv. A client missing from
+      `PATH`, or one that exits non-zero, is exit 1.
+    - **cursor / opencode** (`method: "file"`): they have no `mcp add`, so hop
+      adds one entry to the user-level config at `configPath` —
+      `~/.cursor/mcp.json` (`mcpServers.hop = {command: <hop>, args: ["mcp"]}`)
+      or `$XDG_CONFIG_HOME/opencode/opencode.json` (default `~/.config`; its
+      `opencode.jsonc` when only that exists; `mcp.hop = {type: "local",
+      command: [<hop>, "mcp"], enabled: true}`). It only ever adds: every
+      other key is kept, the file is written atomically (temp file + rename,
+      mode 0600) and re-indented with two spaces. It refuses (exit 1,
+      nothing written) a file that is not a plain JSON object — comments
+      included, since a rewrite would drop them — or one that already has a
+      different `hop` entry. An identical entry is left alone: exit 0,
+      `ran: false`, with a warning.
+    - `--dry-run` only reports (`ran: false`): it runs and writes nothing. An
+      unknown client is a usage error (exit 2).
   - `hop mcp config [--json]` prints the `{"mcpServers": {"hop": {"command",
     "args": ["mcp"]}}}` entry for clients configured by a JSON file (Cursor,
     Claude Desktop, …).
@@ -485,7 +500,7 @@ src/
 │   ├── status-target.ts #   which worktree `hop status` reports (branch, or innermost containing the cwd)
 │   ├── commit.ts        #   `git log -1` format + parser for `hop status`'s lastCommit
 │   ├── mcp.ts           #   MCP protocol: message → response or tool call; tool list + arg schemas
-│   ├── mcp-install.ts   #   `hop mcp install` client argv, `hop mcp config` entry
+│   ├── mcp-install.ts   #   `hop mcp install` client argv / config-file merge, `hop mcp config` entry
 │   ├── git-executable.ts #  where the git binary may live (candidate list)
 │   ├── install-method.ts #  how this hop was installed → how --update updates it
 │   ├── install-script.ts #  script path → npm / bun / refused (and the npm prefix it implies)
@@ -507,7 +522,7 @@ src/
 │   ├── release-binary.ts #  sha256, writability check, atomic fsynced replacement of the running binary
 │   ├── package-manager.ts # mise / npm / bun lookup (PATH, npm's prefix first) + spawn (output to stderr)
 │   ├── self-update.ts   #   assembles the four above into the SelfUpdatePort
-│   └── mcp-install.ts   #   McpInstallPort: client CLI lookup + spawn (reuses package-manager.ts)
+│   └── mcp-install.ts   #   McpInstallPort: client CLI lookup + spawn (reuses package-manager.ts), config file paths + atomic write
 ├── cli-fatal.ts         # cli.ts only: renders an escaped error (hop: … + envelope)
 ├── cli-update.ts        # cli.ts only: `--update` argument parsing, wiring, reporting
 ├── cli-mcp.ts           # cli.ts only: `hop mcp [install|config]` argument parsing
