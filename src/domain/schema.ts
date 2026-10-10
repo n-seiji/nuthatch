@@ -142,6 +142,74 @@ export type CleanData = InferOutput<typeof CleanDataSchema>;
 export const CleanEnvelopeSchema = jsonEnvelopeSchema(CleanDataSchema);
 export type CleanEnvelope = InferOutput<typeof CleanEnvelopeSchema>;
 
+/** One uncommitted change in `hop status`: git's two-letter porcelain `XY` code and the path, relative to the worktree. */
+export const StatusChangeSchema = object({
+  status: string(),
+  path: string(),
+});
+export type StatusChange = InferOutput<typeof StatusChangeSchema>;
+
+/** The commit a worktree's HEAD points at. `date` is the committer date, ISO 8601. */
+export const StatusCommitSchema = object({
+  sha: string(),
+  subject: string(),
+  date: string(),
+});
+export type StatusCommit = InferOutput<typeof StatusCommitSchema>;
+
+/**
+ * `hop status [<branch>]` data shape: everything `hop ls` reports for one
+ * worktree, plus what an agent needs to judge it without running git itself.
+ * `changes` is empty when there is no working tree to inspect (bare,
+ * prunable, or its directory is gone). `cleanReason` is the reason
+ * `hop clean` would give for this worktree (null: not garbage) — computed for
+ * every kind, though `hop clean` only removes managed ones by default.
+ */
+export const StatusDataSchema = object({
+  ...LsEntrySchema.entries,
+  upstream: NullableStringSchema,
+  lastCommit: nullable(StatusCommitSchema),
+  changes: array(StatusChangeSchema),
+  cleanReason: nullable(GarbageReasonSchema),
+});
+export type StatusData = InferOutput<typeof StatusDataSchema>;
+
+export const StatusEnvelopeSchema = jsonEnvelopeSchema(StatusDataSchema);
+export type StatusEnvelope = InferOutput<typeof StatusEnvelopeSchema>;
+
+/**
+ * `hop mcp install <client>` data shape. `method` is how the client is
+ * configured: `cli` (claude / codex: hop runs the client's own `mcp add`,
+ * `command` is that argv, `configPath` null) or `file` (cursor / opencode:
+ * hop edits the client's user-level JSON config at `configPath`, `command`
+ * null). `ran` is whether hop ran the command or wrote the file — false for
+ * `--dry-run`, and for a file that already registers hop exactly so.
+ */
+const McpCommandSchema = array(string());
+export const McpInstallDataSchema = object({
+  client: picklist(["claude", "codex", "cursor", "opencode"]),
+  method: picklist(["cli", "file"]),
+  command: nullable(McpCommandSchema),
+  configPath: NullableStringSchema,
+  ran: boolean(),
+});
+export type McpInstallData = InferOutput<typeof McpInstallDataSchema>;
+
+export const McpInstallEnvelopeSchema = jsonEnvelopeSchema(McpInstallDataSchema);
+export type McpInstallEnvelope = InferOutput<typeof McpInstallEnvelopeSchema>;
+
+/** `hop mcp config` data shape: an `mcpServers` entry for clients configured by a JSON file. */
+const McpServerEntrySchema = object({
+  command: string(),
+  args: array(string()),
+});
+const McpServersSchema = object({ hop: McpServerEntrySchema });
+export const McpConfigDataSchema = object({ mcpServers: McpServersSchema });
+export type McpConfigData = InferOutput<typeof McpConfigDataSchema>;
+
+export const McpConfigEnvelopeSchema = jsonEnvelopeSchema(McpConfigDataSchema);
+export type McpConfigEnvelope = InferOutput<typeof McpConfigEnvelopeSchema>;
+
 export const PickEnvelopeSchema = jsonEnvelopeSchema(PickDataSchema);
 export type PickEnvelope = InferOutput<typeof PickEnvelopeSchema>;
 

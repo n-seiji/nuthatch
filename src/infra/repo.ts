@@ -1,5 +1,10 @@
 import { basename, dirname, join } from "node:path";
 import { classifyWorktreePath, isWithin } from "../domain/classify.ts";
+import {
+  filterOutNestedWorktreePaths,
+  parseStatusEntries,
+  type StatusEntry,
+} from "../domain/dirty.ts";
 import type { Worktree } from "../domain/model.ts";
 import { parsePorcelain } from "../domain/porcelain.ts";
 import type { AddWorktreeOptions, FsPort, GitPort } from "../domain/ports.ts";
@@ -112,6 +117,31 @@ export const worktreeDirtyState = async (
     return null;
   }
   return isWorktreeDirty(git, worktrees, wt.path);
+};
+
+/**
+ * Uncommitted changes in `wt`, ignoring worktrees nested inside it (the same
+ * filtering as the dirty check), or null when there is no working tree on
+ * disk to inspect — the same cases `worktreeDirtyState` reports as null.
+ */
+export const worktreeChanges = async (
+  git: GitPort,
+  fs: FsPort,
+  worktrees: readonly Worktree[],
+  wt: Worktree,
+): Promise<StatusEntry[] | null> => {
+  if (wt.bare || wt.prunable || !(await fs.exists(wt.path))) {
+    return null;
+  }
+  const entries = parseStatusEntries(await git.statusPorcelain(wt.path));
+  const kept = new Set(
+    filterOutNestedWorktreePaths(
+      entries.map((entry) => entry.path),
+      wt.path,
+      nestedWorktreePaths(worktrees, wt.path),
+    ),
+  );
+  return entries.filter((entry) => kept.has(entry.path));
 };
 
 export type BranchCheckoutResolution<T> =

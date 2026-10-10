@@ -31,12 +31,13 @@ as a stateless create-or-jump tool.
 
 ## Command surface — a single `hop`
 
-There is exactly one command: `hop`. Only five names are reserved as
-subcommands — `ls / rm / clean / root / init` — and a branch name that
-collides with one of them is escaped with `hop -- <branch>` (uniform across
-all commands). `eval "$(hop init zsh)"` defines the shell function used for
-auto-`cd`. `--update` and `--version` are flags, not reserved words (see
-[Self-update](#self-update)), so the reserved list stays at five.
+There is exactly one command: `hop`. Only seven names are reserved as
+subcommands — `ls / rm / status / clean / root / init / mcp` — and a branch
+name that collides with one of them is escaped with `hop -- <branch>`
+(uniform across all commands). `eval "$(hop init zsh)"` defines the shell
+function used for auto-`cd`. `--update` and `--version` are flags, not
+reserved words (see [Self-update](#self-update)), so they never add to the
+reserved list.
 
 ### Navigation
 
@@ -53,6 +54,7 @@ auto-`cd`. `--update` and `--version` are flags, not reserved words (see
 |---|---|
 | `hop ls [--json]` | Listing: branch / path / category / dirty / ahead-behind. `dirty` is `false` for an entry with no working tree to inspect (bare, prunable, or git-locked with its directory missing) — check `prunable` / `locked` as well |
 | `hop rm <branch>` | Removes the worktree (the branch is kept). Refuses if dirty (including untracked), overridable with `--force`. Does not distinguish managed from external. Always refuses a worktree git reports as locked, `--force` or not (`git worktree unlock` is never called). A worktree git reports as prunable is not dirty-checked (there is no working tree to check): rm drops its stale registration with a warning — the same policy as `hop clean`'s prunable candidates — and if a directory without a valid `.git` file is still at that path, git itself refuses (exit 3). If multiple worktrees hold the same branch, the branch-only CLI refuses rather than guessing; the picker carries the selected path through the lock-protected re-validation. `--ext` is a deprecated no-op (kept only for backward compatibility; passing it prints a deprecation warning) |
+| `hop status [<branch>] [--json]` | One worktree in detail, read-only (no lock, changes nothing): every `hop ls` field plus `upstream` (short name or null), `lastCommit` (`{sha, subject, date}` of HEAD — the committer date in ISO 8601 — or null; read from the root clone by sha, so a prunable worktree still has one), `changes` (`[{status, path}]`: git's porcelain `XY` code and the path relative to the worktree, with a registered worktree nested inside it filtered out exactly as the dirty check does; empty when there is no working tree), and `cleanReason` (`prunable` / `merged` / `gone`, the reason `hop clean` would give, or null — computed for every kind, though `hop clean` only removes managed ones by default). Without `<branch>`, it reports the innermost worktree containing the cwd. `dirty` is `changes` being non-empty. Errors follow `hop rm`: no worktree for the branch (or the cwd is in none) is exit 1; a branch held by several worktrees is refused rather than guessed (exit 3) |
 | `hop clean [--yes\|--dry-run]` | Auto-detects and removes garbage worktrees (below). Targets managed worktrees only by default (`--ext` extends the target to external ones as well, unchanged from before) |
 | `hop root <branch>` | Temporarily switches root for verification purposes. Even if the target branch is already checked out on another worktree (the "holder"), swaps it out as long as the holder is clean and not git-locked — the holder is set to detached HEAD to free up the branch. Refuses if the holder is dirty/locked, or a stale registration git reports as prunable. `hop root -` returns (using git's `@{-1}`, no state file needed — this restores only root's branch; a holder detached by the swap is not re-attached) |
 
@@ -65,7 +67,7 @@ auto-`cd`. `--update` and `--version` are flags, not reserved words (see
 | `hop --version` | Prints hop's version (`package.json`'s, e.g. `0.1.5`) on stdout, exit 0 |
 
 `--update` and `--version` are **flags, not reserved words**: a git branch name
-cannot start with `-`, so the five reserved names stay five and no `--`
+cannot start with `-`, so they never join the reserved names and no `--`
 escape is needed. Like `--help`, only the first argument counts (`hop --
 --update` is still an escaped jump). After `--update` only `--check` and
 `--json` are accepted; anything else is a usage error (exit 2), so a typo such
@@ -253,6 +255,75 @@ otherwise `null`, always for `standalone`. Progress (`Checking…`,
 the envelope and puts the message on stderr. The zsh wrapper needs no change:
 `--*` already means "don't `cd`".
 
+## MCP server — `hop mcp`
+
+`hop mcp` serves the [Model Context Protocol](https://modelcontextprotocol.io)
+over stdio, so a client without a shell (Claude Desktop, an IDE chat) — or an
+agent that would rather have typed tools than parse `--help` — can inspect
+worktrees. It is the hop binary itself: no extra process, port, or
+dependency.
+
+| Tool | Same as | Arguments |
+|---|---|---|
+| `list_worktrees` | `hop ls --json` | `cwd?` |
+| `worktree_status` | `hop status [<branch>] --json` | `cwd?`, `branch?` |
+| `clean_candidates` | `hop clean --dry-run --json` | `cwd?`, `ext?` (default false) |
+
+- **Read-only, by design.** Every tool is annotated `readOnlyHint: true,
+  destructiveHint: false`, and none takes the repo lock or changes anything.
+  Mutations (create / rm / clean / switching root) stay CLI-only for now: the
+  CLI is where the safety net lives (dirty refusal, `--force`, y/N for
+  external worktrees), and exposing them as tools is a separate decision. The
+  server's `instructions` tell the model to use the CLI for those.
+- **Same contract as the CLI.** A tool runs the same command and returns the
+  same `{schemaVersion, command, data, warnings}` envelope as `structuredContent`
+  and as text. A command that fails (exit ≠ 0) is a tool result with
+  `isError: true` and the error message as a second text item — never a
+  protocol error, never a crash; an escaped throw (e.g. `cwd` is not in a git
+  repository) is reported the same way, through `describeFatalError`.
+- **`cwd`** must be absolute (else JSON-RPC `-32602`). It defaults to the
+  directory the server was started in, which clients set to the project, so
+  one user-wide registration covers every repository.
+- **Protocol.** Newline-delimited JSON-RPC 2.0. stdout carries nothing but
+  responses; logs stay on stderr. `initialize` echoes the client's
+  `protocolVersion` when it is one of `2025-11-25 / 2025-06-18 / 2025-03-26 /
+  2024-11-05`, else answers `2025-11-25`. Supported methods: `initialize`,
+  `ping`, `tools/list`, `tools/call`; notifications are accepted and never
+  answered; anything else is `-32601`, a non-JSON line `-32700`, a malformed
+  request `-32600`. Tool calls run concurrently. The server exits 0 when stdin
+  closes, after in-flight calls answer.
+- **Registering it.**
+  - The `hop` plugin (Claude Code / Codex, `plugins/hop/`) ships `.mcp.json`
+    starting `hop mcp`, so installing the plugin registers the server along
+    with the skill — nothing else to run.
+  - `hop mcp install claude|codex|cursor|opencode [--dry-run] [--json]`
+    registers the server user-wide. `<hop>` below is hop's absolute path on
+    `PATH` (a GUI client may not have the user's shell `PATH`), else the bare
+    name. Data: `{client, method, command, configPath, ran}`.
+    - **claude / codex** (`method: "cli"`): runs the client's own `claude mcp
+      add --scope user hop -- <hop> mcp` / `codex mcp add hop -- <hop> mcp`
+      (spawned like `--update`'s package managers: absolute path, argv array,
+      home directory, output on stderr), so the client remains the only
+      writer of its config. `command` is that argv. A client missing from
+      `PATH`, or one that exits non-zero, is exit 1.
+    - **cursor / opencode** (`method: "file"`): they have no `mcp add`, so hop
+      adds one entry to the user-level config at `configPath` —
+      `~/.cursor/mcp.json` (`mcpServers.hop = {command: <hop>, args: ["mcp"]}`)
+      or `$XDG_CONFIG_HOME/opencode/opencode.json` (default `~/.config`; its
+      `opencode.jsonc` when only that exists; `mcp.hop = {type: "local",
+      command: [<hop>, "mcp"], enabled: true}`). It only ever adds: every
+      other key is kept, the file is written atomically (temp file + rename,
+      mode 0600) and re-indented with two spaces. It refuses (exit 1,
+      nothing written) a file that is not a plain JSON object — comments
+      included, since a rewrite would drop them — or one that already has a
+      different `hop` entry. An identical entry is left alone: exit 0,
+      `ran: false`, with a warning.
+    - `--dry-run` only reports (`ran: false`): it runs and writes nothing. An
+      unknown client is a usage error (exit 2).
+  - `hop mcp config [--json]` prints the `{"mcpServers": {"hop": {"command",
+    "args": ["mcp"]}}}` entry for clients configured by a JSON file (Cursor,
+    Claude Desktop, …).
+
 ## The 3 worktree categories
 
 | Category | Definition | Allowed operations |
@@ -340,7 +411,10 @@ clone.
   compatibility is pinned by snapshot tests. `hop --update --json` is
   `command: "update"` with `data` = `{current, latest, updateAvailable,
   method, action, command}` (see [Self-update](#self-update)); when it fails
-  `data` is omitted and the message is on stderr.
+  `data` is omitted and the message is on stderr. `hop status --json` is
+  `command: "status"` and `hop mcp install|config --json` is `command: "mcp"`
+  (shapes in [Management](#management) and [MCP server](#mcp-server--hop-mcp)).
+  `hop mcp` itself (serving) writes only JSON-RPC messages to stdout.
 - **exit code**: 0=success (including a picker Esc cancel, with empty
   stdout) / 1=generic error / 2=usage error / 3=safety rejection (e.g.
   dirty) / 130=SIGINT (a picker Ctrl+C cancel is treated the same way). The
@@ -422,6 +496,11 @@ src/
 │   ├── classify.ts      #   root/managed/external classification
 │   ├── tracking.ts      #   which remote branch a new branch tracks (origin wins)
 │   ├── garbage.ts       #   garbage detection for clean
+│   ├── dirty.ts         #   git status -z parsing, nested-worktree filtering
+│   ├── status-target.ts #   which worktree `hop status` reports (branch, or innermost containing the cwd)
+│   ├── commit.ts        #   `git log -1` format + parser for `hop status`'s lastCommit
+│   ├── mcp.ts           #   MCP protocol: message → response or tool call; tool list + arg schemas
+│   ├── mcp-install.ts   #   `hop mcp install` client argv / config-file merge, `hop mcp config` entry
 │   ├── git-executable.ts #  where the git binary may live (candidate list)
 │   ├── install-method.ts #  how this hop was installed → how --update updates it
 │   ├── install-script.ts #  script path → npm / bun / refused (and the npm prefix it implies)
@@ -442,12 +521,15 @@ src/
 │   ├── capped-body.ts   #   reads a response body up to a size cap (Content-Length + counted bytes)
 │   ├── release-binary.ts #  sha256, writability check, atomic fsynced replacement of the running binary
 │   ├── package-manager.ts # mise / npm / bun lookup (PATH, npm's prefix first) + spawn (output to stderr)
-│   └── self-update.ts   #   assembles the four above into the SelfUpdatePort
+│   ├── self-update.ts   #   assembles the four above into the SelfUpdatePort
+│   └── mcp-install.ts   #   McpInstallPort: client CLI lookup + spawn (reuses package-manager.ts), config file paths + atomic write
 ├── cli-fatal.ts         # cli.ts only: renders an escaped error (hop: … + envelope)
 ├── cli-update.ts        # cli.ts only: `--update` argument parsing, wiring, reporting
+├── cli-mcp.ts           # cli.ts only: `hop mcp [install|config]` argument parsing
+├── mcp-server.ts        # cli layer: `hop mcp`'s stdio loop; runs tools via commands, envelopes via render.ts
 ├── version.ts           # cli.ts only: hop's version, inlined from package.json
 ├── commands/             # 1 command = 1 component. Cross-imports forbidden
-│   ├── jump.ts / ls.ts / pick.ts / rm.ts / clean.ts / root.ts / init.ts / self-update.ts
+│   ├── jump.ts / ls.ts / pick.ts / rm.ts / status.ts / clean.ts / root.ts / init.ts / self-update.ts / mcp-install.ts
 │   │                    #   ★ Never renders. Only returns a structured Result
 ├── ui/                  # Self-drawn picker (raw-mode stdin, alternate screen on stderr). Wired to commands only via cli-pick.ts
 └── render.ts            # cli layer only: Result → plain / JSON. Never imported from commands

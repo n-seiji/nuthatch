@@ -30,6 +30,7 @@ hop -              # 直前の worktree へ戻る
 
 hop ls [--json]    # worktree 一覧 (dirty, ahead/behind, kind)
 hop rm <branch>    # worktree を削除 (branch は残す) — managed/external 問わず、dirty には --force が必要
+hop status [<branch>] [--json]  # 1 つの worktree の詳細: 変更ファイル・最終コミット・upstream・clean 対象か
 hop clean          # ゴミ worktree を自動判定して削除 (managed のみ)
 hop root <branch>  # root clone を一時的に切替 (動作確認用) —
                    # 対象 branch が他所で checkout 済みなら、clean かつ unlocked な holder を swap する
@@ -182,7 +183,8 @@ export HOP_GIT=/path/to/git
 
 このリポジトリは plugin marketplace も兼ねており、
 [`using-hop`](skills/using-hop/SKILL.md) skill を配布する —
-coding agent に `hop` を非対話・安全に扱う方法を教える skill。
+coding agent に `hop` を非対話・安全に扱う方法を教える skill。plugin を入れると
+hop の読み取り専用 [MCP サーバー](#mcp-サーバー) も登録される (`hop` が `PATH` に必要)。
 
 ```sh
 # Claude Code
@@ -193,6 +195,34 @@ coding agent に `hop` を非対話・安全に扱う方法を教える skill。
 codex plugin marketplace add n-seiji/nuthatch
 codex plugin install hop
 ```
+
+## MCP サーバー
+
+`hop mcp` で hop が stdio の [Model Context Protocol](https://modelcontextprotocol.io)
+サーバーになり、AI クライアント (Claude Desktop や IDE のチャットのように
+シェルを持たないものも含む) から型付きのツールで worktree を確認できる。
+ツールは読み取りのみで、作成・削除・切替は CLI で行う。
+
+| ツール | 中身 |
+|---|---|
+| `list_worktrees` | `hop ls --json` |
+| `worktree_status` | `hop status [<branch>] --json` |
+| `clean_candidates` | `hop clean --dry-run --json` |
+
+登録はコマンド一つ (どれか一つでよい — 上の plugin を入れていれば登録済み):
+
+```sh
+hop mcp install claude      # 実行内容: claude mcp add --scope user hop -- <hop> mcp
+hop mcp install codex       # 実行内容: codex mcp add hop -- <hop> mcp
+hop mcp install cursor      # ~/.cursor/mcp.json に mcpServers.hop を追加
+hop mcp install opencode    # ~/.config/opencode/opencode.json に mcp.hop を追加
+hop mcp install claude --dry-run  # 実行するコマンドを表示するだけ
+hop mcp config              # その他のクライアント (Claude Desktop など) 用の mcpServers JSON を表示
+```
+
+Cursor と OpenCode は hop が設定ファイルを直接編集するが、追加するのは自分の
+エントリだけ: 他の設定は残し、コメント入りのファイルや別内容の `hop` エントリが
+あるファイルは触らない (手で追加するよう案内する)。
 
 ## Docs
 

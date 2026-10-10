@@ -9,15 +9,21 @@ export interface JsonEnvelope<T> {
   readonly warnings: readonly string[];
 }
 
+/** The `--json` envelope for a command Result (also what `hop mcp`'s tools return). */
+export const toJsonEnvelope = <T>(
+  command: string,
+  result: CommandResult<T>,
+): JsonEnvelope<T | undefined> => ({
+  schemaVersion: 1,
+  command,
+  data: result.ok ? result.data : undefined,
+  warnings: result.warnings ?? [],
+});
+
 /** Turns a command Result into stdout/stderr output. Only the CLI layer (cli.ts and cli-*.ts) calls this. */
 export const render = <T>(command: string, result: CommandResult<T>, json: boolean): void => {
   if (json) {
-    const envelope: JsonEnvelope<T | undefined> = {
-      schemaVersion: 1,
-      command,
-      data: result.ok ? result.data : undefined,
-      warnings: result.warnings ?? [],
-    };
+    const envelope = toJsonEnvelope(command, result);
     process.stdout.write(`${JSON.stringify(envelope)}\n`);
     if (!result.ok && result.errorMessage !== undefined) {
       process.stderr.write(`${result.errorMessage}\n`);

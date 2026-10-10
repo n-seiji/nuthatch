@@ -78,9 +78,22 @@ const isRenameOrCopyCode = (code: string): boolean => code.includes("R") || code
  * NUL-terminated record holding the *old* path — that old-path record is
  * consumed and dropped, since only the destination matters for containment.
  */
-export const parseStatusPaths = (statusOutput: string): string[] => {
+export const parseStatusPaths = (statusOutput: string): string[] =>
+  parseStatusEntries(statusOutput).map((entry) => entry.path);
+
+/** One `git status --porcelain` entry: the two-letter `XY` code and the (destination) path. */
+export interface StatusEntry {
+  readonly status: string;
+  readonly path: string;
+}
+
+/**
+ * Same parse as `parseStatusPaths`, keeping each entry's `XY` status code
+ * (e.g. ` M`, `A `, `??`) next to its path, for `hop status`.
+ */
+export const parseStatusEntries = (statusOutput: string): StatusEntry[] => {
   const records = statusOutput.split("\0").filter((record) => record.length > 0);
-  const paths: string[] = [];
+  const entries: StatusEntry[] = [];
 
   let index = 0;
   while (index < records.length) {
@@ -88,7 +101,10 @@ export const parseStatusPaths = (statusOutput: string): string[] => {
     if (record === undefined || record.length <= STATUS_CODE_WIDTH) {
       index += RECORDS_PER_ORDINARY_ENTRY;
     } else {
-      paths.push(record.slice(STATUS_CODE_WIDTH));
+      entries.push({
+        status: record.slice(0, STATUS_CODE_WIDTH - 1),
+        path: record.slice(STATUS_CODE_WIDTH),
+      });
       // A rename/copy record is followed by one extra record (the old
       // Path) — skip it too, so it's never mistaken for an unrelated
       // Entry's path.
@@ -97,5 +113,5 @@ export const parseStatusPaths = (statusOutput: string): string[] => {
     }
   }
 
-  return paths;
+  return entries;
 };

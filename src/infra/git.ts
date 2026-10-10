@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import { LAST_COMMIT_FORMAT, parseLastCommit } from "../domain/commit.ts";
 import { isDirtyFromStatus } from "../domain/dirty.ts";
 import type { AddWorktreeOptions, GitPort, SwitchBranchOptions } from "../domain/ports.ts";
 import { createGitExecutableResolver } from "./git-executable.ts";
@@ -79,6 +80,41 @@ const createWorktreeMethods = () => ({
       args.push(branch);
     }
     await run(cwd, args);
+  },
+
+  statusPorcelain(path: string) {
+    // -z for the same reason as isDirty: see dirty.ts's parseStatusPaths.
+    return run(path, ["status", "--porcelain", "-z", "--untracked-files=all"]);
+  },
+
+  async commitInfo(cwd: string, rev: string) {
+    try {
+      // "--end-of-options" keeps a rev that starts with "-" from being read as an option.
+      const out = await run(cwd, [
+        "log",
+        "-1",
+        `--format=${LAST_COMMIT_FORMAT}`,
+        "--end-of-options",
+        rev,
+      ]);
+      return parseLastCommit(out);
+    } catch {
+      return null;
+    }
+  },
+
+  async upstreamOf(cwd: string, branch: string) {
+    try {
+      const out = await run(cwd, [
+        "for-each-ref",
+        "--format=%(upstream:short)",
+        `refs/heads/${branch}`,
+      ]);
+      const upstream = out.trim();
+      return upstream.length > 0 ? upstream : null;
+    } catch {
+      return null;
+    }
   },
 
   async removeWorktree(cwd: string, path: string, force: boolean) {

@@ -17,14 +17,16 @@ import {
   runInteractivePicker,
   type SwitchRootOutcome,
 } from "./cli-pick.ts";
+import { initCommand } from "./cli-init-command.ts";
+import { createMcpCommand } from "./cli-mcp.ts";
+import { createStatusCommand } from "./cli-status-command.ts";
 import { runUpdate } from "./cli-update.ts";
 import { clean } from "./commands/clean.ts";
-import { renderInit } from "./commands/init.ts";
 import { jump } from "./commands/jump.ts";
 import { ls } from "./commands/ls.ts";
 import { rm } from "./commands/rm.ts";
 import { describeFatalError } from "./domain/fatal-error.ts";
-import { EXIT_CANCELLED, EXIT_SUCCESS, EXIT_USAGE_ERROR, ok } from "./domain/result.ts";
+import { EXIT_CANCELLED, EXIT_SUCCESS, ok } from "./domain/result.ts";
 import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
@@ -103,26 +105,6 @@ const cleanCommand = defineCommand({
   },
 });
 
-const initCommand = defineCommand({
-  meta: { name: "init", description: "Print shell integration" },
-  args: {
-    shell: {
-      type: "positional",
-      required: true,
-      description: "Shell name (zsh)",
-    },
-  },
-  run({ args }) {
-    const shell = String(args.shell);
-    if (shell !== "zsh") {
-      process.stderr.write(`Unsupported shell: ${shell}\n`);
-      process.exitCode = EXIT_USAGE_ERROR;
-      return;
-    }
-    process.stdout.write(renderInit({ shell: "zsh" }));
-  },
-});
-
 const runJump = async (
   target: string,
   options: { create: boolean; track?: string; json: boolean },
@@ -139,9 +121,11 @@ const runJump = async (
 const RESERVED_COMMANDS = {
   ls: lsCommand,
   rm: rmCommand,
+  status: createStatusCommand(git, fs),
   clean: cleanCommand,
   root: rootCommand,
   init: initCommand,
+  mcp: createMcpCommand({ git, fs, term }),
 } as const;
 
 const jumpArgsSchema = {
