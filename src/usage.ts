@@ -5,14 +5,19 @@ export const USAGE = `Usage: hop [command] [options]
   hop <branch>           Create-or-jump: cd into <branch>'s worktree (pass --create to create a missing one)
   hop root               cd into the root clone
   hop -                  cd back to the previous worktree
-  hop -- <branch>        Escape a branch name that collides with a reserved command (ls/rm/clean/root/init/help)
+  hop -- <branch>        Escape a branch name that collides with a reserved command (ls/rm/status/clean/root/init/mcp/help)
 
   hop ls [--json]        List worktrees (dirty, ahead/behind, kind)
   hop rm <branch>        Remove a worktree, keeping the branch
+  hop status [<branch>]  Show one worktree in detail: changes, last commit, upstream (default: the cwd's)
   hop clean              Auto-detect and remove garbage worktrees
   hop root <branch>      Temporarily switch the root clone (for verification)
   hop root -             Switch the root clone back
   hop init zsh           Print the zsh shell integration (eval "$(hop init zsh)")
+
+  hop mcp                Serve read-only worktree tools over MCP (stdio), for AI clients
+  hop mcp install <client>  Register hop's MCP server with claude or codex (--dry-run: only print)
+  hop mcp config         Print the mcpServers entry for clients configured by a JSON file
 
   hop --update           Update hop to the latest release, the way it was installed
   hop --update --check   Only report whether an update is available; change nothing
@@ -37,7 +42,8 @@ Options:
   --ext                  [deprecated, no-op for hop rm] hop rm no longer requires it to
                          remove external worktrees; still gates hop clean's auto-cleanup scope
   --yes                  Skip confirmation and execute (hop clean)
-  --dry-run              Only report candidates as JSON, without deleting (hop clean)
+  --dry-run              Only report candidates as JSON, without deleting (hop clean);
+                         only print the client command (hop mcp install)
   --with-branch          Also delete the branch when cleaning (hop clean)
   -h, --help             Show this help and exit
 `;

@@ -1,6 +1,6 @@
 import { classifyGarbage, type GarbageInput } from "../domain/garbage.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
-import type { CleanCandidate, Worktree } from "../domain/schema.ts";
+import type { CleanCandidate, GarbageReason, Worktree } from "../domain/schema.ts";
 import { type RepoContext, worktreeDirtyState } from "../infra/repo.ts";
 
 /** Finds worktrees safe for `hop clean` to remove (see clean.ts for the policy). */
@@ -18,7 +18,7 @@ export const buildCleanCandidates = async (
 
   const results = await Promise.all(
     targets.map(async (wt): Promise<CleanCandidate | null> => {
-      const reason = await classifyWorktree(wt, { git, fs, defaultRef, context });
+      const reason = await classifyCleanReason(wt, { git, fs, defaultRef, context });
       if (reason === null) {
         return null;
       }
@@ -29,17 +29,22 @@ export const buildCleanCandidates = async (
   return results.filter((candidate): candidate is CleanCandidate => candidate !== null);
 };
 
-interface ClassifyWorktreeContext {
+export interface ClassifyWorktreeContext {
   readonly git: GitPort;
   readonly fs: FsPort;
   readonly defaultRef: string | null;
   readonly context: RepoContext;
 }
 
-const classifyWorktree = async (
+/**
+ * The reason `hop clean` would remove `wt` (null: it would not), whatever
+ * its kind — callers decide which kinds are eligible. `defaultRef` comes
+ * from `git.resolveDefaultBranchRef`.
+ */
+export const classifyCleanReason = async (
   wt: Worktree,
   { git, fs, defaultRef, context }: ClassifyWorktreeContext,
-) => {
+): Promise<GarbageReason | null> => {
   if (wt.prunable) {
     return classifyGarbage({
       prunable: true,

@@ -4,6 +4,7 @@
  */
 
 import type { CommandArgv, InstallFacts } from "./install-method.ts";
+import type { StatusCommit } from "./schema.ts";
 
 export interface GitPort {
   /** Runs `git worktree list --porcelain -z` and returns raw stdout. */
@@ -25,6 +26,12 @@ export interface GitPort {
     branch: string,
     options: AddWorktreeOptions,
   ) => Promise<void>;
+  /** Raw `git status --porcelain -z --untracked-files=all` output for the worktree at `path`. */
+  statusPorcelain: (path: string) => Promise<string>;
+  /** The commit `rev` points at, or null if it cannot be read (e.g. an unborn branch). */
+  commitInfo: (cwd: string, rev: string) => Promise<StatusCommit | null>;
+  /** Short name of `branch`'s upstream (e.g. `origin/feat/x`), or null if it has none. */
+  upstreamOf: (cwd: string, branch: string) => Promise<string | null>;
   /** Removes a worktree. */
   removeWorktree: (cwd: string, path: string, force: boolean) => Promise<void>;
   /** Ahead/behind counts of `branch` versus its upstream, if any. */
@@ -124,6 +131,18 @@ export interface SelfUpdatePort {
    * inherited and both of the child's output streams sent to hop's stderr,
    * and resolves to its exit code. Rejects if the process cannot be started
    * or is killed by a signal (the message names the signal).
+   */
+  runCommand: (argv: CommandArgv) => Promise<number>;
+}
+
+/** What `hop mcp install` / `hop mcp config` need from outside the process. */
+export interface McpInstallPort {
+  /** Absolute path of the executable `name` on PATH, or null. */
+  resolveExecutable: (name: string) => Promise<string | null>;
+  /**
+   * Runs `argv` (a program by absolute path, then its arguments) with its
+   * output on hop's stderr, resolving to its exit code; rejects if it cannot
+   * be started or is killed by a signal.
    */
   runCommand: (argv: CommandArgv) => Promise<number>;
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { filterOutNestedWorktreePaths, isDirtyFromStatus, parseStatusPaths } from "./dirty.ts";
+import {
+  filterOutNestedWorktreePaths,
+  isDirtyFromStatus,
+  parseStatusEntries,
+  parseStatusPaths,
+} from "./dirty.ts";
 
 describe("filterOutNestedWorktreePaths", () => {
   it("他 worktree の path と一致するエントリを除外する", () => {
@@ -99,5 +104,22 @@ describe("isDirtyFromStatus", () => {
   it("非 ASCII path を持つネストした worktree の変更のみの場合、dirty ではない (8 進エスケープ問題の回帰確認)", () => {
     const status = "?? .claude/worktrees/日本語/\0";
     expect(isDirtyFromStatus(status, "/repo", ["/repo/.claude/worktrees/日本語"])).toBe(false);
+  });
+});
+
+describe("parseStatusEntries", () => {
+  it("各エントリの XY コードとパスを返す", () => {
+    expect(parseStatusEntries(" M src/index.ts\0?? new.txt\0A  added.ts\0")).toEqual([
+      { status: " M", path: "src/index.ts" },
+      { status: "??", path: "new.txt" },
+      { status: "A ", path: "added.ts" },
+    ]);
+  });
+
+  it("rename は移動先のパスだけを返し、旧パスのレコードを読み飛ばす", () => {
+    expect(parseStatusEntries("R  new.txt\0old.txt\0 M other.ts\0")).toEqual([
+      { status: "R ", path: "new.txt" },
+      { status: " M", path: "other.ts" },
+    ]);
   });
 });

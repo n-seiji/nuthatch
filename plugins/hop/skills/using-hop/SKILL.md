@@ -26,9 +26,17 @@ of the task.
 
 - Create or select a branch worktree: `hop <branch> --create`
 - Inspect worktrees without a picker: `hop ls --json`
+- Inspect one worktree (changes, last commit, upstream, whether `hop clean`
+  would remove it): `hop status [<branch>] --json` — without a branch, the
+  worktree you are in
 - Resolve the root clone: `hop root`
 - Escape a reserved branch name: `hop -- <branch>`
 - Check current flags and output details: `hop --help`
+
+When the `hop` MCP server is connected, its `list_worktrees`,
+`worktree_status` and `clean_candidates` tools return the same JSON as
+`hop ls`, `hop status` and `hop clean --dry-run`. They only read; create,
+remove and switch with the CLI.
 
 Before using `hop rm`, `hop clean`, or `hop root <branch>`, read
 [references/destructive-operations.md](references/destructive-operations.md).

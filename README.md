@@ -32,6 +32,7 @@ hop -              # cd back to the previous worktree
 
 hop ls [--json]    # list worktrees (dirty, ahead/behind, kind)
 hop rm <branch>    # remove a worktree (branch is kept) — managed or external, dirty needs --force
+hop status [<branch>] [--json]  # one worktree in detail: changes, last commit, upstream, clean reason
 hop clean          # auto-detect and remove garbage worktrees (managed only)
 hop root <branch>  # temporarily switch the root clone (for verification) —
                    # swaps out a clean, unlocked holder if the branch is checked out elsewhere
@@ -188,7 +189,8 @@ export HOP_GIT=/path/to/git
 
 This repo doubles as a plugin marketplace that ships the
 [`using-hop`](skills/using-hop/SKILL.md) skill — it teaches coding agents how
-to drive `hop` non-interactively and safely.
+to drive `hop` non-interactively and safely. Installing the plugin also
+registers hop's read-only [MCP server](#mcp-server) (`hop` must be on `PATH`).
 
 ```sh
 # Claude Code
@@ -198,6 +200,28 @@ to drive `hop` non-interactively and safely.
 # Codex
 codex plugin marketplace add n-seiji/nuthatch
 codex plugin install hop
+```
+
+## MCP server
+
+`hop mcp` turns hop into a [Model Context Protocol](https://modelcontextprotocol.io)
+server over stdio, so AI clients — including ones without a shell, like
+Claude Desktop or an IDE chat — can inspect worktrees with typed tools. The
+tools only read; creating, removing and switching stay with the CLI.
+
+| Tool | Same as |
+|---|---|
+| `list_worktrees` | `hop ls --json` |
+| `worktree_status` | `hop status [<branch>] --json` |
+| `clean_candidates` | `hop clean --dry-run --json` |
+
+Register it with one command (pick one — the plugin above already includes it):
+
+```sh
+hop mcp install claude      # runs: claude mcp add --scope user hop -- <hop> mcp
+hop mcp install codex       # runs: codex mcp add hop -- <hop> mcp
+hop mcp install claude --dry-run  # only print the command
+hop mcp config              # print the mcpServers JSON for Cursor, Claude Desktop, …
 ```
 
 ## Docs
