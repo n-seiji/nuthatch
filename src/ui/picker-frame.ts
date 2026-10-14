@@ -21,7 +21,16 @@ const CURSOR_HOME = `${ESC}[H`;
 const CLEAR_TO_END = `${ESC}[J`;
 const SGR_RESET = `${ESC}[0m`;
 
-export type LineStyle = "plain" | "cyan" | "dim" | "bold-dim" | "inverse" | "red";
+export type LineStyle =
+  | "plain"
+  | "cyan"
+  | "dim"
+  | "bold-dim"
+  | "inverse"
+  | "red"
+  | "green"
+  | "yellow"
+  | "magenta";
 
 export interface StyledSpan {
   readonly text: string;
@@ -38,6 +47,9 @@ const SGR_CODES: Record<LineStyle, string> = {
   "bold-dim": `${ESC}[1m${ESC}[2m`,
   inverse: `${ESC}[7m`,
   red: `${ESC}[31m`,
+  green: `${ESC}[32m`,
+  yellow: `${ESC}[33m`,
+  magenta: `${ESC}[35m`,
 };
 
 const renderSpan = (span: StyledSpan, colorEnabled: boolean): string => {
