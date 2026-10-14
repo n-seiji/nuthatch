@@ -25,6 +25,13 @@ hop() {
     --*) should_cd=0 ;;
   esac
 
+  # Nothing to cd into: run hop with the terminal as its stdout, so a listing
+  # keeps its colors (hop only colors stdout when it is a terminal).
+  if [[ $should_cd -eq 0 ]]; then
+    command hop "$@"
+    return $?
+  fi
+
   # "status" is a zsh read-only special parameter (mirrors $?); using it as a
   # local name fails with "read-only variable: status". Use "rc" instead, and
   # declare it before the command substitution so the exit code isn't
