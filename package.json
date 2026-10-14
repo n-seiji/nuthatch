@@ -41,6 +41,9 @@
     "oxlint": "^1.81.0",
     "typescript": "^5.6.0"
   },
+  "overrides": {
+    "tinypool": "~2.1.2"
+  },
   "engines": {
     "node": ">=22"
   }
