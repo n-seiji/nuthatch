@@ -6,6 +6,8 @@ import {
   truncateToWidthKeepingTail,
 } from "../domain/display-width.ts";
 import type { WorktreeKind } from "../domain/model.ts";
+import { compareWorktrees } from "../domain/worktree-order.ts";
+import type { LineStyle } from "./picker-frame.ts";
 
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
@@ -26,6 +28,16 @@ const WORKTREE_KIND_LABELS: Record<WorktreeKind, string> = {
   managed: "managed",
   external: "ext",
 };
+
+/** Kind colors, shared by the picker and `hop ls`'s table. */
+export const WORKTREE_KIND_STYLES: Record<WorktreeKind, LineStyle> = {
+  root: "magenta",
+  managed: "cyan",
+  external: "yellow",
+};
+
+/** Changes stand out in yellow; a clean worktree reads as "fine" in green. */
+export const dirtyStyle = (dirty: boolean): LineStyle => (dirty ? "yellow" : "green");
 
 const CREATABLE_SOURCE_LABELS: Record<"local" | "remote", string> = {
   local: "local",
@@ -56,12 +68,6 @@ const isCreatableCandidate = (
   candidate: PickCandidate,
 ): candidate is Extract<PickCandidate, { kind: "creatable" }> => candidate.kind === "creatable";
 
-const WORKTREE_KIND_ORDER: Record<WorktreeKind, number> = {
-  root: 0,
-  managed: 1,
-  external: 2,
-};
-
 const CREATABLE_SOURCE_ORDER: Record<"local" | "remote", number> = {
   local: 0,
   remote: 1,
@@ -70,21 +76,10 @@ const CREATABLE_SOURCE_ORDER: Record<"local" | "remote", number> = {
 const compareByBranchLabel = (a: PickCandidate, b: PickCandidate): number =>
   candidateBranchLabel(a).localeCompare(candidateBranchLabel(b));
 
-/** 0 for a normal branch, 1 for detached HEAD — sorts detached worktrees to the end of their kind group. */
-const detachedRank = (candidate: Extract<PickCandidate, { kind: "worktree" }>): number =>
-  candidate.worktree.branch === null ? 1 : 0;
-
 const compareWorktreeCandidates = (
   a: Extract<PickCandidate, { kind: "worktree" }>,
   b: Extract<PickCandidate, { kind: "worktree" }>,
-): number => {
-  const kindDiff = WORKTREE_KIND_ORDER[a.worktree.kind] - WORKTREE_KIND_ORDER[b.worktree.kind];
-  if (kindDiff !== 0) {
-    return kindDiff;
-  }
-  const detachedDiff = detachedRank(a) - detachedRank(b);
-  return detachedDiff === 0 ? compareByBranchLabel(a, b) : detachedDiff;
-};
+): number => compareWorktrees(a.worktree, b.worktree) || compareByBranchLabel(a, b);
 
 const compareCreatableCandidates = (
   a: Extract<PickCandidate, { kind: "creatable" }>,
@@ -171,8 +166,10 @@ export interface CandidateRow {
   /** Which section this row belongs to — lets the renderer dim BRANCHES rows so worktree vs. not-yet-created reads at a glance. */
   readonly section: "worktree" | "branch";
   readonly statusMarker: string;
+  readonly markerStyle: LineStyle;
   readonly branchLabel: string;
   readonly kindLabel: string;
+  readonly kindStyle: LineStyle;
   readonly pathLabel: string;
 }
 
@@ -194,11 +191,17 @@ const toCandidateRow = (
   index: options.index,
   section: options.section,
   statusMarker: statusMarker(candidate),
+  markerStyle:
+    candidate.kind === "worktree" && candidate.dirty !== null
+      ? dirtyStyle(candidate.dirty)
+      : "plain",
   branchLabel: padBranchLabel(
     truncateToWidth(candidateBranchLabel(candidate), options.branchWidth),
     options.branchWidth,
   ),
   kindLabel: candidateKindLabel(candidate).padEnd(KIND_COLUMN_WIDTH, " "),
+  kindStyle:
+    candidate.kind === "worktree" ? WORKTREE_KIND_STYLES[candidate.worktree.kind] : "plain",
   pathLabel: candidatePathLabel(candidate, options.homeDir, options.pathMaxLength),
 });
 

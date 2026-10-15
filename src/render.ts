@@ -9,8 +9,16 @@ export interface JsonEnvelope<T> {
   readonly warnings: readonly string[];
 }
 
+/** Formats a command's data for people (the non-`--json` output); without one, plain output is indented JSON. */
+export type PlainFormatter<T> = (data: T) => string;
+
 /** Turns a command Result into stdout/stderr output. Only the CLI layer (cli.ts and cli-*.ts) calls this. */
-export const render = <T>(command: string, result: CommandResult<T>, json: boolean): void => {
+export const render = <T>(
+  command: string,
+  result: CommandResult<T>,
+  json: boolean,
+  plain?: PlainFormatter<T>,
+): void => {
   if (json) {
     const envelope: JsonEnvelope<T | undefined> = {
       schemaVersion: 1,
@@ -28,7 +36,11 @@ export const render = <T>(command: string, result: CommandResult<T>, json: boole
   if (result.path !== undefined) {
     process.stdout.write(`${result.path}\n`);
   } else if (result.ok && result.data !== undefined) {
-    process.stdout.write(`${JSON.stringify(result.data, null, PLAIN_JSON_INDENT)}\n`);
+    process.stdout.write(
+      plain === undefined
+        ? `${JSON.stringify(result.data, null, PLAIN_JSON_INDENT)}\n`
+        : plain(result.data),
+    );
   }
 
   for (const warning of result.warnings ?? []) {
@@ -41,7 +53,12 @@ export const render = <T>(command: string, result: CommandResult<T>, json: boole
 };
 
 /** How a command invocation ends: its output, then its exit code. */
-export const reportResult = <T>(command: string, result: CommandResult<T>, json: boolean): void => {
-  render(command, result, json);
+export const reportResult = <T>(
+  command: string,
+  result: CommandResult<T>,
+  json: boolean,
+  plain?: PlainFormatter<T>,
+): void => {
+  render(command, result, json, plain);
   process.exitCode = result.exitCode;
 };

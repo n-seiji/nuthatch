@@ -15,7 +15,7 @@ const execFile = promisify(execFileCb);
  * build --compile` binaries append the invocation name to `process.argv`
  * whenever started with no args, regardless of whether stdout is a TTY
  * (see cli-dispatch.ts's normalizeCliArgs doc comment). The shell wrapper
- * (`hop init zsh`) always captures stdout via command substitution, so
+ * (`hop init zsh`) captures stdout via command substitution whenever it may cd, so
  * stdout is a pipe in the real path — this test launches the actual
  * compiled binary the same way (stdout piped, no args) and asserts it
  * doesn't misread the synthesized token as a branch name (which used to

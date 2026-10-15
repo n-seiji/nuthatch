@@ -4,7 +4,6 @@ import {
   buildFrame,
   GUTTER,
   truncateLineToWidth,
-  type LineStyle,
   type StyledLine,
   wrapInBox,
 } from "./picker-frame.ts";
@@ -59,42 +58,22 @@ const hiddenCountLine = (count: number, direction: "above" | "below"): StyledLin
   ];
 };
 
-/** Status marker colors: changes stand out in yellow, a clean worktree reads as "fine" in green. */
-const STATUS_MARKER_STYLES: Record<string, LineStyle> = {
-  "●": "yellow",
-  "○": "green",
-};
-
-/** Kind label colors, keyed by the trimmed label picker-layout.ts produces. */
-const KIND_LABEL_STYLES: Record<string, LineStyle> = {
-  root: "magenta",
-  managed: "cyan",
-  ext: "yellow",
-};
-
 const candidateRowLine = (
   row: Extract<DisplayRow, { kind: "candidate" }>,
   selected: boolean,
 ): StyledLine => {
-  if (selected) {
-    const text = `❯ ${row.statusMarker} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`;
-    return [{ text, style: "inverse" }];
-  }
-  if (row.section === "branch") {
-    return [
-      {
-        text: `  ${row.statusMarker} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`,
-        style: "dim",
-      },
-    ];
-  }
-  return [
-    { text: "  " },
-    { text: row.statusMarker, style: STATUS_MARKER_STYLES[row.statusMarker] ?? "plain" },
+  const spans: StyledLine = [
+    { text: selected ? "❯ " : "  " },
+    { text: row.statusMarker, style: row.markerStyle },
     { text: ` ${row.branchLabel}  ` },
-    { text: row.kindLabel, style: KIND_LABEL_STYLES[row.kindLabel.trim()] ?? "plain" },
+    { text: row.kindLabel, style: row.kindStyle },
     { text: ` ${row.pathLabel}`, style: "dim" },
   ];
+  // The selected row and not-yet-created branches are one solid style across the whole row.
+  if (selected || row.section === "branch") {
+    return [{ text: spans.map((span) => span.text).join(""), style: selected ? "inverse" : "dim" }];
+  }
+  return spans;
 };
 
 const displayRowLine = (row: DisplayRow, clampedIndex: number): StyledLine =>
