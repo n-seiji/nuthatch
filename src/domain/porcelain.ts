@@ -1,6 +1,6 @@
 import type { Worktree } from "./model.ts";
 
-const REFS_HEADS_PREFIX = "refs/heads/";
+export const REFS_HEADS_PREFIX = "refs/heads/";
 
 /** A parsed worktree record, before kind classification is applied. */
 export type ParsedWorktree = Omit<Worktree, "kind">;

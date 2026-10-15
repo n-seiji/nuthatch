@@ -88,7 +88,7 @@ export const PickDataSchema = object({
 export type PickData = InferOutput<typeof PickDataSchema>;
 
 /** Builds the `{schemaVersion:1, command, data, warnings}` envelope schema for a given data shape. */
-export const jsonEnvelopeSchema = <TDataSchema extends GenericSchema>(dataSchema: TDataSchema) =>
+const jsonEnvelopeSchema = <TDataSchema extends GenericSchema>(dataSchema: TDataSchema) =>
   object({
     schemaVersion: literal(1),
     command: string(),

@@ -436,7 +436,8 @@ logic is pure functions with zero external dependencies.
 
 ```
 src/
-├── cli.ts               # Entry point. citty parses args → runs a command → renders the result
+├── cli.ts               # Entry point. Parses args → runs a command → renders the result
+├── cli-args.ts          # cli.ts only: the small argv parser (flags / positionals)
 ├── domain/              # Pure functions only. May only import from within domain
 │   ├── model.ts         #   Worktree type (kind: root|managed|external)
 │   ├── porcelain.ts     #   worktree list --porcelain parser
@@ -455,6 +456,7 @@ src/
 ├── infra/               # The only place with external dependencies. Implements domain's ports
 │   ├── git.ts           #   node:child_process execFile (argv array only)
 │   ├── git-executable.ts #  probes the candidates, caches the absolute path
+│   ├── executable.ts    #   first executable file among candidates (shared by git and package-manager lookup)
 │   ├── fs.ts            #   realpath / exists / mkdir / readdir
 │   ├── repo.ts          #   classified worktree list, dirty check, how to check out a branch
 │   ├── lock.ts          #   per-repo mutation lock (withRepoLock)
@@ -484,8 +486,8 @@ shell/init.zsh           # Template for `hop init zsh` (strict quoting, idempote
 - **commands never render**: they return a structured Result, and
   cli.ts + render.ts do the rendering (no shared output module exists,
   since that would be a cross-cutting dependency).
-- The arg parser is **citty**. Parser-specific types never flow into
-  commands.
+- The arg parser is hop's own `cli-args.ts` (citty was dropped to keep
+  startup fast). Parser-specific types never flow into commands.
 - Subprocess calls use **node:child_process** — this works for both the npm
   build (Node 22+) and the compiled build (Bun).
 
@@ -496,7 +498,7 @@ shell/init.zsh           # Template for `hop init zsh` (strict quoting, idempote
 | Language | TypeScript | Development runtime is bun |
 | Minimum versions | git >= 2.36 / node >= 22 / bun >= 1.1 | Range supporting porcelain -z and compilation |
 | TUI | self-drawn (no TUI dependency) | Raw-mode stdin + alternate screen on stderr, TTY only; without a TTY, bare `hop` prints a listing instead |
-| arg parser | citty | Rolling our own is forbidden |
+| arg parser | in-house (`src/cli-args.ts`) | Keeps citty's (mri's) rules; citty pulled in consola and slowed startup |
 | lint/format | oxlint / oxfmt | |
 | Testing | bun test | unit (domain) + integration (real repo in a tmpdir, GIT_CONFIG_NOSYSTEM=1 / isolated HOME / hooks disabled / LC_ALL=C / injected clock) |
 | Distribution | npm + GitHub Releases | The npm build is a Node-executable bundle in dist/ via bun build. Binaries are built with bun compile (darwin-arm64/x64, linux-x64) |

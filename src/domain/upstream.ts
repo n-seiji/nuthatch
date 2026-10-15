@@ -1,3 +1,5 @@
+import { REFS_HEADS_PREFIX } from "./porcelain.ts";
+
 /**
  * Every local branch's relation to its upstream, read from one
  * `git for-each-ref` instead of one `git rev-list` per branch: `hop ls` and
@@ -13,7 +15,6 @@ export type UpstreamState =
   | { readonly kind: "tracking"; readonly ahead: number; readonly behind: number };
 
 const NONE: UpstreamState = { kind: "none" };
-const REFS_HEADS_PREFIX = "refs/heads/";
 const FIELD_SEPARATOR = "\0";
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { baseName, parentDir } from "./posix-path.ts";
+import { absoluteCandidates, baseName, parentDir, splitPathEnv } from "./posix-path.ts";
 
 describe("parentDir", () => {
   it("深いパスの場合、1 つ上のディレクトリを返す", () => {
@@ -27,5 +27,28 @@ describe("baseName", () => {
 
   it("ルートの場合、空文字を返す", () => {
     expect(baseName("/")).toBe("");
+  });
+});
+
+describe("absoluteCandidates", () => {
+  it("絶対パスのエントリだけを順番どおりに name と結合する", () => {
+    expect(absoluteCandidates(["/usr/bin", ".", "node_modules/.bin", "/bin/"], "git")).toEqual([
+      "/usr/bin/git",
+      "/bin/git",
+    ]);
+  });
+
+  it("前後の空白を除き、重複は最初の 1 つだけ残す", () => {
+    expect(absoluteCandidates([" /usr/bin ", "/usr/bin/", "", "/opt/x"], "hop")).toEqual([
+      "/usr/bin/hop",
+      "/opt/x/hop",
+    ]);
+  });
+});
+
+describe("splitPathEnv", () => {
+  it("コロンで区切り、未設定なら空のエントリ 1 つを返す", () => {
+    expect(splitPathEnv("/a:/b")).toEqual(["/a", "/b"]);
+    expect(splitPathEnv()).toEqual([""]);
   });
 });
