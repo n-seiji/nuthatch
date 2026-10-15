@@ -29,7 +29,7 @@ import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
 import { render, reportResult } from "./render.ts";
-import { reportLs } from "./render-ls.ts";
+import { formatLsForStdout } from "./render-ls.ts";
 import { USAGE } from "./usage.ts";
 import { VERSION } from "./version.ts";
 
@@ -39,7 +39,7 @@ const term = createTermPort();
 
 const runLs = async (json: boolean): Promise<void> => {
   const result = await ls(git, fs, { cwd: process.cwd() });
-  reportLs(result, json);
+  reportResult("ls", result, json, formatLsForStdout);
 };
 
 const lsCommand = defineCommand({

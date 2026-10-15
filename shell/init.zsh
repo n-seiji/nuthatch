@@ -43,7 +43,7 @@ hop() {
   out="$(command hop "$@")"
   rc=$?
 
-  if [[ $rc -eq 0 && $should_cd -eq 1 && -n "$out" ]]; then
+  if [[ $rc -eq 0 && -n "$out" ]]; then
     cd -- "$out" || return $?
   elif [[ -n "$out" ]]; then
     print -r -- "$out"
