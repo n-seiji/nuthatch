@@ -2,6 +2,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { isDirtyFromStatus } from "../domain/dirty.ts";
 import type { AddWorktreeOptions, GitPort, SwitchBranchOptions } from "../domain/ports.ts";
+import { parseUpstreamStates, UPSTREAM_FORMAT, type UpstreamState } from "../domain/upstream.ts";
 import { createGitExecutableResolver } from "./git-executable.ts";
 
 const execFile = promisify(execFileCb);
@@ -90,21 +91,12 @@ const createWorktreeMethods = () => ({
     await run(cwd, args);
   },
 
-  async aheadBehind(cwd: string, branch: string) {
+  async upstreamStates(cwd: string) {
     try {
-      const out = await run(cwd, [
-        "rev-list",
-        "--left-right",
-        "--count",
-        `${branch}...${branch}@{upstream}`,
-      ]);
-      const [ahead, behind] = out.trim().split(/\s+/u).map(Number);
-      if (ahead === undefined || behind === undefined) {
-        return null;
-      }
-      return { ahead, behind };
+      const out = await run(cwd, ["for-each-ref", `--format=${UPSTREAM_FORMAT}`, "refs/heads/"]);
+      return parseUpstreamStates(out);
     } catch {
-      return null;
+      return new Map<string, UpstreamState>();
     }
   },
 });
@@ -215,19 +207,6 @@ const createGarbagePolicyMethods = () => ({
       return !out.split("\n").some((line) => line.startsWith("+"));
     } catch {
       return "unknown";
-    }
-  },
-
-  async isUpstreamGone(cwd: string, branch: string) {
-    try {
-      const out = await run(cwd, [
-        "for-each-ref",
-        "--format=%(upstream:track)",
-        `refs/heads/${branch}`,
-      ]);
-      return out.trim() === "[gone]";
-    } catch {
-      return false;
     }
   },
 });

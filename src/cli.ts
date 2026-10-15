@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { type ArgsDef, type CommandDef, defineCommand, parseArgs, runCommand } from "citty";
+import { type ArgsSpec, parseCliArgs } from "./cli-args.ts";
 import {
   dispatchCliArgs,
   isHelpRequest,
@@ -9,125 +9,52 @@ import {
   normalizeCliArgs,
 } from "./cli-dispatch.ts";
 import { reportFatalError, wantsJson } from "./cli-fatal.ts";
-import { createRootCommand, rewriteRootPreviousToken } from "./cli-root-command.ts";
-import {
-  createPickerCallbacks,
-  loadPickCandidates,
-  renderSwitchRootOutcome,
-  runInteractivePicker,
-  type SwitchRootOutcome,
-} from "./cli-pick.ts";
-import { runUpdate } from "./cli-update.ts";
-import { clean } from "./commands/clean.ts";
-import { renderInit } from "./commands/init.ts";
-import { jump } from "./commands/jump.ts";
-import { ls } from "./commands/ls.ts";
-import { rm } from "./commands/rm.ts";
 import { describeFatalError } from "./domain/fatal-error.ts";
+import type { FsPort, GitPort, TermPort } from "./domain/ports.ts";
 import { EXIT_CANCELLED, EXIT_SUCCESS, EXIT_USAGE_ERROR, ok } from "./domain/result.ts";
 import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTermPort } from "./infra/term.ts";
 import { render, reportResult } from "./render.ts";
-import { reportLs } from "./render-ls.ts";
 import { USAGE } from "./usage.ts";
 import { VERSION } from "./version.ts";
 
-const git = createGitPort();
-const fs = createFsPort();
-const term = createTermPort();
+/*
+ * Every command's implementation is loaded with a dynamic import, on the path
+ * that runs it: one invocation runs one command, so `hop <branch>` never pays
+ * to evaluate the picker UI, `hop --version` never loads git plumbing, and
+ * only `hop --update` reaches the network and crypto code.
+ */
 
-const runLs = async (json: boolean): Promise<void> => {
-  const result = await ls(git, fs, { cwd: process.cwd() });
-  reportLs(result, json);
+interface Ports {
+  readonly git: GitPort;
+  readonly fs: FsPort;
+  readonly term: TermPort;
+}
+
+let ports: Ports | null = null;
+const getPorts = (): Ports => {
+  ports ??= { git: createGitPort(), fs: createFsPort(), term: createTermPort() };
+  return ports;
 };
 
-const lsCommand = defineCommand({
-  meta: { name: "ls", description: "List worktrees" },
-  args: {
-    json: { type: "boolean", description: "Output JSON" },
-  },
-  async run({ args }) {
-    await runLs(Boolean(args.json));
-  },
-});
+const JSON_FLAG = "json";
 
-const rmCommand = defineCommand({
-  meta: { name: "rm", description: "Remove a worktree (keeps the branch)" },
-  args: {
-    branch: {
-      type: "positional",
-      required: true,
-      description: "Branch to remove",
-    },
-    force: { type: "boolean", description: "Force removal even if dirty" },
-    ext: {
-      type: "boolean",
-      description: "Deprecated, no-op: external worktrees no longer require it",
-    },
-    json: { type: "boolean", description: "Output JSON" },
-  },
-  async run({ args }) {
-    const result = await rm(git, fs, {
-      cwd: process.cwd(),
-      branch: String(args.branch),
-      force: Boolean(args.force),
-      ext: Boolean(args.ext),
-    });
-    reportResult("rm", result, Boolean(args.json));
-  },
-});
-
-const rootCommand = createRootCommand(git, fs);
-
-const cleanCommand = defineCommand({
-  meta: {
-    name: "clean",
-    description: "Remove worktrees that are safe to garbage-collect",
-  },
-  args: {
-    ext: { type: "boolean", description: "Also consider external worktrees" },
-    withBranch: { type: "boolean", description: "Also delete the branch" },
-    dryRun: { type: "boolean", description: "Only report candidates" },
-    yes: { type: "boolean", description: "Skip confirmation and execute" },
-    json: { type: "boolean", description: "Output JSON" },
-  },
-  async run({ args }) {
-    const result = await clean(git, fs, term, {
-      cwd: process.cwd(),
-      ext: Boolean(args.ext),
-      withBranch: Boolean(args.withBranch),
-      dryRun: Boolean(args.dryRun),
-      yes: Boolean(args.yes),
-    });
-    reportResult("clean", result, Boolean(args.json));
-  },
-});
-
-const initCommand = defineCommand({
-  meta: { name: "init", description: "Print shell integration" },
-  args: {
-    shell: {
-      type: "positional",
-      required: true,
-      description: "Shell name (zsh)",
-    },
-  },
-  run({ args }) {
-    const shell = String(args.shell);
-    if (shell !== "zsh") {
-      process.stderr.write(`Unsupported shell: ${shell}\n`);
-      process.exitCode = EXIT_USAGE_ERROR;
-      return;
-    }
-    process.stdout.write(renderInit({ shell: "zsh" }));
-  },
-});
+const runLs = async (json: boolean): Promise<void> => {
+  const [{ ls }, { reportLs }] = await Promise.all([
+    import("./commands/ls.ts"),
+    import("./render-ls.ts"),
+  ]);
+  const { git, fs } = getPorts();
+  reportLs(await ls(git, fs, { cwd: process.cwd() }), json);
+};
 
 const runJump = async (
   target: string,
   options: { create: boolean; track?: string; json: boolean },
 ): Promise<void> => {
+  const { jump } = await import("./commands/jump.ts");
+  const { git, fs } = getPorts();
   const result = await jump(git, fs, {
     cwd: process.cwd(),
     target,
@@ -137,31 +64,6 @@ const runJump = async (
   reportResult("jump", result, options.json);
 };
 
-const RESERVED_COMMANDS = {
-  ls: lsCommand,
-  rm: rmCommand,
-  clean: cleanCommand,
-  root: rootCommand,
-  init: initCommand,
-} as const;
-
-const jumpArgsSchema = {
-  target: {
-    type: "positional",
-    required: false,
-    description: "Branch to jump to",
-  },
-  create: {
-    type: "boolean",
-    description: "Create the worktree if it doesn't exist",
-  },
-  track: {
-    type: "string",
-    description: "Remote branch to track when creating",
-  },
-  json: { type: "boolean", description: "Output JSON" },
-} as const;
-
 /**
  * Runs the interactive picker (TTY only; ui/picker.ts's own terminal-session
  * checks stdin/stderr isTTY-ness and skips raw mode when not interactive).
@@ -169,12 +71,19 @@ const jumpArgsSchema = {
  * module comment for why.
  */
 const runInteractivePick = async (json: boolean): Promise<void> => {
+  const {
+    createPickerCallbacks,
+    loadPickCandidates,
+    renderSwitchRootOutcome,
+    runInteractivePicker,
+  } = await import("./cli-pick.ts");
+  const { git, fs } = getPorts();
   const candidates = await loadPickCandidates(git, fs, json);
   if (candidates === null) {
     return;
   }
 
-  let lastSwitchRootOutcome: SwitchRootOutcome | null = null;
+  let lastSwitchRootOutcome: Parameters<typeof renderSwitchRootOutcome>[1] = null;
   const callbacks = createPickerCallbacks(git, fs, json, (outcome) => {
     lastSwitchRootOutcome = outcome;
   });
@@ -206,47 +115,118 @@ const runInteractivePick = async (json: boolean): Promise<void> => {
   await runJump(selected.branch, { create: true, json });
 };
 
-const runJumpFromArgs = async (rawArgs: readonly string[]): Promise<void> => {
-  const args = parseArgs([...rawArgs], jumpArgsSchema);
-  if (args.target === undefined) {
-    if (term.isTTY()) {
-      await runInteractivePick(Boolean(args.json));
+const JUMP_ARGS: ArgsSpec = {
+  positionals: [{ name: "target", required: false }],
+  booleans: ["create", JSON_FLAG],
+  strings: ["track"],
+};
+
+const runJumpFromArgs = async (tokens: readonly string[]): Promise<void> => {
+  const args = parseCliArgs(tokens, JUMP_ARGS);
+  const json = args.booleans.json ?? false;
+  const { target } = args.positionals;
+  if (target === undefined) {
+    if (getPorts().term.isTTY()) {
+      await runInteractivePick(json);
       return;
     }
     // Non-TTY: no picker, just list worktrees.
-    await runLs(Boolean(args.json));
+    await runLs(json);
     return;
   }
-  await runJump(String(args.target), {
-    create: Boolean(args.create),
-    json: Boolean(args.json),
-    ...(args.track === undefined ? {} : { track: String(args.track) }),
+  const { track } = args.strings;
+  await runJump(target, {
+    create: args.booleans.create ?? false,
+    json,
+    ...(track === undefined ? {} : { track }),
   });
 };
 
-// Dispatch is manual (not citty's `subCommands`) because citty's runCommand
-// Always invokes a parent's `run` even after dispatching a subcommand, and
-// Throws on any unrecognized first token — both wrong for us, since any
-// Non-reserved first token must fall through to `jump` as a branch name.
+const runRm = async (tokens: readonly string[]): Promise<void> => {
+  const args = parseCliArgs(tokens, {
+    positionals: [{ name: "branch", required: true }],
+    booleans: ["force", "ext", JSON_FLAG],
+  });
+  const { rm } = await import("./commands/rm.ts");
+  const { git, fs } = getPorts();
+  const result = await rm(git, fs, {
+    cwd: process.cwd(),
+    branch: args.positionals.branch ?? "",
+    force: args.booleans.force ?? false,
+    ext: args.booleans.ext ?? false,
+  });
+  reportResult("rm", result, args.booleans.json ?? false);
+};
+
+const runClean = async (tokens: readonly string[]): Promise<void> => {
+  const args = parseCliArgs(tokens, {
+    booleans: ["ext", "withBranch", "dryRun", "yes", JSON_FLAG],
+  });
+  const { clean } = await import("./commands/clean.ts");
+  const { git, fs, term } = getPorts();
+  const result = await clean(git, fs, term, {
+    cwd: process.cwd(),
+    ext: args.booleans.ext ?? false,
+    withBranch: args.booleans.withBranch ?? false,
+    dryRun: args.booleans.dryRun ?? false,
+    yes: args.booleans.yes ?? false,
+  });
+  reportResult("clean", result, args.booleans.json ?? false);
+};
+
+const runRoot = async (tokens: readonly string[]): Promise<void> => {
+  const args = parseCliArgs(tokens, {
+    positionals: [{ name: "branch", required: false }],
+    booleans: [JSON_FLAG],
+    strings: ["track"],
+  });
+  const { root } = await import("./commands/root.ts");
+  const { git, fs } = getPorts();
+  const { branch } = args.positionals;
+  const { track } = args.strings;
+  const result = await root(git, fs, {
+    cwd: process.cwd(),
+    ...(branch === undefined ? {} : { target: branch }),
+    ...(track === undefined ? {} : { track }),
+  });
+  reportResult("root", result, args.booleans.json ?? false);
+};
+
+const runInit = async (tokens: readonly string[]): Promise<void> => {
+  const args = parseCliArgs(tokens, {
+    positionals: [{ name: "shell", required: true }],
+  });
+  const shell = args.positionals.shell ?? "";
+  if (shell !== "zsh") {
+    process.stderr.write(`Unsupported shell: ${shell}\n`);
+    process.exitCode = EXIT_USAGE_ERROR;
+    return;
+  }
+  const { renderInit } = await import("./commands/init.ts");
+  process.stdout.write(renderInit({ shell: "zsh" }));
+};
+
+const RESERVED_COMMANDS: Readonly<Record<string, (tokens: readonly string[]) => Promise<void>>> = {
+  ls: (tokens) => runLs(parseCliArgs(tokens, { booleans: [JSON_FLAG] }).booleans.json ?? false),
+  rm: runRm,
+  clean: runClean,
+  root: runRoot,
+  init: runInit,
+};
+
+// Dispatch is manual, not a subcommand framework's, because any non-reserved
+// First token must fall through to `jump` as a branch name.
 // Process.argv is [node, script, ...userArgs]; drop the first two.
 const ARGV_USER_ARGS_START = 2;
 
 const dispatchAndRun = async (dispatch: ReturnType<typeof dispatchCliArgs>): Promise<void> => {
-  if (dispatch.kind === "reserved") {
-    const command = RESERVED_COMMANDS[dispatch.name as keyof typeof RESERVED_COMMANDS];
-    // For `root`, rewrite a leading bare "-" before citty ever parses it —
-    // See cli-root-command.ts for why.
-    const commandArgs =
-      dispatch.name === "root" ? rewriteRootPreviousToken(dispatch.args) : [...dispatch.args];
-    // The command union's arg schemas differ per command, so this cast collapses
-    // Them to the common CommandDef<ArgsDef> shape runCommand expects.
-    await runCommand(command as unknown as CommandDef<ArgsDef>, {
-      rawArgs: commandArgs,
-    });
-    return;
-  }
+  const command = dispatch.kind === "reserved" ? RESERVED_COMMANDS[dispatch.name] : undefined;
+  await (command === undefined ? runJumpFromArgs(dispatch.args) : command(dispatch.args));
+};
 
-  await runJumpFromArgs(dispatch.args);
+const runUpdate = async (rawArgs: readonly string[]): Promise<void> => {
+  const update = await import("./cli-update.ts");
+  await update.runUpdate(rawArgs, getPorts().term);
 };
 
 const main = async (): Promise<void> => {
@@ -269,7 +249,7 @@ const main = async (): Promise<void> => {
     return;
   }
   if (isUpdateRequest(rawArgs)) {
-    await runUpdate(rawArgs, term);
+    await runUpdate(rawArgs);
     return;
   }
 
