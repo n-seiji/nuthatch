@@ -1,10 +1,9 @@
 import { spawn } from "node:child_process";
-import { constants } from "node:fs";
-import { access, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename } from "node:path";
 import type { CommandArgv } from "../domain/install-method.ts";
 import { pathExecutableCandidates } from "../domain/self-update.ts";
+import { firstExecutable } from "./executable.ts";
 
 /**
  * Locating and running a package manager (mise / npm / bun) for
@@ -15,42 +14,17 @@ import { pathExecutableCandidates } from "../domain/self-update.ts";
 
 const STDERR_FD = 2;
 
-const isExecutableFile = async (path: string): Promise<boolean> => {
-  try {
-    const stats = await stat(path);
-    if (!stats.isFile()) {
-      return false;
-    }
-    await access(path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 /**
  * The first executable file named `name` in `preferredDir` or an absolute
  * PATH entry, or null. Every probe is launched at once and awaited in
  * candidate order (the preferred dir first), so the first entry wins and
  * nothing waits past it.
  */
-export const resolveExecutable = async (
+export const resolveExecutable = (
   name: string,
   pathEnv?: string,
   preferredDir: string | null = null,
-): Promise<string | null> => {
-  const probes = pathExecutableCandidates(name, pathEnv, preferredDir).map(async (candidate) =>
-    (await isExecutableFile(candidate)) ? candidate : null,
-  );
-  for (const probe of probes) {
-    // oxlint-disable-next-line no-await-in-loop
-    const found = await probe;
-    if (found !== null) {
-      return found;
-    }
-  }
-  return null;
-};
+): Promise<string | null> => firstExecutable(pathExecutableCandidates(name, pathEnv, preferredDir));
 
 /**
  * Runs `argv` in the user's home directory, not wherever hop was started: hop

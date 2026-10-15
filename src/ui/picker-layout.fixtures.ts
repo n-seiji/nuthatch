@@ -7,7 +7,7 @@ import type { Worktree } from "../domain/model.ts";
  * the max-lines lint limit). Test-only — never imported from src/ outside
  * tests.
  */
-export const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
+const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
   path: "/repo",
   head: "abc",
   branch: "main",

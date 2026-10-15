@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 const execFile = promisify(execFileCb);
 
 /** Isolated environment so tests never touch the developer's real git config. */
-export const isolatedEnv = (home: string): NodeJS.ProcessEnv => ({
+const isolatedEnv = (home: string): NodeJS.ProcessEnv => ({
   ...process.env,
   HOME: home,
   GIT_CONFIG_NOSYSTEM: "1",
