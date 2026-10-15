@@ -1,6 +1,7 @@
 import { classifyGarbage, type GarbageInput } from "../domain/garbage.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import type { CleanCandidate, Worktree } from "../domain/schema.ts";
+import { type UpstreamState, upstreamStateOf } from "../domain/upstream.ts";
 import { type RepoContext, worktreeDirtyState } from "../infra/repo.ts";
 
 /** Finds worktrees safe for `hop clean` to remove (see clean.ts for the policy). */
@@ -10,7 +11,10 @@ export const buildCleanCandidates = async (
   context: RepoContext,
   ext: boolean,
 ): Promise<CleanCandidate[]> => {
-  const defaultRef = await git.resolveDefaultBranchRef(context.rootPath);
+  const [defaultRef, upstreams] = await Promise.all([
+    git.resolveDefaultBranchRef(context.rootPath),
+    git.upstreamStates(context.rootPath),
+  ]);
 
   const targets = context.worktrees.filter(
     (wt) => wt.kind === "managed" || (ext && wt.kind === "external"),
@@ -18,7 +22,7 @@ export const buildCleanCandidates = async (
 
   const results = await Promise.all(
     targets.map(async (wt): Promise<CleanCandidate | null> => {
-      const reason = await classifyWorktree(wt, { git, fs, defaultRef, context });
+      const reason = await classifyWorktree(wt, { git, fs, defaultRef, upstreams, context });
       if (reason === null) {
         return null;
       }
@@ -33,12 +37,13 @@ interface ClassifyWorktreeContext {
   readonly git: GitPort;
   readonly fs: FsPort;
   readonly defaultRef: string | null;
+  readonly upstreams: ReadonlyMap<string, UpstreamState>;
   readonly context: RepoContext;
 }
 
 const classifyWorktree = async (
   wt: Worktree,
-  { git, fs, defaultRef, context }: ClassifyWorktreeContext,
+  { git, fs, defaultRef, upstreams, context }: ClassifyWorktreeContext,
 ) => {
   if (wt.prunable) {
     return classifyGarbage({
@@ -56,26 +61,30 @@ const classifyWorktree = async (
   }
 
   const { rootPath, worktrees } = context;
-  const [dirtyState, upstreamGone] = await Promise.all([
-    worktreeDirtyState(git, fs, worktrees, wt),
-    git.isUpstreamGone(rootPath, wt.branch),
-  ]);
-
+  const upstreamGone = upstreamStateOf(upstreams, wt.branch).kind === "gone";
   const mergedIntoDefault =
     defaultRef === null ? "unknown" : await git.isAncestor(rootPath, wt.branch, defaultRef);
   // "gone" also needs to recognize squash/rebase merges, whose commits are
-  // Never literal ancestors of the branch they were merged into.
+  // Never literal ancestors of the branch they were merged into. The answer
+  // Only matters for a gone upstream on a branch that isn't merged outright.
   const allCommitsReachableFromDefault =
-    defaultRef === null
+    defaultRef === null || mergedIntoDefault === true || !upstreamGone
       ? "unknown"
       : await git.hasEquivalentCommits(rootPath, wt.branch, defaultRef);
 
-  const input: GarbageInput = {
+  const facts = {
     prunable: false,
-    clean: dirtyState === false,
     mergedIntoDefault,
     upstreamGone,
     allCommitsReachableFromDefault,
   };
+  // A dirty worktree is never a candidate, so when the branch facts already
+  // Rule this one out, skip the status scan: it is by far the most expensive
+  // Check, and most worktrees in use are neither merged nor gone.
+  if (classifyGarbage({ ...facts, clean: true }) === null) {
+    return null;
+  }
+  const dirtyState = await worktreeDirtyState(git, fs, worktrees, wt);
+  const input: GarbageInput = { ...facts, clean: dirtyState === false };
   return classifyGarbage(input);
 };

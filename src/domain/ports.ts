@@ -4,6 +4,7 @@
  */
 
 import type { CommandArgv, InstallFacts } from "./install-method.ts";
+import type { UpstreamState } from "./upstream.ts";
 
 export interface GitPort {
   /** Runs `git worktree list --porcelain -z` and returns raw stdout. */
@@ -27,8 +28,12 @@ export interface GitPort {
   ) => Promise<void>;
   /** Removes a worktree. */
   removeWorktree: (cwd: string, path: string, force: boolean) => Promise<void>;
-  /** Ahead/behind counts of `branch` versus its upstream, if any. */
-  aheadBehind: (cwd: string, branch: string) => Promise<{ ahead: number; behind: number } | null>;
+  /**
+   * Every local branch's upstream state, keyed by short branch name, from a
+   * single git call. Never rejects: if git can't answer, the map is empty,
+   * which reads as "no upstream" for every branch.
+   */
+  upstreamStates: (cwd: string) => Promise<ReadonlyMap<string, UpstreamState>>;
   /** Lists local branch names. */
   listBranches: (cwd: string) => Promise<string[]>;
   /** Lists remotes that have a branch with this name, e.g. ["origin"]. */
@@ -50,8 +55,6 @@ export interface GitPort {
    * commits are never literal ancestors of the branch they were merged into.
    */
   hasEquivalentCommits: (cwd: string, branch: string, ref: string) => Promise<boolean | "unknown">;
-  /** True if `branch`'s upstream is marked `[gone]` (its remote-tracking branch was deleted). */
-  isUpstreamGone: (cwd: string, branch: string) => Promise<boolean>;
   /** Deletes a local branch. Callers must have already established it is safe to delete. */
   deleteBranch: (cwd: string, branch: string) => Promise<void>;
 }

@@ -91,11 +91,11 @@ describe("bare `hop` (no target)", () => {
 });
 
 describe("hop root <branch> → hop root - (real CLI, holder swap)", () => {
-  // Regression test for a bug citty-level `root -` parsing had: citty's
-  // Positional-arg parser silently drops a bare "-" token, so calling
-  // `root()` directly (as root.integration.test.ts does) never exercises the
-  // Actual argv → citty → root() path and can't catch this. Only spawning
-  // The real CLI binary reproduces it.
+  // Regression test for a bug `root -` parsing had: the old argv parser
+  // (citty) silently dropped a bare "-" token. Calling `root()` directly, as
+  // Root.integration.test.ts does, never exercises the actual argv → parser
+  // → root() path and can't catch this. Only spawning the real CLI binary
+  // Reproduces it.
   it("holder swap 後の `hop root -` は root の branch を元に戻す", () => {
     execFileSync("git", ["branch", "swap-clean"], {
       cwd: repo.repoPath,
@@ -147,9 +147,9 @@ describe("hop root <branch> → hop root - (real CLI, holder swap)", () => {
     }).trim();
     expect(branchAfterSwitch).toBe("plain");
 
-    // Regression test: rewriteRootPreviousToken used to only look at
-    // Args[0], so a flag placed before "-" (like --json here) shadowed it
-    // And citty silently dropped the "-" token entirely.
+    // Regression test: a "-" workaround once only looked at args[0], so a
+    // Flag placed before "-" (like --json here) shadowed it and the parser
+    // Silently dropped the "-" token entirely.
     const back = runHop(["root", "--json", "-"]) as {
       data: { branch: string | null; switched: boolean };
     };

@@ -33,9 +33,13 @@ let repo: TestRepo;
 beforeAll(async () => {
   binaryDir = await mkdtemp(join(tmpdir(), "nuthatch-compiled-"));
   binaryPath = join(binaryDir, "hop");
+  // Same flags as .github/workflows/release.yml, so this tests what ships.
   await execFile("bun", [
     "build",
     "--compile",
+    "--bytecode",
+    "--format",
+    "esm",
     "--outfile",
     binaryPath,
     join(import.meta.dir, "cli.ts"),

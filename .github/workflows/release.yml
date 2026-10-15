@@ -15,7 +15,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.21"
+          bun-version: "1.4.2"
 
       - id: version
         name: Verify release tag matches package version
@@ -97,7 +97,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.21"
+          bun-version: "1.4.2"
 
       - run: bun install --frozen-lockfile
 
@@ -105,7 +105,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          bun build ./src/cli.ts --compile --target=${{ matrix.bun-target }} \
+          # --bytecode precompiles the bundle so a run skips parsing it; it
+          # needs a Bun that supports ESM bytecode (1.2.21 refused it).
+          bun build ./src/cli.ts --compile --bytecode --format esm \
+            --target=${{ matrix.bun-target }} \
             --outfile out/hop-${{ matrix.target }}
           chmod +x out/hop-${{ matrix.target }}
 
