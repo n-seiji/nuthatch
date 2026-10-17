@@ -11,8 +11,8 @@ import { reportResult } from "./render.ts";
  */
 
 /**
- * True if `--json` was asked for. Read off the raw argv rather than citty's
- * parse result, because a fatal error can happen before (or instead of) a
+ * True if `--json` was asked for. Read off the raw argv rather than the parsed
+ * arguments, because a fatal error can happen before (or instead of) a
  * successful parse.
  */
 export const wantsJson = (args: readonly string[]): boolean =>

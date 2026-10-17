@@ -1,3 +1,5 @@
+import { absoluteCandidates, splitPathEnv } from "./posix-path.ts";
+
 /**
  * The pure pieces of `hop --update`: where releases are published, how a
  * version or a checksum file is read, and which PATH entries may hold a
@@ -28,7 +30,6 @@ export const releaseAssetUrl = (version: string, assetName: string): string =>
 const VERSION_PATTERN = /^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/u;
 const TAG_PATTERN = /^v(?<version>\d+\.\d+\.\d+)$/u;
 const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/iu;
-const PATH_SEPARATOR = ":";
 
 const parseVersion = (text: string): readonly [number, number, number] => {
   const groups = VERSION_PATTERN.exec(text)?.groups;
@@ -102,15 +103,11 @@ export const pathExecutableCandidates = (
   name: string,
   pathEnv?: string,
   preferredDir: string | null = null,
-): readonly string[] => {
-  const dirs = [
-    ...(preferredDir === null ? [] : [preferredDir]),
-    ...(pathEnv ?? "").split(PATH_SEPARATOR),
-  ]
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.startsWith("/"));
-  return [...new Set(dirs.map((dir) => `${dir.endsWith("/") ? dir.slice(0, -1) : dir}/${name}`))];
-};
+): readonly string[] =>
+  absoluteCandidates(
+    [...(preferredDir === null ? [] : [preferredDir]), ...splitPathEnv(pathEnv)],
+    name,
+  );
 
 /**
  * An fs error saying hop may not write where it needs to: no permission

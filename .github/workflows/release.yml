@@ -4,9 +4,49 @@ on:
   push:
     tags:
       - "v*"
+    # A version bump merged to main releases itself: `prepare` finds no tag
+    # for the new package.json version, and `publish` creates it last. Every
+    # other main push stops at `prepare`, since its version is already tagged.
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      release: ${{ steps.tag.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: tag
+        name: Decide the release tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" = "tag" ]; then
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag="v$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+            echo "$tag already exists; nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -15,12 +55,12 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.21"
+          bun-version: "1.4.2"
 
       - id: version
         name: Verify release tag matches package version
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
           if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -97,7 +137,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.21"
+          bun-version: "1.4.2"
 
       - run: bun install --frozen-lockfile
 
@@ -105,7 +145,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          bun build ./src/cli.ts --compile --target=${{ matrix.bun-target }} \
+          # --bytecode precompiles the bundle so a run skips parsing it; it
+          # needs a Bun that supports ESM bytecode (1.2.21 refused it).
+          bun build ./src/cli.ts --compile --bytecode --format esm \
+            --target=${{ matrix.bun-target }} \
             --outfile out/hop-${{ matrix.target }}
           chmod +x out/hop-${{ matrix.target }}
 
@@ -158,7 +201,7 @@ jobs:
     # Publish only after every build/test/smoke-test job above is green, and
     # Always last, so a broken build or failed smoke test never reaches npm
     # Or GitHub Releases.
-    needs: [build, smoke-test-tarball, build-binaries, smoke-test-darwin-arm64]
+    needs: [prepare, build, smoke-test-tarball, build-binaries, smoke-test-darwin-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -199,8 +242,12 @@ jobs:
           # Staged-only trusted publisher: stage here, then a human promotes on npmjs.com.
           npm stage publish /tmp/pack/*.tgz --access public --provenance
 
+      # On a main push the tag does not exist yet; the Release creates it on
+      # this commit, so a failed build never leaves a dangling tag behind.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: /tmp/binaries/hop-*
           generate_release_notes: true

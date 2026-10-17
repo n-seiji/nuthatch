@@ -1,6 +1,6 @@
 {
   "name": "@n-seiji/nuthatch",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "git worktree manager (hop)",
   "homepage": "https://github.com/n-seiji/nuthatch#readme",
   "bugs": {
@@ -23,7 +23,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun build ./src/cli.ts --outfile dist/cli.js --target node --format esm",
+    "build": "bun build ./src/cli.ts --outdir dist --target node --format esm --splitting",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
@@ -32,7 +32,6 @@
     "test": "bun test"
   },
   "dependencies": {
-    "citty": "^0.1.6",
     "valibot": "^1.4.2"
   },
   "devDependencies": {

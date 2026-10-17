@@ -1,3 +1,5 @@
+import { absoluteCandidates, splitPathEnv } from "./posix-path.ts";
+
 /**
  * Decides *where* the git executable may live. hop resolves git to an
  * absolute path itself instead of handing the bare name "git" to
@@ -41,13 +43,6 @@ interface GitExecutableCandidatesInput {
   readonly path?: string | undefined;
 }
 
-const PATH_SEPARATOR = ":";
-
-const joinBin = (dir: string): string => {
-  const base = dir.endsWith("/") ? dir.slice(0, -1) : dir;
-  return `${base}/git`;
-};
-
 /**
  * Absolute candidate paths in the order they should be probed. A PATH entry
  * that is not absolute (`.`, `node_modules/.bin`) is dropped rather than
@@ -60,12 +55,7 @@ export const gitExecutableCandidates = (input: GitExecutableCandidatesInput): re
     return [override];
   }
 
-  const dirs = (input.path ?? "")
-    .split(PATH_SEPARATOR)
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.startsWith("/"));
-
-  return [...new Set([...dirs, ...GIT_FALLBACK_BIN_DIRS].map((dir) => joinBin(dir)))];
+  return absoluteCandidates([...splitPathEnv(input.path), ...GIT_FALLBACK_BIN_DIRS], "git");
 };
 
 /** Error text for "git is nowhere to be found" — names every place hop looked. */

@@ -3,6 +3,7 @@ import type { Worktree } from "../domain/model.ts";
 import type { FsPort, GitPort, TermPort } from "../domain/ports.ts";
 import { type CommandResult, EXIT_USAGE_ERROR, fail, ok } from "../domain/result.ts";
 import type { CleanCandidate, CleanData } from "../domain/schema.ts";
+import { type UpstreamState, upstreamStateOf } from "../domain/upstream.ts";
 import { withRepoLock } from "../infra/lock.ts";
 import { loadRepoContext, nestedWorktrees, type RepoContext } from "../infra/repo.ts";
 import { buildCleanCandidates } from "./clean-candidates.ts";
@@ -112,11 +113,16 @@ const removeCandidate = async ({
   }
 };
 
+interface BranchPolicyFacts {
+  readonly defaultRef: string | null;
+  readonly upstreams: ReadonlyMap<string, UpstreamState>;
+}
+
 const canDeletePrunableBranch = async (
   git: GitPort,
   rootPath: string,
   candidate: CleanCandidate,
-  defaultRef: string | null,
+  { defaultRef, upstreams }: BranchPolicyFacts,
 ): Promise<boolean> => {
   if (candidate.reason !== "prunable") {
     return true;
@@ -130,7 +136,7 @@ const canDeletePrunableBranch = async (
     if (mergedIntoDefault === true) {
       return true;
     }
-    if (await git.isUpstreamGone(rootPath, candidate.branch)) {
+    if (upstreamStateOf(upstreams, candidate.branch).kind === "gone") {
       return (await git.hasEquivalentCommits(rootPath, candidate.branch, defaultRef)) === true;
     }
   } catch {
@@ -165,7 +171,10 @@ const executeClean = ({
         const freshCandidate = freshByPath.get(candidate.path);
         return freshCandidate === undefined ? [] : [freshCandidate];
       });
-      const defaultRef = await git.resolveDefaultBranchRef(fresh.rootPath);
+      const [defaultRef, upstreams] = await Promise.all([
+        git.resolveDefaultBranchRef(fresh.rootPath),
+        git.upstreamStates(fresh.rootPath),
+      ]);
 
       const removed: string[] = [];
       const warnings: string[] = [];
@@ -173,12 +182,10 @@ const executeClean = ({
         // A prunable worktree has no directory to inspect, so prunable alone
         // Does not establish that its branch is safe to delete.
         // oxlint-disable-next-line no-await-in-loop
-        const branchSafe = await canDeletePrunableBranch(
-          git,
-          fresh.rootPath,
-          candidate,
+        const branchSafe = await canDeletePrunableBranch(git, fresh.rootPath, candidate, {
           defaultRef,
-        );
+          upstreams,
+        });
         const deleteBranch = cleanOptions.withBranch && branchSafe;
         if (
           cleanOptions.withBranch &&

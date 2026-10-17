@@ -1,11 +1,10 @@
-import { constants } from "node:fs";
-import { access, stat } from "node:fs/promises";
 import {
   GIT_EXECUTABLE_OVERRIDE_ENV,
   GIT_NOT_FOUND_ERROR_CODE,
   gitExecutableCandidates,
   gitNotFoundMessage,
 } from "../domain/git-executable.ts";
+import { firstExecutable } from "./executable.ts";
 
 /**
  * Probes domain/git-executable.ts's candidate list and hands git.ts an
@@ -14,39 +13,15 @@ import {
  * to the spawn implementation.
  */
 
-const isExecutableFile = async (path: string): Promise<boolean> => {
-  try {
-    const stats = await stat(path);
-    if (!stats.isFile()) {
-      return false;
-    }
-    await access(path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 /** Throws an Error whose `code` is GIT_NOT_FOUND_ERROR_CODE when nothing matched. */
 const resolveGitExecutable = async (env: NodeJS.ProcessEnv): Promise<string> => {
   const candidates = gitExecutableCandidates({
     override: env[GIT_EXECUTABLE_OVERRIDE_ENV],
     path: env.PATH,
   });
-  /*
-   * Every probe is launched at once (a handful of stat calls, and awaiting
-   * them one by one serialises the fs threadpool), then awaited in candidate
-   * order so the first entry on PATH wins and nothing waits past it.
-   */
-  const probes = candidates.map(async (candidate) =>
-    (await isExecutableFile(candidate)) ? candidate : undefined,
-  );
-  for (const probe of probes) {
-    // oxlint-disable-next-line no-await-in-loop
-    const found = await probe;
-    if (found !== undefined) {
-      return found;
-    }
+  const found = await firstExecutable(candidates);
+  if (found !== null) {
+    return found;
   }
   throw Object.assign(new Error(gitNotFoundMessage(candidates)), {
     code: GIT_NOT_FOUND_ERROR_CODE,

@@ -21,3 +21,21 @@ export const baseName = (path: string): string => {
   const trimmed = withoutTrailingSlash(path);
   return trimmed.slice(trimmed.lastIndexOf("/") + 1);
 };
+
+/**
+ * Absolute `dir/name` candidates in `dirs`' order, each entry trimmed and
+ * deduplicated. A relative entry (`.`, `node_modules/.bin`) is dropped rather
+ * than resolved against the cwd: hop runs inside whatever repository it was
+ * started in, and a program found relative to it would be someone else's code.
+ */
+export const absoluteCandidates = (dirs: readonly string[], name: string): readonly string[] => [
+  ...new Set(
+    dirs
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.startsWith("/"))
+      .map((dir) => `${dir.endsWith("/") ? dir.slice(0, -1) : dir}/${name}`),
+  ),
+];
+
+/** The entries of a `PATH`-style value (empty when unset). */
+export const splitPathEnv = (pathEnv?: string): readonly string[] => (pathEnv ?? "").split(":");

@@ -1,4 +1,3 @@
-import { parseArgs } from "citty";
 import { isRunningAsCompiledBinary } from "./cli-dispatch.ts";
 import { reportFatalError, wantsJson } from "./cli-fatal.ts";
 import { selfUpdate } from "./commands/self-update.ts";
@@ -14,12 +13,9 @@ import { VERSION } from "./version.ts";
  * cli-pick.ts: the entry point stays a thin dispatcher.
  */
 
-const UPDATE_ARGS = {
-  check: { type: "boolean", description: "Only report; change nothing" },
-  json: { type: "boolean", description: "Output JSON" },
-} as const;
-
-const UPDATE_FLAGS: ReadonlySet<string> = new Set(["--check", "--json"]);
+const CHECK_FLAG = "--check";
+const JSON_FLAG = "--json";
+const UPDATE_FLAGS: ReadonlySet<string> = new Set([CHECK_FLAG, JSON_FLAG]);
 
 export type UpdateArgs =
   | { readonly ok: true; readonly check: boolean; readonly json: boolean }
@@ -40,8 +36,7 @@ export const parseUpdateArgs = (tokens: readonly string[]): UpdateArgs => {
       message: `Unknown argument for --update: ${stray.join(" ")}. Usage: hop --update [--check] [--json]`,
     };
   }
-  const args = parseArgs([...tokens], UPDATE_ARGS);
-  return { ok: true, check: Boolean(args.check), json: Boolean(args.json) };
+  return { ok: true, check: tokens.includes(CHECK_FLAG), json: tokens.includes(JSON_FLAG) };
 };
 
 /** `hop --update …`: `rawArgs` still has `--update` as its first token. */
