@@ -245,11 +245,14 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
     ]);
     const frames = result.output.split("[H[J").filter((frame) => frame.length > 0);
     const firstLines = frames.map((frame) => frame.split("\r\n")[0] ?? "");
-    // After widening past MIN_SIDE_BY_SIDE_WIDTH, some frame drawn after the resize (with no further keypress in between) must show the panel's box beside the query line -- proving the resize alone triggered a repaint, and that the wide layout actually goes side-by-side (the box top border shares the query's row; stacked would put it several rows further down, as the 80-column test above checks).
+    // After widening past MIN_SIDE_BY_SIDE_WIDTH, some frame drawn after the resize (with no further keypress in between) must show the panel's box beside the header line -- proving the resize alone triggered a repaint, and that the wide layout actually goes side-by-side (the box top border shares the header's row; stacked would put it several rows further down, as the 80-column test above checks).
     // The harness latin1-decodes raw pty bytes (see pty-harness.py's module comment), so a multi-byte UTF-8 glyph like "╭" doesn't match as itself -- re-encode it the same lossy way before searching.
     const boxTopLeftMangled = Buffer.from("╭", "utf8").toString("latin1");
+    const headerMarkMangled = Buffer.from("◆", "utf8").toString("latin1");
     expect(
-      firstLines.some((line) => line.includes("hop:") && line.includes(boxTopLeftMangled)),
+      firstLines.some(
+        (line) => line.includes(headerMarkMangled) && line.includes(boxTopLeftMangled),
+      ),
     ).toBe(true);
   }, 10_000);
 
@@ -274,7 +277,7 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
       }
       const candidateLine = lines.find((line) => line.includes("feature/a-genuinely"));
       expect(candidateLine).toBeDefined();
-      expect(candidateLine).toContain("○");
+      expect(candidateLine).toContain("✓ clean");
       expect(lines.some((line) => line.includes("Esc"))).toBe(true);
     },
     10_000,

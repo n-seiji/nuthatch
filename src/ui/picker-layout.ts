@@ -21,8 +21,6 @@ export const MAX_PATH_LENGTH = 40;
 /** Exported for picker-side-by-side.ts's MAX_CANDIDATE_ROW_WIDTH -- see MAX_PATH_LENGTH above. */
 export const MAX_BRANCH_COLUMN_WIDTH = 24;
 
-export const LEGEND_TEXT = "●=dirty ○=clean +=not created";
-
 const WORKTREE_KIND_LABELS: Record<WorktreeKind, string> = {
   root: "root",
   managed: "managed",
@@ -44,15 +42,36 @@ const CREATABLE_SOURCE_LABELS: Record<"local" | "remote", string> = {
   remote: "remote",
 };
 
-/** ● dirty / ○ clean / space (dirty status unknown) / + not yet created. */
-export const statusMarker = (candidate: PickCandidate): string => {
+/** A row's state, as a glyph plus a word so no legend is needed. */
+export interface StateLabel {
+  readonly text: string;
+  readonly style: LineStyle;
+}
+
+/** "● changes" is the longest state label. */
+export const STATE_COLUMN_WIDTH = 9;
+
+/**
+ * One state per row, most important first, matching `hop ls`'s STATE column:
+ * a worktree that can't be acted on says why before "changes" does. Empty
+ * when a worktree's dirty status is unknown.
+ */
+export const stateLabel = (candidate: PickCandidate): StateLabel => {
   if (candidate.kind === "creatable") {
-    return "+";
+    return { text: "+ new", style: "dim" };
+  }
+  if (candidate.worktree.prunable) {
+    return { text: "✗ missing", style: "red" };
+  }
+  if (candidate.worktree.locked) {
+    return { text: "⊘ locked", style: "red" };
   }
   if (candidate.dirty === null) {
-    return " ";
+    return { text: "", style: "plain" };
   }
-  return candidate.dirty ? "●" : "○";
+  return candidate.dirty
+    ? { text: "● changes", style: dirtyStyle(true) }
+    : { text: "✓ clean", style: dirtyStyle(false) };
 };
 
 export const candidateKindLabel = (candidate: PickCandidate): string =>
@@ -165,8 +184,9 @@ export interface CandidateRow {
   readonly index: number;
   /** Which section this row belongs to — lets the renderer dim BRANCHES rows so worktree vs. not-yet-created reads at a glance. */
   readonly section: "worktree" | "branch";
-  readonly statusMarker: string;
-  readonly markerStyle: LineStyle;
+  /** The state label, padded to STATE_COLUMN_WIDTH. */
+  readonly stateText: string;
+  readonly stateStyle: LineStyle;
   readonly branchLabel: string;
   readonly kindLabel: string;
   readonly kindStyle: LineStyle;
@@ -190,11 +210,8 @@ const toCandidateRow = (
   kind: "candidate",
   index: options.index,
   section: options.section,
-  statusMarker: statusMarker(candidate),
-  markerStyle:
-    candidate.kind === "worktree" && candidate.dirty !== null
-      ? dirtyStyle(candidate.dirty)
-      : "plain",
+  stateText: stateLabel(candidate).text.padEnd(STATE_COLUMN_WIDTH, " "),
+  stateStyle: stateLabel(candidate).style,
   branchLabel: padBranchLabel(
     truncateToWidth(candidateBranchLabel(candidate), options.branchWidth),
     options.branchWidth,
