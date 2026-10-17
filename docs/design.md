@@ -505,6 +505,13 @@ shell/init.zsh           # Template for `hop init zsh` (strict quoting, idempote
 
 ## Release procedure (fixed order)
 
+A release starts from either a pushed `vX.Y.Z` tag or a push to main whose
+`package.json` version has no tag yet (a merged version bump; also runnable
+by hand via workflow_dispatch). In the second case the tag is created by
+the Release step at the very end, on the pushed commit, so a failed run
+leaves no tag behind. A main push whose version is already tagged does
+nothing.
+
 build (verify tag `vX.Y.Z` matches the `package.json` version) → `npm pack`
 → smoke test the npm build, linux-x64, and darwin-arm64 → darwin-x64 is
 compile-checked only → generate SHA-256 for each binary → npm publish
