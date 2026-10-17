@@ -30,3 +30,14 @@
   are all mechanically enforced by oxlint (`.oxlintrc.json`'s
   `no-restricted-imports` per layer + `import/no-nodejs-modules`). Write
   only the design intent that lint can't express here.
+
+## Dependency vulnerabilities
+
+- Fix by bumping the base (direct) dependency to a version whose parents
+  have picked up the patched release. Verify with `bun audit`.
+- `overrides` for a transitive dependency is a last resort and is used
+  **only for critical** advisories (when bumping the base doesn't fix it
+  and no fixed release exists yet). Never use it for high / moderate / low:
+  wait for the base update and record the remaining findings in the PR.
+- Add a comment/PR note naming the advisory, and remove the override once
+  the parent catches up.
