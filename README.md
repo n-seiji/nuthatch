@@ -53,21 +53,24 @@ lock-protected safety check.
 
 ### Interactive picker
 
-The picker groups candidates into sections — existing worktrees (root first)
-and not-yet-created branches — with a status marker, aligned columns, and
-shortened paths:
+The picker opens with a header naming the repository and counting its
+worktrees, then groups candidates into sections — existing worktrees (root
+first) and not-yet-created branches — each row showing its state in color
+(`✓ clean`, `● changes`, `⊘ locked`, `✗ missing`, `+ new`), aligned columns,
+and shortened paths. The selected row is marked `❯` with its branch name
+highlighted:
 
 ```
-  WORKTREES
-❯ ● main          root     ~/ghq/.../nuthatch
-  ○ feat/picker   managed  …/_worktree/feat__picker
-  ● codex/fix-x   ext      …/.claude/worktrees/x
-
-  BRANCHES — Enter creates a worktree
-  + feat/idea     local
-  + origin/hotfix remote
-
-  (●=dirty ○=clean +=not created)
+◆ nuthatch  3 worktrees · 2 with changes · 2 branches
+hop:  (type to filter)
+WORKTREES ───────────────────────────────────────────────
+❯ ● changes main          root     ~/ghq/.../nuthatch
+  ✓ clean   feat/picker   managed  …/_worktree/feat__picker
+  ● changes codex/fix-x   ext      …/.claude/worktrees/x
+BRANCHES — Enter creates a worktree ─────────────────────
+  + new     feat/idea     local
+  + new     origin/hotfix remote
+↑↓ move · Enter cd · Esc cancel
 ```
 
 A section (header included) disappears entirely when it has no candidates —

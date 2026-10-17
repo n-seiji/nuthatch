@@ -1,11 +1,16 @@
 import { displayWidth, truncateToWidth } from "../domain/display-width.ts";
 import { GUTTER } from "./picker-frame.ts";
-import { KIND_COLUMN_WIDTH, MAX_BRANCH_COLUMN_WIDTH, MAX_PATH_LENGTH } from "./picker-layout.ts";
+import {
+  KIND_COLUMN_WIDTH,
+  MAX_BRANCH_COLUMN_WIDTH,
+  MAX_PATH_LENGTH,
+  STATE_COLUMN_WIDTH,
+} from "./picker-layout.ts";
 import { SIDE_PANEL_WIDTH } from "./side-panel.ts";
 
-/** Non-column, always-present chrome in a rendered candidate row: the 2-column "❯ "/"  " selection marker, the 1-column status marker, a space after it, the 2-column gutter between the branch and kind columns, and a space before the path -- mirrors picker-render.ts's candidateRowLine format string exactly. */
+/** Non-column, always-present chrome in a rendered candidate row: the 2-column "❯ "/"  " selection marker, the state column ("● changes"), a space after it, the 2-column gutter between the branch and kind columns, and a space before the path -- mirrors picker-render.ts's candidateRowLine format string exactly. */
 const SELECTION_MARKER_WIDTH = 2;
-const STATUS_MARKER_WIDTH = 1;
+const STATUS_MARKER_WIDTH = STATE_COLUMN_WIDTH;
 const STATUS_MARKER_GAP_WIDTH = 1;
 const BRANCH_KIND_GUTTER_WIDTH = 2;
 const KIND_PATH_GAP_WIDTH = 1;
@@ -36,11 +41,12 @@ const CANDIDATE_ROW_CHROME_WIDTH =
  * the 104-column footer instead needlessly forced 80-139 column terminals
  * (most real terminals) into stacked mode -- a Fable-reported regression,
  * since the ink version went side-by-side around 100 columns. Requiring
- * only half the path budget (rather than all of it) plus the row's fixed
- * columns keeps the threshold in that same ballpark.
+ * only a quarter of the path budget (rather than all of it; the state
+ * column took the rest when it grew from one glyph to a word) plus the
+ * row's fixed columns keeps the threshold in that same ballpark.
  */
-const HALF_DIVISOR = 2;
-const MIN_PATH_DISPLAY_LENGTH = Math.ceil(MAX_PATH_LENGTH / HALF_DIVISOR);
+const QUARTER_DIVISOR = 4;
+const MIN_PATH_DISPLAY_LENGTH = Math.ceil(MAX_PATH_LENGTH / QUARTER_DIVISOR);
 
 export const MAX_CANDIDATE_ROW_WIDTH =
   CANDIDATE_ROW_CHROME_WIDTH + MAX_BRANCH_COLUMN_WIDTH + KIND_COLUMN_WIDTH + MAX_PATH_LENGTH;

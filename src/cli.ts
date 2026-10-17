@@ -41,12 +41,12 @@ const getPorts = (): Ports => {
 const JSON_FLAG = "json";
 
 const runLs = async (json: boolean): Promise<void> => {
-  const [{ ls }, { reportLs }] = await Promise.all([
+  const [{ ls }, { formatLsForStdout }] = await Promise.all([
     import("./commands/ls.ts"),
     import("./render-ls.ts"),
   ]);
   const { git, fs } = getPorts();
-  reportLs(await ls(git, fs, { cwd: process.cwd() }), json);
+  reportResult("ls", await ls(git, fs, { cwd: process.cwd() }), json, formatLsForStdout);
 };
 
 const runJump = async (

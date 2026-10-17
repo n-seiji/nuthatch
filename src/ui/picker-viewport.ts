@@ -25,8 +25,9 @@ export const MIN_VISIBLE_CANDIDATE_ROWS = 3;
 
 /**
  * Rows always spent on picker chrome, regardless of candidate count: the
- * "hop: <query>" line, the legend line, and the footer hint line. Section
- * headers (WORKTREES / BRANCHES) are budgeted separately (see
+ * header line (repo name and counts), the "hop: <query>" line, and the
+ * footer hint line. Section headers (WORKTREES / BRANCHES) are budgeted
+ * separately (see
  * `SECTION_HEADER_ROWS`) since whether they appear depends on the
  * candidates in view.
  */

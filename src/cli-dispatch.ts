@@ -15,7 +15,8 @@ export type CliDispatch =
  * `bun build --compile` binaries append the invocation name (matching
  * `process.argv0`) to `process.argv` whenever they're started with no
  * arguments — regardless of whether stdout is a TTY. The shell wrapper
- * (`hop init zsh`) always captures stdout via `$(command hop "$@")`, so
+ * (`hop init zsh`) captures stdout via `$(command hop "$@")` for every
+ * invocation that may cd (including bare `hop`), so
  * stdout is a pipe in the exact real-world path this needs to handle; a
  * check on stdout-is-TTY would never strip the synthesized token there.
  */
