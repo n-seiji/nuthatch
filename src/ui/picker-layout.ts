@@ -6,6 +6,8 @@ import {
   truncateToWidthKeepingTail,
 } from "../domain/display-width.ts";
 import type { WorktreeKind } from "../domain/model.ts";
+import { compareWorktrees } from "../domain/worktree-order.ts";
+import type { LineStyle } from "./picker-frame.ts";
 
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
@@ -19,28 +21,57 @@ export const MAX_PATH_LENGTH = 40;
 /** Exported for picker-side-by-side.ts's MAX_CANDIDATE_ROW_WIDTH -- see MAX_PATH_LENGTH above. */
 export const MAX_BRANCH_COLUMN_WIDTH = 24;
 
-export const LEGEND_TEXT = "●=dirty ○=clean +=not created";
-
 const WORKTREE_KIND_LABELS: Record<WorktreeKind, string> = {
   root: "root",
   managed: "managed",
   external: "ext",
 };
 
+/** Kind colors, shared by the picker and `hop ls`'s table. */
+export const WORKTREE_KIND_STYLES: Record<WorktreeKind, LineStyle> = {
+  root: "magenta",
+  managed: "cyan",
+  external: "yellow",
+};
+
+/** Changes stand out in yellow; a clean worktree reads as "fine" in green. */
+export const dirtyStyle = (dirty: boolean): LineStyle => (dirty ? "yellow" : "green");
+
 const CREATABLE_SOURCE_LABELS: Record<"local" | "remote", string> = {
   local: "local",
   remote: "remote",
 };
 
-/** ● dirty / ○ clean / space (dirty status unknown) / + not yet created. */
-export const statusMarker = (candidate: PickCandidate): string => {
+/** A row's state, as a glyph plus a word so no legend is needed. */
+export interface StateLabel {
+  readonly text: string;
+  readonly style: LineStyle;
+}
+
+/** "● changes" is the longest state label. */
+export const STATE_COLUMN_WIDTH = 9;
+
+/**
+ * One state per row, most important first, matching `hop ls`'s STATE column:
+ * a worktree that can't be acted on says why before "changes" does. Empty
+ * when a worktree's dirty status is unknown.
+ */
+export const stateLabel = (candidate: PickCandidate): StateLabel => {
   if (candidate.kind === "creatable") {
-    return "+";
+    return { text: "+ new", style: "dim" };
+  }
+  if (candidate.worktree.prunable) {
+    return { text: "✗ missing", style: "red" };
+  }
+  if (candidate.worktree.locked) {
+    return { text: "⊘ locked", style: "red" };
   }
   if (candidate.dirty === null) {
-    return " ";
+    return { text: "", style: "plain" };
   }
-  return candidate.dirty ? "●" : "○";
+  return candidate.dirty
+    ? { text: "● changes", style: dirtyStyle(true) }
+    : { text: "✓ clean", style: dirtyStyle(false) };
 };
 
 export const candidateKindLabel = (candidate: PickCandidate): string =>
@@ -56,12 +87,6 @@ const isCreatableCandidate = (
   candidate: PickCandidate,
 ): candidate is Extract<PickCandidate, { kind: "creatable" }> => candidate.kind === "creatable";
 
-const WORKTREE_KIND_ORDER: Record<WorktreeKind, number> = {
-  root: 0,
-  managed: 1,
-  external: 2,
-};
-
 const CREATABLE_SOURCE_ORDER: Record<"local" | "remote", number> = {
   local: 0,
   remote: 1,
@@ -70,21 +95,10 @@ const CREATABLE_SOURCE_ORDER: Record<"local" | "remote", number> = {
 const compareByBranchLabel = (a: PickCandidate, b: PickCandidate): number =>
   candidateBranchLabel(a).localeCompare(candidateBranchLabel(b));
 
-/** 0 for a normal branch, 1 for detached HEAD — sorts detached worktrees to the end of their kind group. */
-const detachedRank = (candidate: Extract<PickCandidate, { kind: "worktree" }>): number =>
-  candidate.worktree.branch === null ? 1 : 0;
-
 const compareWorktreeCandidates = (
   a: Extract<PickCandidate, { kind: "worktree" }>,
   b: Extract<PickCandidate, { kind: "worktree" }>,
-): number => {
-  const kindDiff = WORKTREE_KIND_ORDER[a.worktree.kind] - WORKTREE_KIND_ORDER[b.worktree.kind];
-  if (kindDiff !== 0) {
-    return kindDiff;
-  }
-  const detachedDiff = detachedRank(a) - detachedRank(b);
-  return detachedDiff === 0 ? compareByBranchLabel(a, b) : detachedDiff;
-};
+): number => compareWorktrees(a.worktree, b.worktree) || compareByBranchLabel(a, b);
 
 const compareCreatableCandidates = (
   a: Extract<PickCandidate, { kind: "creatable" }>,
@@ -170,9 +184,12 @@ export interface CandidateRow {
   readonly index: number;
   /** Which section this row belongs to — lets the renderer dim BRANCHES rows so worktree vs. not-yet-created reads at a glance. */
   readonly section: "worktree" | "branch";
-  readonly statusMarker: string;
+  /** The state label, padded to STATE_COLUMN_WIDTH. */
+  readonly stateText: string;
+  readonly stateStyle: LineStyle;
   readonly branchLabel: string;
   readonly kindLabel: string;
+  readonly kindStyle: LineStyle;
   readonly pathLabel: string;
 }
 
@@ -193,12 +210,15 @@ const toCandidateRow = (
   kind: "candidate",
   index: options.index,
   section: options.section,
-  statusMarker: statusMarker(candidate),
+  stateText: stateLabel(candidate).text.padEnd(STATE_COLUMN_WIDTH, " "),
+  stateStyle: stateLabel(candidate).style,
   branchLabel: padBranchLabel(
     truncateToWidth(candidateBranchLabel(candidate), options.branchWidth),
     options.branchWidth,
   ),
   kindLabel: candidateKindLabel(candidate).padEnd(KIND_COLUMN_WIDTH, " "),
+  kindStyle:
+    candidate.kind === "worktree" ? WORKTREE_KIND_STYLES[candidate.worktree.kind] : "plain",
   pathLabel: candidatePathLabel(candidate, options.homeDir, options.pathMaxLength),
 });
 

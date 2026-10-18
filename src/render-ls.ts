@@ -1,44 +1,19 @@
-import {
-  displayWidth,
-  padToWidth,
-  truncateToWidth,
-  truncateToWidthKeepingTail,
-} from "./domain/display-width.ts";
-import type { CommandResult } from "./domain/result.ts";
-import type { LsEntry, WorktreeKind } from "./domain/schema.ts";
-import { reportResult } from "./render.ts";
+import { homedir } from "node:os";
+import { isWithin } from "./domain/classify.ts";
+import { displayWidth, padToWidth, truncateToWidth } from "./domain/display-width.ts";
+import type { LsEntry } from "./domain/schema.ts";
+import { compareWorktrees } from "./domain/worktree-order.ts";
+import { colorEnabled } from "./ui/ansi.ts";
+import { lineWidth, renderLine, type StyledLine, type StyledSpan } from "./ui/picker-frame.ts";
+import { dirtyStyle, shortenPath, WORKTREE_KIND_STYLES } from "./ui/picker-layout.ts";
 
 /**
- * `hop ls`'s human-readable table (the plain, non-`--json` output). Built by
- * a pure function so the layout is unit-testable without a terminal; only
- * `reportLs` touches stdout. `--json` and failures still go through
- * render.ts's reportResult unchanged, so the JSON contract is untouched.
+ * `hop ls`'s human-readable table (the plain, non-`--json` output). A pure
+ * function so the layout is unit-testable without a terminal; only
+ * formatLsForStdout reads the terminal. cli.ts hands that to render.ts's
+ * reportResult as the plain formatter, so `--json`, warnings, errors and the
+ * exit code go through the same path as every other command.
  */
-
-const ESC = "\u001B";
-
-type Tone = "plain" | "bold" | "dim" | "green" | "yellow" | "red" | "magenta" | "cyan";
-
-const SGR: Record<Tone, string> = {
-  plain: "",
-  bold: `${ESC}[1m`,
-  dim: `${ESC}[2m`,
-  green: `${ESC}[32m`,
-  yellow: `${ESC}[33m`,
-  red: `${ESC}[31m`,
-  magenta: `${ESC}[35m`,
-  cyan: `${ESC}[36m`,
-};
-
-interface Cell {
-  readonly text: string;
-  readonly tone: Tone;
-}
-
-const cell = (text: string, tone: Tone = "plain"): Cell => ({ text, tone });
-
-const paint = (value: Cell, color: boolean): string =>
-  !color || value.tone === "plain" ? value.text : `${SGR[value.tone]}${value.text}${ESC}[0m`;
 
 const SHORT_SHA_LENGTH = 7;
 const MIN_PATH_WIDTH = 12;
@@ -47,83 +22,65 @@ const COLUMN_GAP = "  ";
 /** The "@ " current-worktree marker column. */
 const MARKER_WIDTH = 2;
 
-const KIND_ORDER: Record<WorktreeKind, number> = { root: 0, managed: 1, external: 2 };
-
-const KIND_CELLS: Record<WorktreeKind, Cell> = {
-  root: cell("root", "magenta"),
-  managed: cell("managed", "cyan"),
-  external: cell("external", "yellow"),
-};
-
-/** Root first, then managed, then external; branch name ascending within a kind, detached last. */
-const compareEntries = (a: LsEntry, b: LsEntry): number => {
-  const kindDiff = KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
-  if (kindDiff !== 0) {
-    return kindDiff;
-  }
-  if (a.branch === null || b.branch === null) {
-    return (a.branch === null ? 1 : 0) - (b.branch === null ? 1 : 0);
-  }
-  return a.branch.localeCompare(b.branch);
-};
-
-const branchCell = (entry: LsEntry): Cell => {
+const branchCell = (entry: LsEntry): StyledSpan => {
   if (entry.branch !== null) {
-    return cell(truncateToWidth(entry.branch, MAX_BRANCH_WIDTH), "bold");
+    return { text: truncateToWidth(entry.branch, MAX_BRANCH_WIDTH), style: "bold" };
   }
   const sha = entry.head?.slice(0, SHORT_SHA_LENGTH) ?? "";
-  return cell(entry.bare ? "(bare)" : `(detached ${sha})`, "dim");
+  return { text: entry.bare ? "(bare)" : `(detached ${sha})`, style: "dim" };
 };
 
 /** One state per row, most important first: a row that can't be acted on says why before "dirty" does. */
-const stateCell = (entry: LsEntry): Cell => {
+const stateCell = (entry: LsEntry): StyledSpan => {
   if (entry.prunable) {
-    return cell("✗ missing", "red");
+    return { text: "✗ missing", style: "red" };
   }
   if (entry.locked) {
-    return cell("⊘ locked", "red");
+    return { text: "⊘ locked", style: "red" };
   }
   if (entry.bare) {
-    return cell("- bare", "dim");
+    return { text: "- bare", style: "dim" };
   }
-  return entry.dirty ? cell("● changes", "yellow") : cell("✓ clean", "green");
+  return { text: entry.dirty ? "● changes" : "✓ clean", style: dirtyStyle(entry.dirty) };
 };
 
 /** Commits ahead/behind the upstream: "↑2 ↓1", "=" when in sync, "-" without an upstream. */
-const syncCells = (entry: LsEntry): Cell[] => {
+const syncCells = (entry: LsEntry): StyledLine => {
   if (entry.ahead === null || entry.behind === null) {
-    return [cell("-", "dim")];
+    return [{ text: "-", style: "dim" }];
   }
   if (entry.ahead === 0 && entry.behind === 0) {
-    return [cell("=", "dim")];
+    return [{ text: "=", style: "dim" }];
   }
-  const cells: Cell[] = [];
+  const arrows: StyledSpan[] = [];
   if (entry.ahead > 0) {
-    cells.push(cell(`↑${entry.ahead}`, "green"));
+    arrows.push({ text: `↑${entry.ahead}`, style: "green" });
   }
   if (entry.behind > 0) {
-    cells.push(cell(`↓${entry.behind}`, "red"));
+    arrows.push({ text: `↓${entry.behind}`, style: "red" });
   }
-  return cells;
+  return arrows.flatMap((span, index) => (index === 0 ? [span] : [{ text: " " }, span]));
 };
 
-const shortenHome = (path: string, home: string): string => {
-  if (home === "" || home === "/") {
-    return path;
-  }
-  if (path === home) {
-    return "~";
-  }
-  return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
-};
+interface Column {
+  readonly header: string;
+  readonly cells: (entry: LsEntry) => StyledLine;
+}
 
-const isInside = (cwd: string, path: string): boolean =>
-  cwd === path || cwd.startsWith(path.endsWith("/") ? path : `${path}/`);
+const COLUMNS: readonly Column[] = [
+  { header: "BRANCH", cells: (entry) => [branchCell(entry)] },
+  { header: "STATE", cells: (entry) => [stateCell(entry)] },
+  { header: "REMOTE", cells: syncCells },
+  {
+    header: "KIND",
+    cells: (entry) => [{ text: entry.kind, style: WORKTREE_KIND_STYLES[entry.kind] }],
+  },
+];
 
 /** The worktree `cwd` is in: the deepest path containing it (an external worktree can live inside root). */
 const currentPath = (entries: readonly LsEntry[], cwd: string): string | null =>
   entries
-    .filter((entry) => isInside(cwd, entry.path))
+    .filter((entry) => entry.path === cwd || isWithin(entry.path, cwd))
     .reduce<string | null>(
       (best, entry) => (best === null || entry.path.length > best.length ? entry.path : best),
       null,
@@ -154,81 +111,54 @@ export interface LsTableOptions {
   readonly cwd: string;
 }
 
-interface Row {
-  readonly marker: Cell;
-  readonly columns: readonly (readonly Cell[])[];
-  readonly path: string;
-}
-
-const HEADERS = ["BRANCH", "STATE", "REMOTE", "KIND"];
-
-const buildRow = (entry: LsEntry, current: string | null, home: string): Row => ({
-  marker: entry.path === current ? cell("@", "green") : cell(" "),
-  columns: [[branchCell(entry)], [stateCell(entry)], syncCells(entry), [KIND_CELLS[entry.kind]]],
-  path: shortenHome(entry.path, home),
-});
-
-const cellsWidth = (cells: readonly Cell[]): number =>
-  displayWidth(cells.map((part) => part.text).join(" "));
-
-const renderCells = (cells: readonly Cell[], width: number, color: boolean): string => {
-  const text = cells.map((part) => paint(part, color)).join(" ");
-  return text + " ".repeat(Math.max(0, width - cellsWidth(cells)));
-};
-
 /** Pure: the full table (header, one line per worktree, summary), newline-terminated. */
 export const formatLsTable = (entries: readonly LsEntry[], options: LsTableOptions): string => {
-  const sorted = entries.toSorted(compareEntries);
+  const sorted = entries.toSorted(compareWorktrees);
   const current = currentPath(sorted, options.cwd);
-  const rows = sorted.map((entry) => buildRow(entry, current, options.home));
-  const widths = HEADERS.map((header, index) =>
-    Math.max(displayWidth(header), ...rows.map((row) => cellsWidth(row.columns[index] ?? []))),
-  );
+  const columns = COLUMNS.map((column) => ({
+    header: column.header,
+    cells: column.cells,
+    width: Math.max(
+      displayWidth(column.header),
+      ...sorted.map((entry) => lineWidth(column.cells(entry))),
+    ),
+  }));
   // "@ " + every column + its gap, then the path takes what is left.
   const fixedWidth =
-    MARKER_WIDTH + widths.reduce((total, width) => total + width + COLUMN_GAP.length, 0);
+    MARKER_WIDTH + columns.reduce((total, column) => total + column.width + COLUMN_GAP.length, 0);
   const pathWidth =
-    options.width === null ? null : Math.max(MIN_PATH_WIDTH, options.width - fixedWidth);
-  const fitPath = (path: string): string =>
-    pathWidth === null ? path : truncateToWidthKeepingTail(path, pathWidth);
+    options.width === null
+      ? Number.POSITIVE_INFINITY
+      : Math.max(MIN_PATH_WIDTH, options.width - fixedWidth);
 
-  const header = `  ${HEADERS.map((title, index) => padToWidth(title, widths[index] ?? 0)).join(COLUMN_GAP)}${COLUMN_GAP}PATH`;
-  const lines = [paint(cell(header, "dim"), options.color)];
-  for (const row of rows) {
-    const columns = row.columns.map((cells, index) =>
-      renderCells(cells, widths[index] ?? 0, options.color),
-    );
-    const path = paint(cell(fitPath(row.path), "dim"), options.color);
-    lines.push(
-      `${paint(row.marker, options.color)} ${columns.join(COLUMN_GAP)}${COLUMN_GAP}${path}`,
-    );
+  const header = columns.map((column) => padToWidth(column.header, column.width));
+  const lines: StyledLine[] = [
+    [{ text: `  ${header.join(COLUMN_GAP)}${COLUMN_GAP}PATH`, style: "dim" }],
+  ];
+  for (const entry of sorted) {
+    const line: StyledSpan[] = [
+      entry.path === current ? { text: "@", style: "green" } : { text: " " },
+      { text: " " },
+    ];
+    for (const column of columns) {
+      const cells = column.cells(entry);
+      const gap = " ".repeat(Math.max(0, column.width - lineWidth(cells))) + COLUMN_GAP;
+      line.push(...cells, { text: gap });
+    }
+    line.push({ text: shortenPath(entry.path, options.home, pathWidth), style: "dim" });
+    lines.push(line);
   }
-  const summary = cell(summaryLine(sorted), "dim");
-  lines.push("", paint(summary, options.color));
-  return `${lines.join("\n")}\n`;
+  lines.push([], [{ text: summaryLine(sorted), style: "dim" }]);
+  return `${lines.map((line) => renderLine(line, options.color)).join("\n")}\n`;
 };
 
-/** Whether stdout should carry colors: a terminal, and NO_COLOR unset or empty. */
-const stdoutColor = (): boolean =>
-  process.stdout.isTTY === true && (process.env["NO_COLOR"] ?? "") === "";
-
-/** `hop ls` output: the table for plain success, render.ts's usual path for `--json` and errors. */
-export const reportLs = (result: CommandResult<LsEntry[]>, json: boolean): void => {
-  if (json || !result.ok || result.data === undefined) {
-    reportResult("ls", result, json);
-    return;
-  }
-  const color = stdoutColor();
-  process.stdout.write(
-    formatLsTable(result.data, {
-      color,
-      width: process.stdout.isTTY === true ? (process.stdout.columns ?? null) : null,
-      home: process.env["HOME"] ?? "",
-      cwd: process.cwd(),
-    }),
-  );
-  for (const warning of result.warnings ?? []) {
-    process.stderr.write(`warning: ${warning}\n`);
-  }
-  process.exitCode = result.exitCode;
+/** The table as it should look on this process's stdout: colors and width only when it is a terminal. */
+export const formatLsForStdout = (entries: readonly LsEntry[]): string => {
+  const { columns } = process.stdout;
+  return formatLsTable(entries, {
+    color: colorEnabled(process.stdout),
+    width: columns > 0 ? columns : null,
+    home: homedir(),
+    cwd: process.cwd(),
+  });
 };

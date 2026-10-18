@@ -3,17 +3,13 @@ import { truncateToWidthKeepingTail } from "../domain/display-width.ts";
 import {
   buildFrame,
   GUTTER,
+  lineWidth,
   truncateLineToWidth,
-  type LineStyle,
   type StyledLine,
   wrapInBox,
 } from "./picker-frame.ts";
-import {
-  buildDisplayRows,
-  LEGEND_TEXT,
-  rawBranchColumnWidth,
-  type DisplayRow,
-} from "./picker-layout.ts";
+import { buildDisplayRows, rawBranchColumnWidth, type DisplayRow } from "./picker-layout.ts";
+import { headerLine, footerLine, ruleLine } from "./picker-chrome.ts";
 import {
   constrainRowColumnWidths,
   footerHintForWidth,
@@ -59,47 +55,36 @@ const hiddenCountLine = (count: number, direction: "above" | "below"): StyledLin
   ];
 };
 
-/** Status marker colors: changes stand out in yellow, a clean worktree reads as "fine" in green. */
-const STATUS_MARKER_STYLES: Record<string, LineStyle> = {
-  "●": "yellow",
-  "○": "green",
-};
-
-/** Kind label colors, keyed by the trimmed label picker-layout.ts produces. */
-const KIND_LABEL_STYLES: Record<string, LineStyle> = {
-  root: "magenta",
-  managed: "cyan",
-  ext: "yellow",
-};
-
+/**
+ * A worktree row: state, branch, kind, path, each in its own color. The
+ * selected row keeps those colors and marks itself with a cyan "❯" and the
+ * branch name in inverse video, so it reads as selected in light and dark
+ * terminals alike (and by the "❯" alone without color).
+ */
 const candidateRowLine = (
   row: Extract<DisplayRow, { kind: "candidate" }>,
   selected: boolean,
 ): StyledLine => {
-  if (selected) {
-    const text = `❯ ${row.statusMarker} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`;
-    return [{ text, style: "inverse" }];
-  }
-  if (row.section === "branch") {
-    return [
-      {
-        text: `  ${row.statusMarker} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`,
-        style: "dim",
-      },
-    ];
+  if (!selected && row.section === "branch") {
+    const text = `  ${row.stateText} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`;
+    return [{ text, style: "dim" }];
   }
   return [
+    selected ? { text: "❯ ", style: "cyan" } : { text: "  " },
+    { text: row.stateText, style: row.stateStyle },
+    { text: " " },
+    selected
+      ? { text: row.branchLabel, style: "inverse" }
+      : { text: row.branchLabel, style: "bold" },
     { text: "  " },
-    { text: row.statusMarker, style: STATUS_MARKER_STYLES[row.statusMarker] ?? "plain" },
-    { text: ` ${row.branchLabel}  ` },
-    { text: row.kindLabel, style: KIND_LABEL_STYLES[row.kindLabel.trim()] ?? "plain" },
-    { text: ` ${row.pathLabel}`, style: "dim" },
+    { text: row.kindLabel, style: row.kindStyle },
+    { text: ` ${row.pathLabel}`, style: selected ? "plain" : "dim" },
   ];
 };
 
-const displayRowLine = (row: DisplayRow, clampedIndex: number): StyledLine =>
+const displayRowLine = (row: DisplayRow, clampedIndex: number, width: number): StyledLine =>
   row.kind === "header"
-    ? [{ text: row.label, style: "bold-dim" }]
+    ? ruleLine(row.label, width)
     : candidateRowLine(row, row.index === clampedIndex);
 
 interface BuildListLinesInput {
@@ -110,6 +95,7 @@ interface BuildListLinesInput {
   readonly hiddenAbove: number;
   readonly hiddenBelow: number;
   readonly footerHint: string;
+  readonly header: StyledLine;
 }
 
 const buildListLines = ({
@@ -120,8 +106,9 @@ const buildListLines = ({
   hiddenAbove,
   hiddenBelow,
   footerHint,
+  header,
 }: BuildListLinesInput): StyledLine[] => {
-  const lines: StyledLine[] = [queryLine(query, maxWidth)];
+  const lines: StyledLine[] = [header, queryLine(query, maxWidth)];
   if (rows.length === 0) {
     lines.push([{ text: "No matches.", style: "dim" }]);
   }
@@ -129,14 +116,19 @@ const buildListLines = ({
   if (above !== null) {
     lines.push(above);
   }
+  // Section rules stop where the widest row does, so they underline the list instead of the whole terminal.
+  const candidateWidths = rows.map((row) =>
+    row.kind === "candidate" ? lineWidth(candidateRowLine(row, false)) : 0,
+  );
+  const ruleWidth = Math.min(maxWidth, Math.max(0, ...candidateWidths));
   for (const row of rows) {
-    lines.push(displayRowLine(row, clampedIndex));
+    lines.push(displayRowLine(row, clampedIndex, ruleWidth));
   }
   const below = hiddenCountLine(hiddenBelow, "below");
   if (below !== null) {
     lines.push(below);
   }
-  lines.push([{ text: `(${LEGEND_TEXT})`, style: "dim" }], [{ text: footerHint, style: "dim" }]);
+  lines.push(footerLine(footerHint));
   return lines;
 };
 
@@ -180,7 +172,7 @@ export const renderPickerFrame = ({
   height,
   colorEnabled: color,
 }: RenderPickerInput): string => {
-  const { query, filtered, clampedIndex, mode, panelIndex, busy } = snapshot;
+  const { query, candidates, filtered, clampedIndex, mode, panelIndex, busy } = snapshot;
   const narrow = isNarrowTerminal(width);
   const right = buildSidePanelLines(mode, panelIndex, busy);
   // The panel only stacks below the list (consuming vertical rows the list would otherwise use) in narrow terminals; side-by-side it costs no rows.
@@ -203,6 +195,7 @@ export const renderPickerFrame = ({
     hiddenAbove: viewport.hiddenAbove,
     hiddenBelow: viewport.hiddenBelow,
     footerHint: footerHintForWidth(right === null ? "list" : "panel", listColumnWidth),
+    header: headerLine(candidates, query.length === 0 ? null : filtered.length),
   }).map((line) => truncateLineToWidth(line, listColumnWidth));
 
   return buildFrame({ left, right, stacked, colorEnabled: color });

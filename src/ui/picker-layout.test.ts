@@ -8,24 +8,31 @@ import {
   KIND_COLUMN_WIDTH,
   padBranchLabel,
   shortenPath,
-  statusMarker,
+  STATE_COLUMN_WIDTH,
+  stateLabel,
 } from "./picker-layout.ts";
 
-describe("statusMarker", () => {
-  it("dirty な worktree は ●", () => {
-    expect(statusMarker(worktreeCandidate({}, true))).toBe("●");
+describe("stateLabel", () => {
+  it("dirty な worktree は黄色の ● changes、clean は緑の ✓ clean", () => {
+    expect(stateLabel(worktreeCandidate({}, true))).toEqual({ text: "● changes", style: "yellow" });
+    expect(stateLabel(worktreeCandidate({}, false))).toEqual({ text: "✓ clean", style: "green" });
   });
 
-  it("clean な worktree は ○", () => {
-    expect(statusMarker(worktreeCandidate({}, false))).toBe("○");
+  it("操作できない worktree は dirty より先にその理由を出す", () => {
+    expect(stateLabel(worktreeCandidate({ prunable: true }, true)).text).toBe("✗ missing");
+    expect(stateLabel(worktreeCandidate({ locked: true }, true)).text).toBe("⊘ locked");
   });
 
-  it("dirty 不明 (null) な worktree は空白", () => {
-    expect(statusMarker(worktreeCandidate({}, null))).toBe(" ");
+  it("dirty 不明 (null) な worktree は空、creatable は + new", () => {
+    expect(stateLabel(worktreeCandidate({}, null)).text).toBe("");
+    expect(stateLabel(creatableCandidate("feat/x", "local")).text).toBe("+ new");
   });
 
-  it("creatable (未作成 branch) は +", () => {
-    expect(statusMarker(creatableCandidate("feat/x", "local"))).toBe("+");
+  it("どのラベルも STATE_COLUMN_WIDTH に収まる", () => {
+    const labels = [true, false].map((dirty) => stateLabel(worktreeCandidate({}, dirty)).text);
+    for (const label of labels) {
+      expect(label.length).toBeLessThanOrEqual(STATE_COLUMN_WIDTH);
+    }
   });
 });
 

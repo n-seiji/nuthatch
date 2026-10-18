@@ -50,20 +50,23 @@ hop --update --check   # --update が何をするかを報告するだけ — �
 
 ### 対話的 picker
 
-picker は候補を section に分けて表示する — 既存の worktree (root が先頭) と
-未作成の branch — ステータスマーカー・整列した列・短縮パス付きで:
+picker は先頭にリポジトリ名と worktree の数を示すヘッダーを出し、候補を
+section に分けて表示する — 既存の worktree (root が先頭) と未作成の branch。
+各行は状態を色付きの言葉 (`✓ clean`・`● changes`・`⊘ locked`・`✗ missing`・
+`+ new`) で示し、列を揃え、パスを短縮する。選択中の行は `❯` と branch 名の
+反転表示で示す:
 
 ```
-  WORKTREES
-❯ ● main          root     ~/ghq/.../nuthatch
-  ○ feat/picker   managed  …/_worktree/feat__picker
-  ● codex/fix-x   ext      …/.claude/worktrees/x
-
-  BRANCHES — Enter creates a worktree
-  + feat/idea     local
-  + origin/hotfix remote
-
-  (●=dirty ○=clean +=not created)
+◆ nuthatch  3 worktrees · 2 with changes · 2 branches
+hop:  (type to filter)
+WORKTREES ───────────────────────────────────────────────
+❯ ● changes main          root     ~/ghq/.../nuthatch
+  ✓ clean   feat/picker   managed  …/_worktree/feat__picker
+  ● changes codex/fix-x   ext      …/.claude/worktrees/x
+BRANCHES — Enter creates a worktree ─────────────────────
+  + new     feat/idea     local
+  + new     origin/hotfix remote
+↑↓ move · Enter cd · Esc cancel
 ```
 
 candidate が 0 件になった section は (header ごと) 丸ごと消える —

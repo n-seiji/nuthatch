@@ -1,4 +1,5 @@
 import type { PickCandidate } from "../domain/candidates.ts";
+import { colorEnabled } from "./ansi.ts";
 import type { PickerKeyEvent } from "./picker-key-parser.ts";
 import { renderPickerFrame } from "./picker-render.ts";
 import { createPickerStore } from "./picker-store.ts";
@@ -27,10 +28,6 @@ const DEFAULT_TERMINAL_WIDTH = 80;
  */
 const terminalDimension = (value: number | undefined, fallback: number): number =>
   value !== undefined && value > 0 ? value : fallback;
-
-/** Whether SGR color codes should be emitted at all — NO_COLOR (any non-empty value, per the convention) or a non-TTY stderr both disable it; a picker running under `--json`-style piping should never leak escape codes into whatever's consuming stderr. */
-const colorEnabled = (stderr: NodeJS.WriteStream): boolean =>
-  stderr.isTTY === true && (process.env["NO_COLOR"] ?? "") === "";
 
 /** Ctrl+C, in any mode: raw-mode stdin never generates a real SIGINT for it (see terminal-session.ts's module comment), so it's handled here — before any mode-specific dispatch — rather than relying on picker-keys.ts's per-mode resolvers (only the list-mode one recognizes it). */
 const isCtrlC = (event: PickerKeyEvent): boolean => event.key.ctrl && event.input === "c";

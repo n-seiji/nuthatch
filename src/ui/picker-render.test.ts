@@ -46,6 +46,7 @@ const buildSnapshotWithPanelOpen = (branch: string): PickerSnapshot => {
   const candidate = worktreeCandidate(branch, `/repo/${branch}`);
   return {
     query: "",
+    candidates: [candidate],
     filtered: [candidate],
     clampedIndex: 0,
     mode: { kind: "panel", candidate, error: null },
@@ -56,6 +57,7 @@ const buildSnapshotWithPanelOpen = (branch: string): PickerSnapshot => {
 
 const buildListSnapshot = (candidates: readonly PickCandidate[]): PickerSnapshot => ({
   query: "",
+  candidates,
   filtered: candidates,
   clampedIndex: 0,
   mode: { kind: "list" },
@@ -103,8 +105,8 @@ describe("renderPickerFrame (all rows fit the terminal width)", () => {
       const lines = frameLines(frame);
       const candidateLine = lines.find((line) => line.includes("❯"));
       expect(candidateLine).toBeDefined();
-      // The status marker ("○" clean) and at least the start of the branch name must survive -- only the path column is allowed to shrink first.
-      expect(candidateLine).toContain("○");
+      // The state label ("✓ clean") and at least the start of the branch name must survive -- only the path column is allowed to shrink first.
+      expect(candidateLine).toContain("✓ clean");
       expect(candidateLine).toContain("feature/a-genuinely");
     },
   );
@@ -246,6 +248,7 @@ describe("renderPickerFrame (stacked panel row budget follows actual panel heigh
     );
     const snapshot: PickerSnapshot = {
       query: "",
+      candidates: [candidate, ...manyCandidates],
       filtered: [candidate, ...manyCandidates],
       clampedIndex: 0,
       mode: {
@@ -273,6 +276,7 @@ describe("renderPickerFrame (stacked panel row budget follows actual panel heigh
     const query = "feature/a-genuinely-very-long-query-string-being-typed-right-now";
     const snapshot: PickerSnapshot = {
       query,
+      candidates: [],
       filtered: [],
       clampedIndex: 0,
       mode: { kind: "list" },

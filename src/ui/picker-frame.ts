@@ -24,6 +24,7 @@ const SGR_RESET = `${ESC}[0m`;
 export type LineStyle =
   | "plain"
   | "cyan"
+  | "bold"
   | "dim"
   | "bold-dim"
   | "inverse"
@@ -43,6 +44,7 @@ export type StyledLine = readonly StyledSpan[];
 const SGR_CODES: Record<LineStyle, string> = {
   plain: "",
   cyan: `${ESC}[36m`,
+  bold: `${ESC}[1m`,
   dim: `${ESC}[2m`,
   "bold-dim": `${ESC}[1m${ESC}[2m`,
   inverse: `${ESC}[7m`,
@@ -52,7 +54,7 @@ const SGR_CODES: Record<LineStyle, string> = {
   magenta: `${ESC}[35m`,
 };
 
-const renderSpan = (span: StyledSpan, colorEnabled: boolean): string => {
+export const renderSpan = (span: StyledSpan, colorEnabled: boolean): string => {
   const style = span.style ?? "plain";
   if (!colorEnabled || style === "plain") {
     return span.text;
@@ -60,10 +62,10 @@ const renderSpan = (span: StyledSpan, colorEnabled: boolean): string => {
   return `${SGR_CODES[style]}${span.text}${SGR_RESET}`;
 };
 
-const lineWidth = (line: StyledLine): number =>
+export const lineWidth = (line: StyledLine): number =>
   line.reduce((total, span) => total + displayWidth(span.text), 0);
 
-const renderLine = (line: StyledLine, colorEnabled: boolean): string =>
+export const renderLine = (line: StyledLine, colorEnabled: boolean): string =>
   line.map((span) => renderSpan(span, colorEnabled)).join("");
 
 /** Pads a rendered left-column line (already containing SGR codes) out to `width` display columns, by appending plain spaces — SGR codes take no display width so displayWidth-based padding on the raw text is computed first. */

@@ -3,8 +3,8 @@ import type { TermPort } from "../domain/ports.ts";
 
 export const createTermPort = (): TermPort => ({
   isTTY() {
-    // Checks stderr (and stdin), not stdout: the shell wrapper always
-    // Captures hop's stdout via command substitution (`out="$(command hop
+    // Checks stderr (and stdin), not stdout: for any command that may cd,
+    // The shell wrapper captures hop's stdout via command substitution (`out="$(command hop
     // "$@")"`) to get the cd target, which makes process.stdout.isTTY false
     // Even at a real interactive terminal. stderr and stdin stay attached to
     // The terminal through command substitution, so they're the correct
