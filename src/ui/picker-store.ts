@@ -68,20 +68,14 @@ const runMutation = async (
 > => {
   if (action === "switchRoot") {
     const result = await callbacks.switchRootHere(candidate);
-    if (!result.ok || result.path === undefined) {
-      return {
-        type: "patch",
-        patch: panelErrorTransition(candidate, result.message ?? "Failed to switch root."),
-      };
+    if (!result.ok) {
+      return { type: "patch", patch: panelErrorTransition(candidate, result.message) };
     }
     return { type: "exit", outcome: { type: "path", path: result.path } };
   }
   const result = await callbacks.deleteWorktree(candidate);
   if (!result.ok) {
-    return {
-      type: "patch",
-      patch: panelErrorTransition(candidate, result.message ?? "Failed to delete worktree."),
-    };
+    return { type: "patch", patch: panelErrorTransition(candidate, result.message) };
   }
   const fresh = await callbacks.reloadCandidates();
   return {

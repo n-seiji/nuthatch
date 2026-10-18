@@ -7,7 +7,7 @@ import { ok } from "./domain/result.ts";
 import { render, reportResult } from "./render.ts";
 import {
   runPicker,
-  type ActionOutcome,
+  type DeleteWorktreeOutcome,
   type PickerCallbacks,
   type PickerResult,
 } from "./ui/picker.ts";
@@ -34,7 +34,7 @@ const deleteWorktree = async (
   git: GitPort,
   fs: FsPort,
   candidate: PickCandidate,
-): Promise<ActionOutcome> => {
+): Promise<DeleteWorktreeOutcome> => {
   const branch = candidateBranchName(candidate);
   if (branch === null) {
     return { ok: false, message: "This candidate has no branch to remove." };
@@ -95,7 +95,7 @@ export const createPickerCallbacks = (
         candidate.kind === "worktree" && candidate.worktree.kind === "external",
       ...(candidate.kind === "worktree" ? { expectedHolderPath: candidate.worktree.path } : {}),
     });
-    if (!result.ok) {
+    if (!result.ok || result.path === undefined) {
       return {
         ok: false,
         message: result.errorMessage ?? "Failed to switch root.",
@@ -106,10 +106,7 @@ export const createPickerCallbacks = (
       detachedHolder: result.data?.detachedHolder ?? null,
       warnings: result.warnings ?? [],
     });
-    return {
-      ok: true,
-      ...(result.path === undefined ? {} : { path: result.path }),
-    };
+    return { ok: true, path: result.path };
   },
   reloadCandidates: async () => (await loadPickCandidates(git, fs, json)) ?? [],
 });
