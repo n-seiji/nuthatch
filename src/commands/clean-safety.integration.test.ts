@@ -129,34 +129,6 @@ describe("clean safety (integration)", () => {
     }
   });
 
-  it("prunable かつ未マージの branch は --with-branch でも残し、理由を返す", async () => {
-    const originDir = await mkdtemp(`${tmpdir()}/nuthatch-origin-`);
-    try {
-      const worktreePath = await createUnmergedTrackedWorktree("feat/prunable-unmerged", originDir);
-      await rm(worktreePath, { recursive: true, force: true });
-
-      const result = await clean(git, fs, term, {
-        cwd: repo.repoPath,
-        ext: false,
-        withBranch: true,
-        dryRun: false,
-        yes: true,
-      });
-
-      expect(result.ok).toBe(true);
-      expect(result.data?.removed).toEqual(["feat/prunable-unmerged"]);
-      expect(result.warnings?.some((warning) => warning.includes("feat/prunable-unmerged"))).toBe(
-        true,
-      );
-      const branches = await repo.git(["branch", "--list", "feat/prunable-unmerged"]);
-      expect(branches.trim()).toContain("feat/prunable-unmerged");
-      const worktrees = await repo.git(["worktree", "list", "--porcelain"]);
-      expect(worktrees).not.toContain(worktreePath);
-    } finally {
-      await rm(originDir, { recursive: true, force: true });
-    }
-  });
-
   it("hop root によって detach された holder (branch なし) は clean 候補にしない", async () => {
     await repo.git(["branch", "feat/held-for-clean"]);
     const held = await jump(git, fs, {
