@@ -39,14 +39,11 @@ export const createFakeSelfUpdate = (overrides: Partial<SelfUpdatePort> = {}): F
   const port: SelfUpdatePort = {
     installFacts: recorded("installFacts", calls, overrides.installFacts),
     latestGithubVersion: recorded("latestGithubVersion", calls, overrides.latestGithubVersion),
-    latestNpmVersion: recorded("latestNpmVersion", calls, overrides.latestNpmVersion),
     downloadReleaseAsset: recorded("downloadReleaseAsset", calls, overrides.downloadReleaseAsset),
     downloadReleaseText: recorded("downloadReleaseText", calls, overrides.downloadReleaseText),
     sha256Hex: recorded("sha256Hex", calls, overrides.sha256Hex),
     assertWritableDir: recorded("assertWritableDir", calls, overrides.assertWritableDir),
     replaceExecutable: recorded("replaceExecutable", calls, overrides.replaceExecutable),
-    resolveExecutable: recorded("resolveExecutable", calls, overrides.resolveExecutable),
-    runCommand: recorded("runCommand", calls, overrides.runCommand),
   };
   const term: TermPort = {
     isTTY: () => false,
@@ -58,13 +55,11 @@ export const createFakeSelfUpdate = (overrides: Partial<SelfUpdatePort> = {}): F
   return { port, term, calls, logs };
 };
 
-/** Install facts for a plain, unrecognised script on darwin-arm64; override what a test is about. */
+/** Install facts for an unrecognised script on darwin-arm64; override what a test is about. */
 export const installFactsOf = (overrides: Partial<InstallFacts> = {}): InstallFacts => ({
   compiled: false,
   executablePath: null,
   scriptPath: null,
-  mise: null,
-  npmGlobalPrefix: null,
   platform: "darwin",
   arch: "arm64",
   ...overrides,
@@ -73,27 +68,15 @@ export const installFactsOf = (overrides: Partial<InstallFacts> = {}): InstallFa
 export const standaloneFacts = (binaryPath = "/home/u/.local/bin/hop"): InstallFacts =>
   installFactsOf({ compiled: true, executablePath: binaryPath });
 
-const MISE_INSTALLS = "/home/u/.local/share/mise/installs";
-
-/** A compiled hop in a mise tool dir whose marker records `tool` (mise names the dir after the id). */
-export const miseFacts = (tool = "github:n-seiji/nuthatch"): InstallFacts => {
-  const dir = `${MISE_INSTALLS}/${tool.replaceAll(/[^a-z0-9]+/giu, "-")}`;
-  return installFactsOf({
+export const miseFacts = (): InstallFacts =>
+  installFactsOf({
     compiled: true,
-    executablePath: `${dir}/0.1.4/hop`,
-    mise: { dir, backend: tool },
+    executablePath: "/home/u/.local/share/mise/installs/github-n-seiji-nuthatch/0.1.4/hop",
   });
-};
 
 export const npmFacts = (): InstallFacts =>
   installFactsOf({
     scriptPath: "/usr/local/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
-    npmGlobalPrefix: "/usr/local",
-  });
-
-export const bunFacts = (): InstallFacts =>
-  installFactsOf({
-    scriptPath: "/home/u/.bun/install/global/node_modules/@n-seiji/nuthatch/dist/cli.js",
   });
 
 export const sourceCheckoutFacts = (): InstallFacts =>

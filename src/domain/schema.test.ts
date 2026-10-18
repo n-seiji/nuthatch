@@ -126,14 +126,14 @@ describe("UpdateEnvelopeSchema", () => {
     expect(safeParse(UpdateEnvelopeSchema, updateEnvelope(standaloneData)).success).toBe(true);
   });
 
-  it("package manager への委譲 (command: argv 配列) を受け付ける", () => {
+  it("mise / package-manager の案内コマンド (command: argv 配列) を受け付ける", () => {
     const result = safeParse(
       UpdateEnvelopeSchema,
       updateEnvelope({
         ...standaloneData,
         method: "mise",
-        action: "delegated",
-        command: ["mise", "upgrade", "github:n-seiji/nuthatch"],
+        action: "none",
+        command: ["mise", "upgrade"],
       }),
     );
     expect(result.success).toBe(true);
@@ -162,8 +162,8 @@ describe("UpdateEnvelopeSchema", () => {
 
   it("未知の method / action、欠けたフィールドを拒否する", () => {
     for (const bad of [
-      { ...standaloneData, method: "pnpm" },
-      { ...standaloneData, action: "installed" },
+      { ...standaloneData, method: "npm" },
+      { ...standaloneData, action: "delegated" },
       { ...standaloneData, command: "mise upgrade" },
       { ...standaloneData, updateAvailable: "yes" },
       { current: "0.1.4", latest: "0.1.5" },

@@ -1,13 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import {
   GITHUB_LATEST_RELEASE_URL,
-  NPM_LATEST_URL,
   compareVersions,
   isWriteDenied,
   parseChecksumFile,
-  pathExecutableCandidates,
   releaseAssetUrl,
-  requireVersion,
   versionFromTag,
 } from "./self-update.ts";
 
@@ -48,16 +45,6 @@ describe("versionFromTag", () => {
     for (const bad of ["0.1.4", "v0.1", "release-1", "v1.2.3-rc.1", ""]) {
       expect(() => versionFromTag(bad)).toThrow(/release tag/u);
     }
-  });
-});
-
-describe("requireVersion", () => {
-  it("x.y.z の場合、そのまま返す", () => {
-    expect(requireVersion("0.1.4")).toBe("0.1.4");
-  });
-
-  it("x.y.z でない場合、エラーにする", () => {
-    expect(() => requireVersion("0.1.4-beta.1")).toThrow(/x\.y\.z/u);
   });
 });
 
@@ -119,51 +106,6 @@ describe("parseChecksumFile", () => {
   });
 });
 
-describe("pathExecutableCandidates", () => {
-  it("PATH の絶対パスエントリを順番どおりに <dir>/<name> へ展開する", () => {
-    expect(pathExecutableCandidates("mise", "/opt/bin:/usr/local/bin")).toEqual([
-      "/opt/bin/mise",
-      "/usr/local/bin/mise",
-    ]);
-  });
-
-  it("相対パス・空のエントリは候補にしない (cwd 依存の実行を防ぐ)", () => {
-    expect(pathExecutableCandidates("npm", "node_modules/.bin:.::/opt/bin")).toEqual([
-      "/opt/bin/npm",
-    ]);
-  });
-
-  it("重複は先に出た順で 1 度だけ、末尾スラッシュは二重にしない", () => {
-    expect(pathExecutableCandidates("bun", "/a/:/b:/a:/")).toEqual(["/a/bun", "/b/bun", "/bun"]);
-  });
-
-  it("PATH が未設定・空の場合、候補なしを返す (既知の場所への fallback はしない)", () => {
-    expect(pathExecutableCandidates("mise")).toEqual([]);
-    expect(pathExecutableCandidates("mise", "")).toEqual([]);
-  });
-
-  it("優先ディレクトリがある場合、PATH より先に並べる (PATH にも同じ場所があれば 1 度だけ)", () => {
-    expect(pathExecutableCandidates("npm", "/usr/bin:/opt/bin", "/p/bin")).toEqual([
-      "/p/bin/npm",
-      "/usr/bin/npm",
-      "/opt/bin/npm",
-    ]);
-    expect(pathExecutableCandidates("npm", "/usr/bin:/p/bin", "/p/bin")).toEqual([
-      "/p/bin/npm",
-      "/usr/bin/npm",
-    ]);
-  });
-
-  it("優先ディレクトリが絶対パスでない・null の場合、PATH だけから候補を作る", () => {
-    expect(pathExecutableCandidates("npm", "/usr/bin", "relative/bin")).toEqual(["/usr/bin/npm"]);
-    expect(pathExecutableCandidates("npm", "/usr/bin", null)).toEqual(["/usr/bin/npm"]);
-  });
-
-  it("PATH が空でも、優先ディレクトリの候補は返す", () => {
-    expect(pathExecutableCandidates("npm", "", "/p/bin")).toEqual(["/p/bin/npm"]);
-  });
-});
-
 describe("isWriteDenied", () => {
   it("EACCES / EPERM / EROFS (権限なし・読み取り専用ファイルシステム) の fs エラーの場合、true を返す", () => {
     expect(isWriteDenied(errorWithCode("EACCES"))).toBe(true);
@@ -184,7 +126,6 @@ describe("release URLs", () => {
     expect(GITHUB_LATEST_RELEASE_URL).toBe(
       "https://api.github.com/repos/n-seiji/nuthatch/releases/latest",
     );
-    expect(NPM_LATEST_URL).toBe("https://registry.npmjs.org/@n-seiji%2Fnuthatch/latest");
   });
 
   it("asset は latest/download ではなく、解決済みのタグ (v<version>) から取得する", () => {

@@ -143,22 +143,18 @@ const UpdateCommandSchema = array(string());
 
 /**
  * `hop --update` data shape. `updateAvailable` is `latest > current`.
- * `action` is what hop itself did: `none` (already up to date, `--check`, or
- * mise answering, before `mise upgrade` ran, that it would not upgrade hop —
- * `updateAvailable` is still true then, and a warning says why), `replaced`
- * (the standalone binary was swapped), or `delegated` (the package manager's
- * own upgrade command ran and exited 0). For `delegated`, hop only knows the
- * command succeeded — the package manager may still decide not to move.
- * `command` is the package manager argv that ran (`delegated`) or that would
- * run (`--check` with an update available on mise/npm/bun); otherwise null,
- * always for standalone.
+ * `method` is how hop was installed; only `standalone` is replaced by hop.
+ * `action` is what hop itself did: `none` (already up to date, or `--check`)
+ * or `replaced` (the standalone binary was swapped). `command` is the argv a
+ * user would run to update a `mise` / `package-manager` install, shown by
+ * `--check` when an update is available; hop never runs it. Otherwise null.
  */
 export const UpdateDataSchema = object({
   current: string(),
   latest: string(),
   updateAvailable: boolean(),
-  method: picklist(["standalone", "mise", "npm", "bun"]),
-  action: picklist(["none", "replaced", "delegated"]),
+  method: picklist(["standalone", "mise", "package-manager", "other"]),
+  action: picklist(["none", "replaced"]),
   command: nullable(UpdateCommandSchema),
 });
 export type UpdateData = InferOutput<typeof UpdateDataSchema>;

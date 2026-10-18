@@ -3,7 +3,7 @@
  * Concrete implementations live in infra/ and are injected by commands.
  */
 
-import type { CommandArgv, InstallFacts } from "./install-method.ts";
+import type { InstallFacts } from "./install-method.ts";
 import type { UpstreamState } from "./upstream.ts";
 
 export interface GitPort {
@@ -84,8 +84,8 @@ export interface TermPort {
 }
 
 /**
- * Everything `hop --update` needs from outside the process: the network, the
- * binary on disk, and package managers. Every network address is fixed (see
+ * Everything `hop --update` needs from outside the process: the network and
+ * the binary on disk. Every network address is fixed (see
  * domain/self-update.ts), and every method may reject — the command turns a
  * rejection into a failed result.
  */
@@ -94,8 +94,6 @@ export interface SelfUpdatePort {
   installFacts: () => Promise<InstallFacts>;
   /** Version of the latest GitHub release: the tag without its leading `v`. */
   latestGithubVersion: () => Promise<string>;
-  /** Version npm's `latest` dist-tag points at (the one `npm i -g` would get). */
-  latestNpmVersion: () => Promise<string>;
   /** Bytes of release asset `assetName` of tag `v<version>`. */
   downloadReleaseAsset: (version: string, assetName: string) => Promise<Uint8Array>;
   /** Text of a small release asset of tag `v<version>`, e.g. a `.sha256` file. */
@@ -113,17 +111,4 @@ export interface SelfUpdatePort {
    * nothing behind on failure.
    */
   replaceExecutable: (path: string, bytes: Uint8Array) => Promise<void>;
-  /**
-   * Absolute path of the executable `name`: in `preferredDir` if present,
-   * else in the first absolute PATH entry that has it; null if neither.
-   */
-  resolveExecutable: (name: string, preferredDir: string | null) => Promise<string | null>;
-  /**
-   * Runs `argv` (program by absolute path, then arguments) in the user's home
-   * directory — not the start directory, whose project config must not steer
-   * a package manager's update — with stdin inherited and stdout/stderr sent
-   * to hop's stderr; resolves to the exit code. Rejects if the process cannot
-   * start or is killed by a signal.
-   */
-  runCommand: (argv: CommandArgv) => Promise<number>;
 }

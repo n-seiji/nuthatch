@@ -1,16 +1,10 @@
 import { messageOf } from "../domain/fatal-error.ts";
-import {
-  type UpdatableMethod,
-  detectInstallMethod,
-  latestChannel,
-  upgradeCommand,
-} from "../domain/install-method.ts";
+import { detectInstallMethod, suggestedCommand, updateHint } from "../domain/install-method.ts";
 import type { SelfUpdatePort, TermPort } from "../domain/ports.ts";
 import { type CommandResult, EXIT_GENERAL_ERROR, fail, ok } from "../domain/result.ts";
 import type { UpdateData } from "../domain/schema.ts";
 import { compareVersions } from "../domain/self-update.ts";
 import { attempt } from "./self-update-attempt.ts";
-import { runDelegated } from "./self-update-delegated.ts";
 import { replaceStandalone } from "./self-update-standalone.ts";
 
 export interface SelfUpdateOptions {
@@ -25,32 +19,18 @@ interface LatestRelease {
   readonly updateAvailable: boolean;
 }
 
-const fetchLatest = (port: SelfUpdatePort, method: UpdatableMethod): Promise<string> =>
-  latestChannel(method) === "npm" ? port.latestNpmVersion() : port.latestGithubVersion();
-
-/** What `--check` says would run: a package manager's command, or nothing for a standalone binary. */
-const checkCommand = (method: UpdatableMethod): string[] | null =>
-  method.kind === "standalone" ? null : [...upgradeCommand(method)];
-
-const describeCheck = (method: UpdatableMethod, base: UpdateData): string => {
-  const how =
-    method.kind === "standalone"
-      ? `replaces ${method.binaryPath}`
-      : `runs: ${upgradeCommand(method).join(" ")}`;
-  return `Update available: ${base.current} -> ${base.latest}. "hop --update" ${how}.`;
-};
-
 /**
- * `hop --update` — updates hop the way it was installed (see
- * domain/install-method.ts). The order is the safety net: the install method
- * is decided before anything goes over the network, so an install hop cannot
- * update (a source checkout, npx) is refused without any request; `--check`
- * stops once it has compared versions; and an installed version that is the
- * same as or newer than the latest is never "updated" back.
+ * `hop --update` — replaces the running binary when it is a compiled
+ * standalone one (see domain/install-method.ts) and otherwise only says how
+ * to update. The order is the safety net: the install method is decided
+ * before anything goes over the network, so an install hop does not replace
+ * is answered with a hint and no request; `--check` stops once it has
+ * compared versions; and an installed version that is the same as or newer
+ * than the latest is never "updated" back.
  *
- * Exit codes: 0 updated / already up to date / `--check`; 1 an unsupported
- * install or any network, package-manager or write failure; 3 a download
- * that failed checksum verification.
+ * Exit codes: 0 updated / already up to date / `--check`; 1 an install hop
+ * does not replace (the hint is the message) or any network or write
+ * failure; 3 a download that failed checksum verification.
  */
 export const selfUpdate = async (
   port: SelfUpdatePort,
@@ -65,13 +45,13 @@ export const selfUpdate = async (
     );
   }
   const method = detectInstallMethod(facts.value);
-  if (method.kind === "unsupported") {
-    return fail(EXIT_GENERAL_ERROR, `Cannot update hop: ${method.reason}.`);
+  if (method.kind !== "standalone" && !options.check) {
+    return fail(EXIT_GENERAL_ERROR, updateHint(method.kind));
   }
 
   term.logStderr("Checking for the latest release...");
   const release = await attempt(async (): Promise<LatestRelease> => {
-    const latest = await fetchLatest(port, method);
+    const latest = await port.latestGithubVersion();
     return {
       latest,
       updateAvailable: compareVersions(latest, options.currentVersion) > 0,
@@ -96,11 +76,18 @@ export const selfUpdate = async (
     term.logStderr(`hop ${base.current} is up to date (latest release: ${base.latest}).`);
     return ok({ data: base });
   }
-  if (options.check) {
-    term.logStderr(describeCheck(method, base));
-    return ok({ data: { ...base, command: checkCommand(method) } });
+  const available = `Update available: ${base.current} -> ${base.latest}.`;
+  if (method.kind !== "standalone") {
+    // Only `--check` gets this far for an install hop does not replace.
+    term.logStderr(`${available} ${updateHint(method.kind)}`);
+    const command = suggestedCommand(method.kind);
+    return ok({
+      data: { ...base, command: command === null ? null : [...command] },
+    });
   }
-  return method.kind === "standalone"
-    ? replaceStandalone(port, term, method, base)
-    : runDelegated(port, term, method, base);
+  if (options.check) {
+    term.logStderr(`${available} "hop --update" replaces ${method.binaryPath}.`);
+    return ok({ data: base });
+  }
+  return replaceStandalone(port, term, method, base);
 };

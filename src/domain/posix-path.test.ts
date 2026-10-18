@@ -1,11 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  absoluteCandidates,
-  baseName,
-  parentDir,
-  shortenHome,
-  splitPathEnv,
-} from "./posix-path.ts";
+import { absoluteCandidates, parentDir, shortenHome, splitPathEnv } from "./posix-path.ts";
 
 describe("parentDir", () => {
   it("深いパスの場合、1 つ上のディレクトリを返す", () => {
@@ -21,18 +15,6 @@ describe("parentDir", () => {
 
   it("末尾のスラッシュは無視する", () => {
     expect(parentDir("/home/u/bin/")).toBe("/home/u");
-  });
-});
-
-describe("baseName", () => {
-  it("最後の要素を返す (末尾のスラッシュは無視する)", () => {
-    expect(baseName("/home/u/installs/node")).toBe("node");
-    expect(baseName("/home/u/installs/node/")).toBe("node");
-    expect(baseName("node")).toBe("node");
-  });
-
-  it("ルートの場合、空文字を返す", () => {
-    expect(baseName("/")).toBe("");
   });
 });
 
