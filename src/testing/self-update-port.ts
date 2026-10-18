@@ -6,7 +6,7 @@ import type { UpdateData } from "../domain/schema.ts";
  * In-memory stand-ins for the self-update command's ports. Anything a test
  * does not provide throws "unexpected call: <name>" instead of silently
  * doing nothing, so a side effect that must not happen (a download under
- * `--check`, a spawn for an unsupported install) fails the test loudly, and
+ * `--check`, a request for an unsupported install) fails the test loudly, and
  * `calls` records exactly which port methods a run touched.
  */
 

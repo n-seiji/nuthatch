@@ -111,7 +111,7 @@ a handful of path checks, first match wins:
 | 5 | a compiled binary on a platform with no prebuilt asset (anything but darwin-arm64 / darwin-x64 / linux-x64) | `other` | refuses | `Update hop with the tool you installed it with.` |
 | 6 | any other compiled binary | `standalone` | replaces it (below) | none |
 
-The refusal is the whole message: one line on stderr, nothing on stdout, exit
+The refusal is the whole message: one line on stderr, nothing on stdout (plain), exit
 1, and no request is made. hop never runs `mise`, `npm`, `bun` or any other
 tool itself, and never looks for one on `PATH`. A path that merely looks like a
 mise or npm layout is classified by the path alone; hop does not read mise's
@@ -441,8 +441,8 @@ mise use -g npm:@n-seiji/nuthatch   # mise
 curl -fsSL https://raw.githubusercontent.com/n-seiji/nuthatch/main/install.sh | sh  # binary
 ```
 
-`hop --update` updates it in place whichever way it was installed (see
-[Self-update](#self-update)).
+`hop --update` replaces only the install.sh binary in place; other installs
+get a one-line hint (see [Self-update](#self-update)).
 
 Shell integration is a single line in `.zshrc`:
 `eval "$(hop init zsh)"` (the same approach as starship / zoxide).

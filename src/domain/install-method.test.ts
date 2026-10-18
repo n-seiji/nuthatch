@@ -24,6 +24,12 @@ const scriptAt = (path: string | null): InstallFacts => ({
 });
 
 describe("detectInstallMethod", () => {
+  it("実行ファイルのパスが取れないコンパイル済みバイナリの場合、置き換えずに other を返す", () => {
+    expect(detectInstallMethod(compiledAt("", { executablePath: null }))).toEqual({
+      kind: "other",
+    });
+  });
+
   it("install.sh が置く場所のコンパイル済みバイナリの場合、standalone とその置き換え先を返す", () => {
     expect(detectInstallMethod(compiledAt("/home/u/.local/bin/hop"))).toEqual({
       kind: "standalone",

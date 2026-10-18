@@ -160,7 +160,7 @@ hop --version         # which version do I have?
 its directory is writable (checked before the binary or its checksum is
 downloaded) and its SHA-256 matches the `.sha256` attached to the release; on a
 mismatch nothing is replaced. For any other install it runs nothing, makes no
-request, and prints one line with the right command (exit 1):
+request, and prints one line saying how to update it (exit 1):
 
 | Installed with | Update with |
 |---|---|

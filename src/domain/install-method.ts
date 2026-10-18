@@ -68,7 +68,10 @@ const NODE_MODULES = "/node_modules/";
  * this platform. Anything else, a source checkout included, is `other`.
  */
 export const detectInstallMethod = (facts: InstallFacts): InstallMethod => {
-  const path = (facts.compiled ? facts.executablePath : facts.scriptPath) ?? "";
+  const path = facts.compiled ? facts.executablePath : facts.scriptPath;
+  if (path === null) {
+    return { kind: "other" };
+  }
   if (path.includes(MISE_TREE)) {
     return { kind: "mise" };
   }
