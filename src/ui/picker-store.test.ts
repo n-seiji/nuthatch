@@ -1,6 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import type { PickCandidate } from "../domain/candidates.ts";
-import type { Worktree } from "../domain/model.ts";
+import type { PickCandidate, Worktree } from "../domain/schema.ts";
 import { createPickerStore, panelErrorTransition } from "./picker-store.ts";
 import type { PickerCallbacks, PickerOutcome } from "./picker-types.ts";
 import type { PickerKeyModifiers } from "./picker-keys.ts";

@@ -1,18 +1,10 @@
-import type { PickCandidate } from "../domain/candidates.ts";
+import type { PickCandidate } from "../domain/schema.ts";
 import type { PickerKeyEvent } from "./picker-key-parser.ts";
 import { renderPickerFrame } from "./picker-render.ts";
 import { createPickerStore } from "./picker-store.ts";
 import type { PickerCallbacks, PickerResult } from "./picker-types.ts";
 import { DEFAULT_TERMINAL_HEIGHT } from "./picker-viewport.ts";
 import { runTerminalSession } from "./terminal-session.ts";
-
-export type {
-  DeleteWorktreeOutcome,
-  PickerCallbacks,
-  PickerCancellation,
-  PickerOutcome,
-  PickerResult,
-} from "./picker-types.ts";
 
 const DEFAULT_TERMINAL_WIDTH = 80;
 

@@ -1,16 +1,13 @@
 import { pick } from "./commands/pick.ts";
 import { rm } from "./commands/rm.ts";
 import { root } from "./commands/root.ts";
-import { candidateBranchName, type PickCandidate } from "./domain/candidates.ts";
+import { candidateBranchName } from "./domain/candidates.ts";
+import type { PickCandidate } from "./domain/schema.ts";
 import type { FsPort, GitPort } from "./domain/ports.ts";
 import { ok } from "./domain/result.ts";
 import { render, reportResult } from "./render.ts";
-import {
-  runPicker,
-  type DeleteWorktreeOutcome,
-  type PickerCallbacks,
-  type PickerResult,
-} from "./ui/picker.ts";
+import type { DeleteWorktreeOutcome, PickerCallbacks, PickerResult } from "./ui/picker-types.ts";
+import { runPicker } from "./ui/picker.ts";
 
 /**
  * Loads the fresh candidate list for the picker (used both for the initial

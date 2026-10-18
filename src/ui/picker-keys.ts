@@ -106,7 +106,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
 
 /** Letters that act as shortcuts inside the action panel: c=cd, d=delete, r=switchRoot. */
 const PANEL_LETTER_SHORTCUTS = ["c", "d", "r"] as const;
-export type PanelLetterShortcut = (typeof PANEL_LETTER_SHORTCUTS)[number];
+type PanelLetterShortcut = (typeof PANEL_LETTER_SHORTCUTS)[number];
 
 export type PanelKeyAction =
   | { readonly type: "close" }

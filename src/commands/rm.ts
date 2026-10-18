@@ -1,5 +1,5 @@
 import { messageOf } from "../domain/fatal-error.ts";
-import type { Worktree } from "../domain/model.ts";
+import type { RmData, Worktree } from "../domain/schema.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import {
   type Checked,
@@ -12,7 +12,6 @@ import {
   pass,
   reject,
 } from "../domain/result.ts";
-import type { RmData } from "../domain/schema.ts";
 import { withRepoLock } from "../infra/lock.ts";
 import {
   loadRepoContext,

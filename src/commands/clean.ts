@@ -1,9 +1,8 @@
 import { messageOf } from "../domain/fatal-error.ts";
 import { classifyGarbage } from "../domain/garbage.ts";
-import type { Worktree } from "../domain/model.ts";
+import type { CleanCandidate, CleanData, Worktree } from "../domain/schema.ts";
 import type { FsPort, GitPort, TermPort } from "../domain/ports.ts";
 import { type CommandResult, EXIT_USAGE_ERROR, fail, ok } from "../domain/result.ts";
-import type { CleanCandidate, CleanData } from "../domain/schema.ts";
 import { withRepoLock } from "../infra/lock.ts";
 import { loadRepoContext, nestedWorktrees, type RepoContext } from "../infra/repo.ts";
 import {

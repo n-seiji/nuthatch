@@ -1,5 +1,6 @@
 import type { PickerActionKind } from "../domain/actions.ts";
-import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
+import { candidateBranchLabel } from "../domain/candidates.ts";
+import type { PickCandidate } from "../domain/schema.ts";
 import { handleConfirmInput, handleListInput, handlePanelInput } from "./picker-input.ts";
 import type { PickerCancelReason, PickerKeyModifiers } from "./picker-keys.ts";
 import { sortCandidatesForDisplay } from "./picker-layout.ts";

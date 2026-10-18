@@ -1,4 +1,4 @@
-import type { WorktreeKind } from "./model.ts";
+import type { WorktreeKind } from "./schema.ts";
 
 /**
  * Returns true if `child` is inside `parent`, respecting path boundaries

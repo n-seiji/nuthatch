@@ -1,11 +1,11 @@
-import { candidateBranchLabel, type PickCandidate } from "../domain/candidates.ts";
+import { candidateBranchLabel } from "../domain/candidates.ts";
+import type { PickCandidate, WorktreeKind } from "../domain/schema.ts";
 import {
   displayWidth,
   padToWidth,
   truncateToWidth,
   truncateToWidthKeepingTail,
 } from "../domain/display-width.ts";
-import type { WorktreeKind } from "../domain/model.ts";
 
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
@@ -156,15 +156,12 @@ export const rawBranchColumnWidth = (candidates: readonly PickCandidate[]): numb
 export const branchColumnWidth = (candidates: readonly PickCandidate[]): number =>
   Math.min(MAX_BRANCH_COLUMN_WIDTH, rawBranchColumnWidth(candidates));
 
-/** Pads `label` to `width` *display columns* — a fullwidth branch name (CJK, emoji) still lines its column up with an ASCII one. */
-export const padBranchLabel = (label: string, width: number): string => padToWidth(label, width);
-
-export interface HeaderRow {
+interface HeaderRow {
   readonly kind: "header";
   readonly label: string;
 }
 
-export interface CandidateRow {
+interface CandidateRow {
   readonly kind: "candidate";
   /** Index into the candidate list this row was built from — used to match the picker's cursor position. */
   readonly index: number;
@@ -194,7 +191,7 @@ const toCandidateRow = (
   index: options.index,
   section: options.section,
   statusMarker: statusMarker(candidate),
-  branchLabel: padBranchLabel(
+  branchLabel: padToWidth(
     truncateToWidth(candidateBranchLabel(candidate), options.branchWidth),
     options.branchWidth,
   ),

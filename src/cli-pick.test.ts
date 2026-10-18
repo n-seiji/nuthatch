@@ -1,7 +1,7 @@
 import { rm as removeDirectory } from "node:fs/promises";
 import { describe, expect, it, spyOn } from "bun:test";
 import { jump } from "./commands/jump.ts";
-import type { PickCandidate } from "./domain/candidates.ts";
+import type { PickCandidate } from "./domain/schema.ts";
 import { createFsPort } from "./infra/fs.ts";
 import { createGitPort } from "./infra/git.ts";
 import { createTestRepo, type TestRepo } from "./testing/repo.ts";

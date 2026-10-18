@@ -4,7 +4,7 @@ import {
   requiresDeleteConfirmation,
   requiresSwitchRootConfirmation,
 } from "../domain/actions.ts";
-import type { PickCandidate } from "../domain/candidates.ts";
+import type { PickCandidate } from "../domain/schema.ts";
 import { ACTION_LETTERS } from "./side-panel.ts";
 import {
   type PickerCancelReason,

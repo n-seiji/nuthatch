@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { availableActions, requiresDeleteConfirmation } from "./actions.ts";
-import type { PickCandidate } from "./candidates.ts";
-import type { Worktree } from "./model.ts";
+import type { PickCandidate, Worktree } from "./schema.ts";
 
 const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
   path: "/repo",

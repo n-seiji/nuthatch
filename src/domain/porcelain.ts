@@ -1,4 +1,4 @@
-import type { Worktree } from "./model.ts";
+import type { Worktree } from "./schema.ts";
 
 export const REFS_HEADS_PREFIX = "refs/heads/";
 
