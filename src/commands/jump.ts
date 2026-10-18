@@ -80,7 +80,7 @@ export const jump = async (
       }
 
       await fs.mkdir(context.managedRoot);
-      await git.addWorktree(context.rootPath, targetPath, options.target, checkout.options);
+      await git.addWorktree(context.rootPath, targetPath, options.target, checkout.value);
       return ok({
         path: targetPath,
         data: { branch: options.target, created: true },

@@ -1,5 +1,12 @@
 import type { GitPort, SwitchBranchOptions } from "../domain/ports.ts";
-import { type CommandResult, EXIT_SAFE_REJECTION, fail } from "../domain/result.ts";
+import {
+  type Checked,
+  type CommandResult,
+  EXIT_SAFE_REJECTION,
+  fail,
+  pass,
+  reject,
+} from "../domain/result.ts";
 import type { RootData } from "../domain/schema.ts";
 import { isWorktreeDirty, type RepoContext } from "../infra/repo.ts";
 
@@ -59,10 +66,6 @@ const multipleHoldersRejection = (
     `Branch "${branch}" is checked out at ${holders.length} worktrees at once (${holders.map((holder) => holder.path).join(", ")}). Not swapping — hop won't guess which one to detach.`,
   );
 
-export type HolderSwapResult =
-  | { readonly rejection: CommandResult<RootData> }
-  | { readonly detachedHolder: DetachedHolder | null };
-
 interface ResolveHolderSwapOptions {
   readonly git: GitPort;
   readonly fresh: RepoContext;
@@ -83,9 +86,9 @@ export const resolveHolderSwap = async ({
   target,
   switchOptions,
   policy,
-}: ResolveHolderSwapOptions): Promise<HolderSwapResult> => {
+}: ResolveHolderSwapOptions): Promise<Checked<DetachedHolder | null, RootData>> => {
   if (target === "-") {
-    return { detachedHolder: null };
+    return pass(null);
   }
 
   const freshHolders = fresh.worktrees.filter((wt) => wt.branch === target && wt.kind !== "root");
@@ -94,30 +97,30 @@ export const resolveHolderSwap = async ({
     // `Git worktree add --force`) — checked before detaching anything,
     // Since detaching just one holder still leaves the branch checked out
     // On the rest.
-    return { rejection: multipleHoldersRejection(target, freshHolders) };
+    return reject(multipleHoldersRejection(target, freshHolders));
   }
   const [freshHolder] = freshHolders;
   if (freshHolder === undefined) {
-    return { detachedHolder: null };
+    return pass(null);
   }
 
   if (policy.expectedPath !== undefined && freshHolder.path !== policy.expectedPath) {
-    return {
-      rejection: holderRejection(
+    return reject(
+      holderRejection(
         target,
         freshHolder.path,
         `changed from the picker selection at ${policy.expectedPath}`,
       ),
-    };
+    );
   }
   if (freshHolder.kind === "external" && !policy.allowExternal) {
-    return {
-      rejection: holderRejection(
+    return reject(
+      holderRejection(
         target,
         freshHolder.path,
         "is external and requires confirmation before it can be put into detached HEAD",
       ),
-    };
+    );
   }
 
   if (switchOptions.createBranch === true) {
@@ -129,33 +132,33 @@ export const resolveHolderSwap = async ({
     // Out between hop's initial (pre-lock) check and now. Either way, hop
     // Was about to `-c` a branch that already exists there — refuse rather
     // Than guess at which case this is.
-    return {
-      rejection: holderRejection(
+    return reject(
+      holderRejection(
         target,
         freshHolder.path,
         "wasn't visible when hop checked existing local branches (e.g. it has no commits yet, or was created after that check)",
       ),
-    };
+    );
   }
   if (freshHolder.locked) {
-    return {
-      rejection: holderRejection(
+    return reject(
+      holderRejection(
         target,
         freshHolder.path,
         `is locked by git${freshHolder.lockReason === null ? "" : ` (${freshHolder.lockReason})`}`,
       ),
-    };
+    );
   }
   if (freshHolder.prunable) {
-    return { rejection: prunableHolderRejection(target, freshHolder.path) };
+    return reject(prunableHolderRejection(target, freshHolder.path));
   }
   const holderDirty = await isWorktreeDirty(git, fresh.worktrees, freshHolder.path);
   if (holderDirty) {
-    return {
-      rejection: holderRejection(target, freshHolder.path, "has uncommitted or untracked changes"),
-    };
+    return reject(
+      holderRejection(target, freshHolder.path, "has uncommitted or untracked changes"),
+    );
   }
 
   await git.detachHead(freshHolder.path);
-  return { detachedHolder: { path: freshHolder.path, branch: target } };
+  return pass({ path: freshHolder.path, branch: target });
 };

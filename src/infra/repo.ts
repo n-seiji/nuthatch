@@ -3,7 +3,7 @@ import { classifyWorktreePath, isWithin } from "../domain/classify.ts";
 import type { Worktree } from "../domain/model.ts";
 import { parsePorcelain } from "../domain/porcelain.ts";
 import type { AddWorktreeOptions, FsPort, GitPort } from "../domain/ports.ts";
-import { type CommandResult, EXIT_USAGE_ERROR, fail } from "../domain/result.ts";
+import { type Checked, EXIT_USAGE_ERROR, fail, pass, reject } from "../domain/result.ts";
 import { resolveTrackingRef } from "../domain/tracking.ts";
 
 export interface RepoContext {
@@ -114,10 +114,6 @@ export const worktreeDirtyState = async (
   return isWorktreeDirty(git, worktrees, wt.path);
 };
 
-export type BranchCheckoutResolution<T> =
-  | { readonly ok: true; readonly options: AddWorktreeOptions }
-  | { readonly ok: false; readonly rejection: CommandResult<T> };
-
 /**
  * How to check out `branch` for a command that may have to create it
  * (`jump --create`, `root`). `explicitTrack` always wins; otherwise a branch
@@ -129,7 +125,7 @@ export const resolveBranchCheckout = async <T>(
   rootPath: string,
   branch: string,
   explicitTrack: string | undefined,
-): Promise<BranchCheckoutResolution<T>> => {
+): Promise<Checked<AddWorktreeOptions, T>> => {
   const localBranches = await git.listBranches(rootPath);
   const createBranch = !localBranches.includes(branch);
 
@@ -138,20 +134,19 @@ export const resolveBranchCheckout = async <T>(
     const remotes = await git.remotesWithBranch(rootPath, branch);
     const resolution = resolveTrackingRef(branch, remotes);
     if (resolution.kind === "ambiguous") {
-      return {
-        ok: false,
-        rejection: fail(
+      return reject(
+        fail(
           EXIT_USAGE_ERROR,
           `Branch "${branch}" exists on multiple remotes (${remotes.join(", ")}). Use --track to disambiguate.`,
         ),
-      };
+      );
     }
     if (resolution.kind === "track") {
       track = resolution.ref;
     }
   }
 
-  return { ok: true, options: { createBranch, ...(track === undefined ? {} : { track }) } };
+  return pass({ createBranch, ...(track === undefined ? {} : { track }) });
 };
 
 const realpathOrRaw = async (fs: FsPort, path: string): Promise<string> => {

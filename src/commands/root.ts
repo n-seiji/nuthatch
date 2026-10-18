@@ -86,7 +86,7 @@ export const root = async (
     fs,
     context,
     target: options.target,
-    switchOptions: checkout.options,
+    switchOptions: checkout.value,
     holderPolicy: {
       allowExternal: options.allowExternalHolderSwap ?? true,
       ...(options.expectedHolderPath === undefined
@@ -204,10 +204,10 @@ const switchAndReport = ({
         switchOptions,
         policy: holderPolicy,
       });
-      if ("rejection" in holderSwap) {
+      if (!holderSwap.ok) {
         return holderSwap.rejection;
       }
-      ({ detachedHolder } = holderSwap);
+      detachedHolder = holderSwap.value;
 
       await git.switchBranch(fresh.rootPath, target, switchOptions);
       // For target === "-", git resolves the destination itself (@{-1}), so we
