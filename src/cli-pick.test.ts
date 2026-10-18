@@ -109,6 +109,9 @@ describe("createPickerCallbacks — fresh external-holder safety", () => {
       const result = await callbacks.switchRootHere(staleCandidate);
 
       expect(result.ok).toBe(false);
+      if (result.ok) {
+        throw new Error("expected the mutation to be refused");
+      }
       expect(result.message).toContain("confirmation");
       const rootBranch = await repo.git(["branch", "--show-current"]);
       const holderBranch = await repo.git(["branch", "--show-current"], externalPath);
@@ -176,6 +179,9 @@ describe("createPickerCallbacks — prunable delete safety", () => {
       const result = await callbacks.deleteWorktree(staleCandidate);
 
       expect(result.ok).toBe(false);
+      if (result.ok) {
+        throw new Error("expected the mutation to be refused");
+      }
       expect(result.message).toContain("changed before removal");
       expect(result.message).toContain("git now reports it prunable");
       expect(await repo.git(["worktree", "list", "--porcelain"])).toContain(path);

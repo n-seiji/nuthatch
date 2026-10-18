@@ -7,7 +7,7 @@ import { DEFAULT_TERMINAL_HEIGHT } from "./picker-viewport.ts";
 import { runTerminalSession } from "./terminal-session.ts";
 
 export type {
-  ActionOutcome,
+  DeleteWorktreeOutcome,
   PickerCallbacks,
   PickerCancellation,
   PickerOutcome,
