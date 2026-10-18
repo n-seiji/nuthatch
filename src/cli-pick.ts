@@ -43,7 +43,6 @@ const deleteWorktree = async (
     // The picker asked y/N only for a row that was already prunable when it loaded.
     allowPrunable: candidate.kind === "worktree" && candidate.worktree.prunable,
     force: false,
-    ext: false,
   });
   if (!result.ok) {
     return {

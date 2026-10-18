@@ -101,7 +101,6 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
       cwd: repo.repoPath,
       branch: BRANCH,
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(true);
@@ -129,29 +128,11 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
       cwd: repo.repoPath,
       branch: BRANCH,
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(true);
     expect(result.warnings).toEqual([
       `Worktree at ${path} no longer exists; removed its stale registration — if it had been moved by hand, the moved copy is no longer linked to this repository.`,
-    ]);
-  });
-
-  it("prunable な worktree を --ext 付きで rm する場合、非推奨の警告は登録削除の警告の後ろに付く", async () => {
-    await createPrunableWorktree();
-
-    const result = await rm(git, fs, {
-      cwd: repo.repoPath,
-      branch: BRANCH,
-      force: false,
-      ext: true,
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.warnings).toEqual([
-      expect.stringContaining("removed its stale registration"),
-      expect.stringContaining("--ext is deprecated"),
     ]);
   });
 
@@ -163,7 +144,6 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
       branch: BRANCH,
       allowPrunable: false,
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(false);
@@ -182,7 +162,6 @@ describe("ディレクトリが消えた worktree — prunable (integration)", (
       branch: BRANCH,
       allowPrunable: true,
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(true);
@@ -229,7 +208,6 @@ const expectGitToRefuseRemoval = async (force: boolean): Promise<void> => {
     cwd: repo.repoPath,
     branch: BRANCH,
     force,
-    ext: false,
   });
 
   expect(result.ok).toBe(false);

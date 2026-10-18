@@ -67,7 +67,6 @@ describe("ディレクトリが消えた worktree — git ロック中 (integrat
       cwd: repo.repoPath,
       branch: BRANCH,
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(false);

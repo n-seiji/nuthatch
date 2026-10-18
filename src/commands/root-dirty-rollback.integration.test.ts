@@ -137,7 +137,6 @@ describe("root (integration) — nested worktree dirty exclusion / rollback warn
       cwd: repo.repoPath,
       branch: "swap-dirty",
       force: false,
-      ext: false,
     });
     expect(rmResult.ok).toBe(false);
     expect(rmResult.exitCode).toBe(3);

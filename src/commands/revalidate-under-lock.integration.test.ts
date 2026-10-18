@@ -93,7 +93,6 @@ describe("lock 取得後の再検証 (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/outer",
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(false);
@@ -116,7 +115,6 @@ describe("lock 取得後の再検証 (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/moved",
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(false);
