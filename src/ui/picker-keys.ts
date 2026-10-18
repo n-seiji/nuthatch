@@ -1,8 +1,8 @@
 /**
  * Pure key-handling logic for the picker, extracted from picker.ts so it can
- * be unit tested without a terminal. Ctrl+N/Ctrl+P and Ctrl+J/Ctrl+K mirror
+ * be unit tested without a terminal. Ctrl+N/Ctrl+P and Ctrl+K mirror
  * the arrow keys (emacs and vim conventions, respectively — both coexist);
- * Ctrl+U clears the search query. Modifier keys (ctrl/meta) never leak into
+ * Ctrl+U clears the search query. Ctrl-modified keys never leak into
  * the search query as literal characters.
  *
  * Three modes, three resolvers: list (resolvePickerKeyAction), the action
@@ -14,18 +14,11 @@
  * to the list rather than doubling as movement — Tab also toggles it, for
  * terminals (e.g. Ghostty) that remap a chord like Cmd+K to Tab.
  *
- * Terminal-protocol caveat: Ctrl+J and Ctrl+H are the ASCII control bytes
- * 0x0A (LF) and 0x08 (BS). picker-key-parser.ts special-cases them *before*
- * its generic Ctrl+letter range check, so they never arrive as
- * `key.ctrl && input === "j"/"h"` the way Ctrl+K, Ctrl+L, Ctrl+N, Ctrl+F do.
- * Two byte-level signals are used instead:
- *   - Ctrl+J arrives as `input === "\n"` with every flag false (not
- *     `key.return` — that's `\r`/CR only). A literal "\n" can't otherwise
- *     reach a single keypress event, so treating it as "down" is safe.
- *   - Ctrl+H arrives as `key.backspace: true` (ctrl not set) —
- *     picker-key-parser.ts gives 0x08 the exact same shape as the
- *     Backspace key (0x7F). The panel has no text field, so treating
- *     physical Backspace as "close" there too is harmless and covers both.
+ * Terminal-protocol caveat: Ctrl+H is the ASCII control byte 0x08 (BS).
+ * picker-key-parser.ts gives it the exact same shape as the Backspace key
+ * (0x7F): `key.backspace: true`, ctrl not set. The panel has no text field,
+ * so treating physical Backspace as "close" there too is harmless and covers
+ * both.
  */
 
 /** Esc cancels quietly (exit 0, empty stdout); Ctrl+C cancels like a real interrupt (exit 130, same as SIGINT). */
@@ -46,7 +39,6 @@ export type PickerKeyAction =
 
 export interface PickerKeyModifiers {
   readonly ctrl: boolean;
-  readonly meta: boolean;
   readonly escape: boolean;
   readonly return: boolean;
   readonly tab: boolean;
@@ -57,9 +49,6 @@ export interface PickerKeyModifiers {
   readonly backspace: boolean;
   readonly delete: boolean;
 }
-
-/** Raw LF (0x0A) — how a real terminal sends Ctrl+J; see the module comment. */
-const isCtrlJByte = (input: string): boolean => input === "\n";
 
 export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): PickerKeyAction => {
   if (key.escape) {
@@ -83,7 +72,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
   if (key.upArrow || (key.ctrl && (input === "p" || input === "k"))) {
     return { type: "up" };
   }
-  if (key.downArrow || (key.ctrl && (input === "n" || input === "j")) || isCtrlJByte(input)) {
+  if (key.downArrow || (key.ctrl && input === "n")) {
     return { type: "down" };
   }
   if (key.ctrl && input === "u") {
@@ -92,7 +81,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
   if (key.backspace || key.delete) {
     return { type: "backspace" };
   }
-  if (input.length > 0 && !key.ctrl && !key.meta) {
+  if (input.length > 0 && !key.ctrl) {
     return { type: "char", char: input };
   }
   return { type: "ignore" };
@@ -130,10 +119,10 @@ export const resolvePanelKeyAction = (input: string, key: PickerKeyModifiers): P
   if (key.upArrow || (key.ctrl && (input === "p" || input === "k"))) {
     return { type: "up" };
   }
-  if (key.downArrow || (key.ctrl && (input === "n" || input === "j")) || isCtrlJByte(input)) {
+  if (key.downArrow || (key.ctrl && input === "n")) {
     return { type: "down" };
   }
-  if (!key.ctrl && !key.meta && isPanelLetterShortcut(input)) {
+  if (!key.ctrl && isPanelLetterShortcut(input)) {
     return { type: "letter", char: input };
   }
   return { type: "ignore" };
@@ -153,7 +142,7 @@ export const resolveConfirmKeyAction = (
   input: string,
   key: PickerKeyModifiers,
 ): ConfirmKeyAction => {
-  if (!key.ctrl && !key.meta && (input === "y" || input === "Y")) {
+  if (!key.ctrl && (input === "y" || input === "Y")) {
     return { type: "yes" };
   }
   return { type: "no" };

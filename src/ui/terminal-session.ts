@@ -1,6 +1,6 @@
 import { EXIT_CANCELLED } from "../domain/result.ts";
-import { type AltScreenTarget, enterAltScreen, leaveAltScreen } from "./alt-screen.ts";
 import { ESC } from "../domain/ansi.ts";
+import { type AltScreenTarget, enterAltScreen, leaveAltScreen } from "./alt-screen.ts";
 import { PickerKeyParser, type PickerKeyEvent } from "./picker-key-parser.ts";
 
 /**

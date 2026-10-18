@@ -100,7 +100,7 @@ below the list instead.
 | `Tab`, `→`, `Ctrl+L`, `Ctrl+F` | Open the action panel for the selected candidate (cd / delete / switch root here) |
 | `Ctrl+X` | Delete the selected worktree (always asks y/N first) |
 | `Ctrl+R` | Switch the root clone to the selected branch (asks y/N first for an `external` worktree) |
-| `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K`/`Ctrl+J` | Move the selection (arrow, emacs, and vim keys all work side by side) |
+| `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K` | Move the selection (arrow, emacs, and vim keys all work side by side) |
 | `Esc` | Cancel quietly — exit 0, stdout stays empty (the shell wrapper just doesn't cd) |
 | `Ctrl+C` | Cancel like an interrupt — exit 130, same as a real SIGINT |
 

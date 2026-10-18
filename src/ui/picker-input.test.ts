@@ -6,7 +6,6 @@ import type { PickerMode } from "./picker-types.ts";
 
 const noMods: PickerKeyModifiers = {
   ctrl: false,
-  meta: false,
   escape: false,
   return: false,
   tab: false,

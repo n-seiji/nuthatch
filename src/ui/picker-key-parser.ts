@@ -1,15 +1,20 @@
-import { event, withMeta, type PickerKeyEvent } from "./picker-key-event.ts";
-import { BRACKETED_PASTE_END, parseCsi, parseSs3 } from "./picker-key-csi.ts";
+import { event, type PickerKeyEvent } from "./picker-key-event.ts";
+import { parseCsi, parseSs3 } from "./picker-key-csi.ts";
 
 export type { PickerKeyEvent } from "./picker-key-event.ts";
 
 /**
+ * Bracketed paste (`ESC[200~ ... ESC[201~`, enabled by terminal-session.ts)
+ * is the safety mechanism for pasted text: its content becomes query text
+ * only, with every control character dropped, so a paste can never open the
+ * action panel or trigger delete / switch-root.
+ *
  * Converts raw stdin bytes (as read in raw mode) into the `{input, key}`
  * shape `resolvePickerKeyAction`/`resolvePanelKeyAction`/
  * `resolveConfirmKeyAction` expect. Kept deliberately narrow — it only
  * recognizes the sequences the picker's key resolvers actually branch on
- * (see picker-keys.ts's module comment for the exact byte-level contract
- * Ctrl+J/Ctrl+H rely on).
+ * (see picker-keys.ts's module comment for the byte-level contract Ctrl+H
+ * relies on).
  *
  * Chunk boundaries are not key boundaries: a single `read()`/`data` event can
  * split a UTF-8 codepoint, split an escape sequence across two chunks, or
@@ -34,7 +39,7 @@ const TAB = 0x09;
 const LF = 0x0a;
 const CR = 0x0d;
 
-/** Ctrl+<letter> byte range, 0x01-0x1A, mapped back to the lowercase letter. Excludes the bytes terminals treat as their own named keys (Tab, LF, CR, Backspace) — those are handled before this range is consulted. */
+/** Ctrl+<letter> byte range, 0x01-0x1A, mapped back to the lowercase letter. Excludes the bytes terminals treat as their own named keys (Tab, CR, Backspace) and LF, which is ignored — those are handled before this range is consulted. */
 const CTRL_LETTER_START = 0x01;
 const CTRL_LETTER_END = 0x1a;
 const CTRL_LETTER_OFFSET = "a".codePointAt(0) as number;
@@ -73,15 +78,14 @@ const utf8SequenceLength = (leadByte: number): number => {
 const decodeUtf8 = (bytes: Buffer): string =>
   new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 
-/** Below this codepoint, a character is a C0 control code rather than printable text -- never something the picker's single-line query should render or act on literally. Used for the non-paste byte-level path below (which never sees DEL/C1 -- those are handled by their own branches: DEL is BACKSPACE_DEL, and a raw C1 byte can't survive UTF-8 decoding as itself). */
+/** Below this codepoint, a character is a C0 control code rather than printable text — never something the picker's single-line query should render or act on literally. */
 const CONTROL_CODEPOINT_MAX = 0x1f;
 
-/** DEL and the C1 control range (U+0080-U+009F) -- pasted text is decoded UTF-8, so unlike the byte-level path above these can validly appear as their own codepoints and must be filtered explicitly. */
+/** DEL and the C1 control range (U+0080-U+009F) -- pasted text is decoded UTF-8, so unlike the byte-level path these can validly appear as their own codepoints and must be filtered explicitly. */
 const DEL_CODEPOINT = 0x7f;
 const C1_CONTROL_MIN = 0x80;
 const C1_CONTROL_MAX = 0x9f;
 
-/** Whether `char` is safe to pass through literally from pasted text -- excludes C0 controls, DEL, and the C1 control range (see pastedTextToEvents below for why paste content needs this at all). */
 const isPrintableChar = (char: string): boolean => {
   const codePoint = char.codePointAt(0) ?? 0;
   if (codePoint <= CONTROL_CODEPOINT_MAX || codePoint === DEL_CODEPOINT) {
@@ -90,29 +94,18 @@ const isPrintableChar = (char: string): boolean => {
   return codePoint < C1_CONTROL_MIN || codePoint > C1_CONTROL_MAX;
 };
 
-/**
- * Turns decoded paste text into key events, dropping control characters
- * (newlines included) rather than passing them through as literal input.
- * Pasted text commonly carries a trailing newline (copying a branch name
- * out of `git branch`'s output, e.g.) or embedded CR/LF from a multi-line
- * clipboard selection; a bare "\n" would be indistinguishable from a real
- * Ctrl+J keypress (see the module comment above) and move the selection
- * instead of filling the query. Paste content has no legitimate use for
- * control bytes in a single-line query field, so they are dropped.
- */
+/** Pasted text becomes query characters only: C0 (Tab/CR/LF included), DEL and C1 controls are dropped, so nothing in a paste can act as a key (Tab opening the panel, Ctrl+X/Ctrl+R shortcuts, Enter). */
 const pastedTextToEvents = (text: string): PickerKeyEvent[] =>
   [...text].filter((char) => isPrintableChar(char)).map((char) => event(char));
+
+const PASTE_START_MARKER = Buffer.from("\u001B[200~", "latin1");
+const PASTE_END_MARKER = Buffer.from("\u001B[201~", "latin1");
 
 const CSI_INTRODUCER_CODE = "[".codePointAt(0) as number;
 const SS3_INTRODUCER_CODE = "O".codePointAt(0) as number;
 
-/** Ceiling on how many buffered bytes an incomplete CSI/SS3 sequence may reach before it's discarded outright. Real sequences (arrow keys, modified arrows, delete, bracketed-paste markers) are all well under this; a buffer growing past it means we're not actually looking at a real sequence (e.g. framing got out of sync), so holding it forever waiting for a final byte that will never come would leave the parser stuck. */
+/** Ceiling on how many buffered bytes an incomplete CSI/SS3 sequence may reach before it's discarded outright. Real sequences (arrow keys, modified arrows, delete) are all well under this; a buffer growing past it means we're not actually looking at a real sequence (e.g. framing got out of sync), so holding it forever waiting for a final byte that will never come would leave the parser stuck. */
 const MAX_PENDING_SEQUENCE_BYTES = 32;
-
-const PASTE_END_MARKER = Buffer.concat([
-  Buffer.from([ESC]),
-  Buffer.from(`[${BRACKETED_PASTE_END}`),
-]);
 
 /**
  * Byte-level stdin parser feeding the picker's key resolvers. Not
@@ -123,7 +116,7 @@ export class PickerKeyParser {
   private buffer: Buffer = Buffer.alloc(0);
   private inPaste = false;
 
-  /** Whether a trailing, still-ambiguous ESC byte is buffered — the caller should start/refresh a short timer while true. False during a paste even when the buffer holds a single trailing ESC byte: stepPaste's overlap handling holds that byte back as a possible prefix of the `ESC[201~` end marker, not a candidate Escape keypress, so the caller's pending-escape timer must never fire on it (doing so would flush a fake Escape and drop the marker's remaining bytes, leaving the parser stuck in paste mode -- see picker-key-parser.test.ts). */
+  /** Whether a trailing, still-ambiguous ESC byte is buffered — the caller should start/refresh a short timer while true. Never during a paste: a trailing ESC there may be the start of the end marker, not an Escape keypress. */
   hasPendingEscape(): boolean {
     return !this.inPaste && this.buffer.length === 1 && this.buffer[0] === ESC;
   }
@@ -148,14 +141,7 @@ export class PickerKeyParser {
     return results;
   }
 
-  /**
-   * One decode step while bracketed paste is active: everything up to the
-   * ESC[201~ end marker is literal text (never interpreted as a command --
-   * see the module comment), even a stray ESC the pasted content itself
-   * contains. Holds back a trailing byte run that could be an in-progress
-   * prefix of the end marker rather than emitting it as text prematurely,
-   * so a marker split across two chunks is still recognized.
-   */
+  /** One decode step inside a bracketed paste: everything up to ESC[201~ is text. A trailing run that could be a prefix of the end marker is held back so a marker split across reads is still recognized. */
   private stepPaste(): PickerKeyEvent[] | null {
     if (this.buffer.length === 0) {
       return null;
@@ -167,12 +153,17 @@ export class PickerKeyParser {
       this.inPaste = false;
       return pastedTextToEvents(text);
     }
-
-    const maxOverlap = Math.min(PASTE_END_MARKER.length - 1, this.buffer.length);
     let overlap = 0;
-    for (let candidate = maxOverlap; candidate > 0; candidate -= 1) {
-      const tail = this.buffer.subarray(this.buffer.length - candidate);
-      if (tail.equals(PASTE_END_MARKER.subarray(0, candidate))) {
+    for (
+      let candidate = Math.min(PASTE_END_MARKER.length - 1, this.buffer.length);
+      candidate > 0;
+      candidate -= 1
+    ) {
+      if (
+        this.buffer
+          .subarray(this.buffer.length - candidate)
+          .equals(PASTE_END_MARKER.subarray(0, candidate))
+      ) {
         overlap = candidate;
         break;
       }
@@ -200,8 +191,9 @@ export class PickerKeyParser {
       return [event("", { return: true })];
     }
     if (first === LF) {
+      // Ignored (not Ctrl+J, not Enter): a pasted trailing newline must not move the selection or fill the query.
       this.buffer = this.buffer.subarray(1);
-      return [event("\n")];
+      return [];
     }
     if (first === TAB) {
       this.buffer = this.buffer.subarray(1);
@@ -230,37 +222,30 @@ export class PickerKeyParser {
     }
     const second = this.buffer[1] as number;
     if (second === CSI_INTRODUCER_CODE) {
+      if (this.buffer.subarray(0, PASTE_START_MARKER.length).equals(PASTE_START_MARKER)) {
+        this.buffer = this.buffer.subarray(PASTE_START_MARKER.length);
+        this.inPaste = true;
+        return [];
+      }
       return this.applySequence(parseCsi(this.buffer));
     }
     if (second === SS3_INTRODUCER_CODE) {
       return this.applySequence(parseSs3(this.buffer));
     }
-    // Alt+<char>: ESC immediately followed by a printable byte that isn't a CSI/SS3 introducer.
-    // Consume ESC, then decode the following char(s) as meta-modified input.
+    // Not a CSI/SS3 introducer (e.g. Alt+<letter>): treat the ESC as a plain Escape and leave the following bytes to be parsed as ordinary keys.
     this.buffer = this.buffer.subarray(1);
-    const inner = this.stepUtf8Char();
-    return inner === null ? null : inner.map((keyEvent) => withMeta(keyEvent));
+    return [event("", { escape: true })];
   }
 
   private applySequence(result: ReturnType<typeof parseCsi>): PickerKeyEvent[] | null {
     if (result.kind === "incomplete") {
-      /* A sequence that never reaches its final byte (garbled framing, or a key that isn't one we recognize) would otherwise hold the buffer forever, absorbing every later byte -- including a real Ctrl+C -- as more "parameters". Cap how long we'll wait for one. */
+      /* A sequence that never reaches its final byte (garbled framing) would otherwise hold the buffer forever, absorbing every later byte as more "parameters". Cap how long we'll wait for one. Note: bytes after `ESC[` (Ctrl+C included) are held until a final byte arrives or this cap is hit. */
       if (this.buffer.length > MAX_PENDING_SEQUENCE_BYTES) {
         this.buffer = Buffer.alloc(0);
       }
       return null;
     }
-    if (result.kind === "interrupted") {
-      this.buffer = this.buffer.subarray(result.consumed);
-      return [result.event];
-    }
     this.buffer = this.buffer.subarray(result.consumed);
-    if (result.pasteStarted === true) {
-      this.inPaste = true;
-    }
-    if (result.pasteEnded === true) {
-      this.inPaste = false;
-    }
     return result.event === null ? [] : [result.event];
   }
 

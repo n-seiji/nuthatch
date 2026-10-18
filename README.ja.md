@@ -92,7 +92,7 @@ action を選ぶ間も一覧が見え続ける。横に並べられない幅 (�
 | `Tab`, `→`, `Ctrl+L`, `Ctrl+F` | 選択中の候補の action panel を開く (ここで cd / 削除 / root 切替) |
 | `Ctrl+X` | 選択中の worktree を削除 (常に先に y/N を確認) |
 | `Ctrl+R` | root clone を選択中の branch へ切替 (`external` は先に y/N を確認) |
-| `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K`/`Ctrl+J` | 選択を移動 (矢印・emacs・vim キーがすべて併用可) |
+| `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K` | 選択を移動 (矢印・emacs・vim キーがすべて併用可) |
 | `Esc` | 静かにキャンセル — exit 0、stdout は空のまま (shell wrapper は cd しない) |
 | `Ctrl+C` | 割り込みとしてキャンセル — exit 130、実際の SIGINT と同じ |
 
