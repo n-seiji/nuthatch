@@ -1,6 +1,6 @@
 {
   "name": "hop",
-  "version": "0.1.7",
+  "version": "0.2.0",
   "description": "Safe worktree operations with the hop CLI",
   "author": {
     "name": "n-seiji"
