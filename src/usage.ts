@@ -24,7 +24,7 @@ Interactive picker keys:
                          (stacks below it instead on narrow terminals)
   Ctrl+X                 Delete the selected worktree (y/N confirmation)
   Ctrl+R                 Switch the root clone to the selected branch (y/N first for an external worktree)
-  ↑/↓, Ctrl+P/N, Ctrl+K/J Move the selection (arrow, emacs, and vim keys all work)
+  ↑/↓, Ctrl+P/N, Ctrl+K Move the selection (arrow, emacs, and vim keys all work)
   Esc                    Cancel (exit 0, no output)
   Ctrl+C                 Cancel like an interrupt (exit 130, same as SIGINT)
   In the action panel: same up/down movement keys, Enter to run the highlighted

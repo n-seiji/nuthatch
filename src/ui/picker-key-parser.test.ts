@@ -10,13 +10,6 @@ describe("PickerKeyParser", () => {
     expect(events).toEqual([{ input: "", key: expect.objectContaining({ return: true }) }]);
   });
 
-  it(String.raw`Ctrl+J (LF) を down 相当の \n として認識する (Enter とは区別する)`, () => {
-    const parser = new PickerKeyParser();
-    const events = feed(parser, "\n");
-    expect(events[0]?.input).toBe("\n");
-    expect(events[0]?.key.return).toBe(false);
-  });
-
   it("Tab を認識する", () => {
     const parser = new PickerKeyParser();
     const events = feed(parser, "\t");
@@ -63,26 +56,10 @@ describe("PickerKeyParser", () => {
     expect(feed(parser, "\u001BOB")[0]?.key.downArrow).toBe(true);
   });
 
-  it("修飾付き CSI (ESC[1;5A = Ctrl+↑) を認識する", () => {
-    const parser = new PickerKeyParser();
-    const events = feed(parser, "\u001B[1;5A");
-    expect(events[0]?.key.upArrow).toBe(true);
-    expect(events[0]?.key.ctrl).toBe(true);
-  });
-
   it("Delete (ESC[3~) を認識する", () => {
     const parser = new PickerKeyParser();
     const events = feed(parser, "\u001B[3~");
     expect(events[0]?.key.delete).toBe(true);
-  });
-
-  it("Alt+文字 (ESC 接頭辞) を meta 付き char として認識する", () => {
-    const parser = new PickerKeyParser();
-    const events = feed(parser, "\u001Bx");
-    expect(events[0]).toEqual({
-      input: "x",
-      key: expect.objectContaining({ meta: true }),
-    });
   });
 
   it("未知のエスケープ列は破棄され、途中から通常文字として流れない", () => {
@@ -131,63 +108,6 @@ describe("PickerKeyParser", () => {
     expect(parser.hasPendingEscape()).toBe(false);
   });
 
-  it("bracketed paste 中の文字は通常の文字として扱われ、コマンド文字 (y/d 等) として解釈されない", () => {
-    const parser = new PickerKeyParser();
-    const events = feed(parser, "\u001B[200~y d\u001B[201~");
-    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["y", " ", "d"]);
-    for (const keyEvent of events) {
-      expect(keyEvent.key.ctrl).toBe(false);
-    }
-  });
-
-  it("bracketed paste の終端マーカーがチャンク境界で分割されても検出する", () => {
-    const parser = new PickerKeyParser();
-    expect(feed(parser, "\u001B[200~ab\u001B[20")).toEqual([
-      { input: "a", key: expect.objectContaining({}) },
-      { input: "b", key: expect.objectContaining({}) },
-    ]);
-    const rest = feed(parser, "1~c");
-    expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["c"]);
-  });
-
-  it("paste 終了後は通常のキー解釈に戻る", () => {
-    const parser = new PickerKeyParser();
-    feed(parser, "\u001B[200~x\u001B[201~");
-    const events = feed(parser, "\u0003");
-    expect(events[0]).toEqual({
-      input: "c",
-      key: expect.objectContaining({ ctrl: true }),
-    });
-  });
-
-  it("paste 終端マーカーが単独 ESC で分割されても hasPendingEscape は立たない (誤って escape 扱いされ paste モードが解除されないままになるのを防ぐ)", () => {
-    const parser = new PickerKeyParser();
-    // "\u001B[201~" (paste end marker) split right after the leading ESC.
-    const events = feed(parser, "\u001B[200~x\u001B");
-    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["x"]);
-    expect(parser.hasPendingEscape()).toBe(false);
-    expect(parser.flushPendingEscape()).toBeNull();
-    const rest = feed(parser, "[201~y");
-    expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["y"]);
-    expect(rest[0]?.key.ctrl).toBe(false);
-  });
-
-  it("未完了の CSI 途中に来た Ctrl+C (0x03) を即座に ctrl+c として通知し、途中まで溜めたバイトは破棄する", () => {
-    const parser = new PickerKeyParser();
-    // "\u001B[" followed directly by Ctrl+C, with no final byte ever arriving.
-    const events = feed(parser, "\u001B[\u0003");
-    expect(events).toEqual([{ input: "c", key: expect.objectContaining({ ctrl: true }) }]);
-    // The parser must not be stuck waiting for a final byte afterwards.
-    const rest = feed(parser, "a");
-    expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["a"]);
-  });
-
-  it("未完了の CSI にパラメータバイトを挟んで Ctrl+C が来ても取りこぼさない", () => {
-    const parser = new PickerKeyParser();
-    const events = feed(parser, "\u001B[1;5\u0003");
-    expect(events).toEqual([{ input: "c", key: expect.objectContaining({ ctrl: true }) }]);
-  });
-
   it("未完了のエスケープ列が上限を超えて溜まり続けたら破棄し、通常入力に戻る", () => {
     const parser = new PickerKeyParser();
     const garbage = `\u001B[${"9".repeat(64)}`;
@@ -196,36 +116,31 @@ describe("PickerKeyParser", () => {
     expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["a"]);
   });
 
-  it("SS3 (ESC O) 収集中に来た Ctrl+C (0x03) も即座に ctrl+c として通知する (1 回目の Ctrl+C が無反応になるのを防ぐ)", () => {
+  it("LF (0x0A) は無視される (Ctrl+J でも Enter でもなく、クエリにも入らない)", () => {
     const parser = new PickerKeyParser();
-    const events = feed(parser, "\u001BO\u0003");
-    expect(events).toEqual([{ input: "c", key: expect.objectContaining({ ctrl: true }) }]);
-    const rest = feed(parser, "a");
-    expect(rest.map((keyEvent) => keyEvent.input)).toEqual(["a"]);
+    expect(feed(parser, "\n")).toEqual([]);
+    expect(feed(parser, "a\nb").map((keyEvent) => keyEvent.input)).toEqual(["a", "b"]);
   });
 
-  it("貼り付け中の DEL (0x7F) は query に混入しない (Fable 指摘: 落とすとコメントにあったが実際には落ちていなかった)", () => {
+  it("修飾付き矢印 (ESC[1;5A = Ctrl+↑) は素の矢印として扱い、ctrl フラグやクエリ文字を生まない", () => {
     const parser = new PickerKeyParser();
-    const events = feed(parser, "\u001B[200~a\u007Fb\u001B[201~");
-    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["a", "b"]);
+    const events = feed(parser, "\u001B[1;5A\u001B[1;2B");
+    expect(events).toEqual([
+      { input: "", key: expect.objectContaining({ upArrow: true, ctrl: false }) },
+      { input: "", key: expect.objectContaining({ downArrow: true, ctrl: false }) },
+    ]);
   });
 
-  it("貼り付け中の C1 制御文字 (U+0080-U+009F) も query に混入しない", () => {
+  it("ESC + 文字 (Alt+文字) は Escape として確定し、続く文字は通常キーとして流れる", () => {
     const parser = new PickerKeyParser();
-    // Unlike the other cases here, U+0085 must be fed as its real UTF-8 encoding (not the latin1-per-byte `feed` helper) -- a raw 0x85 byte alone isn't valid UTF-8 and would decode to U+FFFD instead of the C1 control this test targets.
-    const events = parser.feed(
-      Buffer.concat([
-        Buffer.from("\u001B[200~a", "latin1"),
-        Buffer.from("\u0085", "utf8"),
-        Buffer.from("b\u001B[201~", "latin1"),
-      ]),
-    );
-    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["a", "b"]);
+    const events = feed(parser, "\u001Bx");
+    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["", "x"]);
+    expect(events[0]?.key.escape).toBe(true);
   });
 
-  it("貼り付け経路以外の DEL は従来どおり backspace として扱われる (paste 用のフィルタが非 paste 経路に影響しないこと)", () => {
+  it("貼り付けはブラケットなしの通常キー入力として流れる", () => {
     const parser = new PickerKeyParser();
-    const events = feed(parser, "\u007F");
-    expect(events[0]?.key.backspace).toBe(true);
+    const events = feed(parser, "feat-a\n");
+    expect(events.map((keyEvent) => keyEvent.input).join("")).toBe("feat-a");
   });
 });

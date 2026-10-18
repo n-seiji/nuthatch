@@ -1,11 +1,10 @@
 import { EXIT_CANCELLED } from "../domain/result.ts";
 import { type AltScreenTarget, enterAltScreen, leaveAltScreen } from "./alt-screen.ts";
-import { ESC } from "../domain/ansi.ts";
 import { PickerKeyParser, type PickerKeyEvent } from "./picker-key-parser.ts";
 
 /**
- * Owns the picker's raw-mode terminal lifecycle: alt screen, bracketed
- * paste, stdin raw mode, key decoding, resize-triggered re-renders, and
+ * Owns the picker's raw-mode terminal lifecycle: alt screen, stdin raw
+ * mode, key decoding, resize-triggered re-renders, and
  * teardown on every exit path (normal finish, Esc/Ctrl+C, an exception, or
  * an external SIGINT). The alt-screen enter/leave primitives it reuses live
  * in alt-screen.ts.
@@ -18,9 +17,6 @@ import { PickerKeyParser, type PickerKeyEvent } from "./picker-key-parser.ts";
  * same synchronous tick coalesce into a single frame (via a microtask), so
  * a burst of pasted characters doesn't repaint once per byte.
  */
-
-const ENABLE_BRACKETED_PASTE = `${ESC}[?2004h`;
-const DISABLE_BRACKETED_PASTE = `${ESC}[?2004l`;
 
 /** How long to wait after a lone ESC byte before treating it as an actual Escape keypress, rather than the start of a not-yet-complete sequence. Real terminals send a full CSI/SS3 sequence effectively atomically (well under this), so this only ever delays a genuine Escape press, never a recognized combo. */
 const PENDING_ESCAPE_TIMEOUT_MS = 25;
@@ -90,9 +86,6 @@ const createCleanup = (deps: TeardownDeps): (() => void) => {
       });
       runSafely(() => {
         deps.stdin.pause();
-      });
-      runSafely(() => {
-        deps.altScreenTarget.write(DISABLE_BRACKETED_PASTE);
       });
     }
     runSafely(() => {
@@ -248,7 +241,6 @@ export const runTerminalSession = <T>(
 
     enterAltScreen(altScreenTarget);
     if (isInteractive) {
-      altScreenTarget.write(ENABLE_BRACKETED_PASTE);
       stdin.setRawMode?.(true);
       stdin.resume();
       stdin.on("data", handleData);

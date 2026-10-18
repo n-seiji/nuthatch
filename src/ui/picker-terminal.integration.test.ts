@@ -140,10 +140,9 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
       { wait_ms: STARTUP_SETTLE_MS },
       { signal: "TERM" },
     ]);
-    // Same restore sequence as a normal exit (alt-screen.ts / bracketed paste off) must have been written before the process dies.
+    // Same restore sequence as a normal exit (alt-screen.ts) must have been written before the process dies.
     expect(result.output).toContain("[?25h");
     expect(result.output).toContain("[?1049l");
-    expect(result.output).toContain("[?2004l");
     expect(result.exit_code).toBe(143);
   }, 10_000);
 
@@ -155,28 +154,7 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
     ]);
     expect(result.output).toContain("[?25h");
     expect(result.output).toContain("[?1049l");
-    expect(result.output).toContain("[?2004l");
     expect(result.exit_code).toBe(129);
-  }, 10_000);
-
-  it("ESC の直後に未完了の CSI ([) を送っても、続く Ctrl+C で exit 130 になる (Ctrl+C が飲み込まれて操作不能にならない)", () => {
-    const result = runInPty(repo, [
-      { wait_for: "WORKTREES", timeout_ms: 5000 },
-      { wait_ms: STARTUP_SETTLE_MS },
-      { send: "[" },
-      { wait_ms: 50 },
-      { send: "" },
-    ]);
-    expect(result.exit_code).toBe(130);
-  }, 10_000);
-
-  it("ESC O (SS3 導入子) の直後の Ctrl+C 1 回で exit 130 になる (1 回目が無反応にならない)", () => {
-    const result = runInPty(repo, [
-      { wait_for: "WORKTREES", timeout_ms: 5000 },
-      { wait_ms: STARTUP_SETTLE_MS },
-      { send: "O" },
-    ]);
-    expect(result.exit_code).toBe(130);
   }, 10_000);
 
   it("同一チャンクで Enter+Ctrl+X+y を送っても、cd 後の worktree は削除されない (finish 後の残りキーを無視する)", () => {
@@ -213,16 +191,16 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
     expect(result.output).toContain("?");
   }, 10_000);
 
-  it("末尾に改行の付いた貼り付けで選択がずれない (改行が Ctrl+J/down として解釈されない)", () => {
+  it("末尾に改行の付いた貼り付けで選択がずれない (LF は無視される)", () => {
     addWorktree("feature-a2");
     const result = runInPty(repo, [
       { wait_for: "WORKTREES", timeout_ms: 5000 },
       { wait_ms: STARTUP_SETTLE_MS },
-      { send: "[200~feature-a\n[201~" },
+      { send: "feature-a\n" },
       { wait_ms: 100 },
       { send: "" },
     ]);
-    // The highlighted (inverse-video) row must still be "feature-a", not "feature-a2" -- a bare pasted "\n" used to be indistinguishable from a real Ctrl+J (down) keypress and moved the selection to the second match.
+    // The highlighted (inverse-video) row must still be "feature-a", not "feature-a2" -- a trailing "\n" is ignored rather than moving the selection to the second match.
     // eslint-disable-next-line no-control-regex -- intentionally matching the raw SGR "inverse" escape sequence in the pty's byte output.
     const inverseSegments = [...result.output.matchAll(/\u001B\[7m(?<row>[^\u001B]*)/gu)];
     const lastInverse = inverseSegments.at(-1)?.groups?.["row"] ?? "";

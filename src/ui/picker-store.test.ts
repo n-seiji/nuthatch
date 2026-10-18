@@ -6,7 +6,6 @@ import type { PickerKeyModifiers } from "./picker-keys.ts";
 
 const NO_MODIFIERS: PickerKeyModifiers = {
   ctrl: false,
-  meta: false,
   escape: false,
   return: false,
   tab: false,
