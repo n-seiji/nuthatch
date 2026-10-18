@@ -1,23 +1,13 @@
-import { absoluteCandidates, splitPathEnv } from "./posix-path.ts";
-
 /**
- * The pure pieces of `hop --update`: where releases are published, how a
- * version or a checksum file is read, and which PATH entries may hold a
- * package manager. Every network address here is fixed — hop never fetches a
+ * The pure pieces of `hop --update`: where releases are published and how a
+ * version or a checksum file is read. Every network address here is fixed — hop never fetches a
  * URL it was handed. How the install method is decided lives in
  * install-method.ts.
  */
 
-/** The npm package name hop is published under. */
-export const NPM_PACKAGE = "@n-seiji/nuthatch";
-export const NPM_PACKAGE_LATEST = `${NPM_PACKAGE}@latest`;
-
 const GITHUB_REPO = "n-seiji/nuthatch";
 
 export const GITHUB_LATEST_RELEASE_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-
-/** The registry wants the scope's slash percent-encoded: `@scope%2Fname`. */
-export const NPM_LATEST_URL = `https://registry.npmjs.org/${NPM_PACKAGE.replace("/", "%2F")}/latest`;
 
 /**
  * An asset of one specific release. The URL names the tag that was resolved
@@ -48,12 +38,6 @@ export const compareVersions = (a: string, b: string): number => {
   const [aMajor, aMinor, aPatch] = parseVersion(a);
   const [bMajor, bMinor, bPatch] = parseVersion(b);
   return aMajor - bMajor || aMinor - bMinor || aPatch - bPatch;
-};
-
-/** Returns `text` unchanged when it is a plain `x.y.z` version, throws otherwise. */
-export const requireVersion = (text: string): string => {
-  parseVersion(text);
-  return text;
 };
 
 /** `v0.1.4` -> `0.1.4`. The release workflow only ever publishes `vX.Y.Z` tags. */
@@ -90,24 +74,6 @@ export const parseChecksumFile = (text: string, assetName: string): ChecksumFile
   }
   return { ok: true, digest: digest.toLowerCase() };
 };
-
-/**
- * Absolute candidate paths for `name`: `preferredDir` first when there is
- * one, then the PATH entries in order. A relative entry is dropped rather
- * than resolved against the cwd, for the same reason as git's
- * (git-executable.ts): hop must never run a program out of whatever
- * directory it happens to be started in. No fallback directories here — an
- * upgrade command that is not found is reported, not guessed.
- */
-export const pathExecutableCandidates = (
-  name: string,
-  pathEnv?: string,
-  preferredDir: string | null = null,
-): readonly string[] =>
-  absoluteCandidates(
-    [...(preferredDir === null ? [] : [preferredDir]), ...splitPathEnv(pathEnv)],
-    name,
-  );
 
 /**
  * An fs error saying hop may not write where it needs to: no permission

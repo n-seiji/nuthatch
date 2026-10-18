@@ -42,8 +42,8 @@ hop -- <branch>    # escape a branch name that collides with a reserved command
 hop --help         # print usage (also -h / hop help)
 
 hop --version          # print hop's version
-hop --update           # update hop to the latest release, the way it was installed
-hop --update --check   # only report what --update would do — changes nothing
+hop --update           # replace a standalone binary with the latest release (other installs: prints how to update)
+hop --update --check   # only report whether an update is available — changes nothing
 ```
 
 If Git reports the same branch checked out in multiple worktrees, the
@@ -151,27 +151,27 @@ binary yet — use the npm install instead.
 ### Updating
 
 ```sh
-hop --update          # update to the latest release, the way hop was installed
-hop --update --check  # just report: current, latest, method, and the command it would run
+hop --update          # replace a standalone binary with the latest release
+hop --update --check  # just report: current, latest, how hop was installed, what to do
 hop --version         # which version do I have?
 ```
 
-`hop --update` detects how hop was installed. A binary from `install.sh` is
-replaced in place, but only if its directory is writable (checked before the
-binary or its checksum is downloaded) and only after its SHA-256 matches the
-`.sha256` attached to the release — on a mismatch nothing is replaced. A mise /
-npm / bun install is updated by running that tool's own upgrade command from
-your home directory (`mise upgrade …`,
-`npm install -g --prefix <the prefix hop lives in> @n-seiji/nuthatch@latest`,
-`bun add -g @n-seiji/nuthatch@latest`), so a version pinned in your global mise
-config still wins (hop asks mise first and warns when it has nothing to
-upgrade), a project's own `mise.toml` cannot interfere, and an npm update lands
-in the prefix hop is already in. `npx` / `bunx`, a source checkout, a binary
-that Homebrew, Nix, aqua, proto or another version manager keeps its own copy
-of, and layouts hop does not drive (a pnpm or yarn global, a project
-dependency) are refused with a note on what to do instead. This is the only
-thing hop does over the network: HTTPS requests to fixed GitHub and npm
-addresses, each with a timeout and a size cap.
+`hop --update` only replaces the binary that `install.sh` installs, and only if
+its directory is writable (checked before the binary or its checksum is
+downloaded) and its SHA-256 matches the `.sha256` attached to the release; on a
+mismatch nothing is replaced. For any other install it runs nothing, makes no
+request, and prints one line saying how to update it (exit 1):
+
+| Installed with | Update with |
+|---|---|
+| `install.sh` (binary in `~/.local/bin`) | `hop --update`, or re-run `install.sh` |
+| mise | `mise upgrade` |
+| npm / bun / pnpm / yarn global | `npm i -g @n-seiji/nuthatch@latest` (or your package manager's equivalent) |
+| Homebrew, Nix, aqua, proto, a source checkout, any other tool | that tool's own upgrade command |
+
+`hop --update --check` works for every install and reports the same hint. The
+only network traffic is HTTPS requests to fixed GitHub addresses, each with a
+timeout and a size cap.
 
 ## Troubleshooting
 

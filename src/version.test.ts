@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "bun:test";
-import { requireVersion } from "./domain/self-update.ts";
+import { compareVersions } from "./domain/self-update.ts";
 import { VERSION } from "./version.ts";
 
 describe("VERSION", () => {
@@ -12,6 +12,6 @@ describe("VERSION", () => {
   });
 
   it("self-update が比較できる x.y.z 形式である", () => {
-    expect(requireVersion(VERSION)).toBe(VERSION);
+    expect(compareVersions(VERSION, VERSION)).toBe(0);
   });
 });

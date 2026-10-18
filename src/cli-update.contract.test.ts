@@ -9,9 +9,9 @@ import { createTestRepo, type TestRepo } from "./testing/repo.ts";
 /**
  * Process-level contract for `hop --version` and `hop --update`. Every run
  * here starts from this source checkout (`bun run src/cli.ts`), which
- * `hop --update` must refuse as a "source checkout" — the install method is
- * decided before any network request, so these tests need no network and can
- * never change anything. Only `--check` and malformed invocations are run:
+ * `hop --update` must refuse with a hint — the install method is decided
+ * before any network request, so these tests need no network and can never
+ * change anything. Only the refused update and malformed invocations are run:
  * nothing here would be safe to run for real.
  */
 
@@ -40,16 +40,16 @@ describe("hop --version", () => {
 });
 
 describe("hop --update (このソースチェックアウトから)", () => {
-  it("--update --check はソースチェックアウトとして拒否し、exit 1、stdout は空のまま", async () => {
-    const result = await hop(["--update", "--check"]);
+  it("--update は案内の 1 行だけを出して拒否し、exit 1、stdout は空のまま", async () => {
+    const result = await hop(["--update"]);
 
     expect(result.exitCode).toBe(EXIT_GENERAL_ERROR);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("source checkout");
+    expect(result.stderr).toBe("Update hop with the tool you installed it with.\n");
   });
 
   it("--json 付きなら、data の無い update envelope を stdout に出す", async () => {
-    const result = await hop(["--update", "--check", "--json"]);
+    const result = await hop(["--update", "--json"]);
 
     expect(result.exitCode).toBe(EXIT_GENERAL_ERROR);
     const envelope = parse(UpdateEnvelopeSchema, JSON.parse(result.stdout));
@@ -58,7 +58,7 @@ describe("hop --update (このソースチェックアウトから)", () => {
       command: "update",
       warnings: [],
     });
-    expect(result.stderr).toContain("source checkout");
+    expect(result.stderr).toContain("Update hop with the tool you installed it with.");
   });
 
   it("未知の引数は exit 2 の usage error で拒否する (--chek の typo を --check と取り違えない)", async () => {
@@ -95,7 +95,11 @@ describe("hop --update --help", () => {
       // oxlint-disable-next-line no-await-in-loop
       const result = await hop(args);
 
-      expect(result).toEqual({ exitCode: EXIT_SUCCESS, stdout: "", stderr: plain.stderr });
+      expect(result).toEqual({
+        exitCode: EXIT_SUCCESS,
+        stdout: "",
+        stderr: plain.stderr,
+      });
     }
   });
 });

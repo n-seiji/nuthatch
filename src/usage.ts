@@ -14,7 +14,7 @@ export const USAGE = `Usage: hop [command] [options]
   hop root -             Switch the root clone back
   hop init zsh           Print the zsh shell integration (eval "$(hop init zsh)")
 
-  hop --update           Update hop to the latest release, the way it was installed
+  hop --update           Replace a standalone binary with the latest release (else: how to update)
   hop --update --check   Only report whether an update is available; change nothing
   hop --version          Print hop's version
 
