@@ -256,10 +256,10 @@ describe("bracketed paste を picker に通す", () => {
   it.each([
     ["Tab の後に d (panel を開いて delete)", "\td"],
     ["Tab の後に r (panel を開いて switchRoot)", "\tr"],
-    ["main\tdone 形式", "main\tdone"],
+    ["branch\tdone 形式 (候補に一致する prefix)", "feat\tdone"],
     ["Ctrl+X の後に y (自前で delete を確定)", "\u0018y"],
     ["Ctrl+R (switchRoot ショートカット)", "\u0012"],
-    ["CR (選択して抜ける)", "ab\r"],
+    ["CR (候補に一致する prefix の後で選択して抜ける)", "feat\r"],
   ] as const)("貼り付け内の %s は panel も mutation も起こさない", async (_label, pasted) => {
     const deleteWorktree = mock<PickerCallbacks["deleteWorktree"]>(() =>
       Promise.resolve({ ok: true }),
