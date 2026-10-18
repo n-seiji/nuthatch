@@ -143,6 +143,7 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
     // Same restore sequence as a normal exit (alt-screen.ts) must have been written before the process dies.
     expect(result.output).toContain("[?25h");
     expect(result.output).toContain("[?1049l");
+    expect(result.output).toContain("[?2004l");
     expect(result.exit_code).toBe(143);
   }, 10_000);
 
@@ -154,6 +155,7 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
     ]);
     expect(result.output).toContain("[?25h");
     expect(result.output).toContain("[?1049l");
+    expect(result.output).toContain("[?2004l");
     expect(result.exit_code).toBe(129);
   }, 10_000);
 
@@ -191,16 +193,16 @@ describe("picker (real pty, self-drawn terminal UI)", () => {
     expect(result.output).toContain("?");
   }, 10_000);
 
-  it("末尾に改行の付いた貼り付けで選択がずれない (LF は無視される)", () => {
+  it("末尾に CR の付いた bracketed paste は選択も移動もしない (制御文字は query に入らない)", () => {
     addWorktree("feature-a2");
     const result = runInPty(repo, [
       { wait_for: "WORKTREES", timeout_ms: 5000 },
       { wait_ms: STARTUP_SETTLE_MS },
-      { send: "feature-a\n" },
+      { send: "\u001B[200~feature-a\r\u001B[201~" },
       { wait_ms: 100 },
       { send: "" },
     ]);
-    // The highlighted (inverse-video) row must still be "feature-a", not "feature-a2" -- a trailing "\n" is ignored rather than moving the selection to the second match.
+    // The highlighted (inverse-video) row must still be "feature-a", not "feature-a2" -- a pasted trailing CR/LF is dropped rather than selecting (which would exit the picker) or moving the selection to the second match.
     // eslint-disable-next-line no-control-regex -- intentionally matching the raw SGR "inverse" escape sequence in the pty's byte output.
     const inverseSegments = [...result.output.matchAll(/\u001B\[7m(?<row>[^\u001B]*)/gu)];
     const lastInverse = inverseSegments.at(-1)?.groups?.["row"] ?? "";

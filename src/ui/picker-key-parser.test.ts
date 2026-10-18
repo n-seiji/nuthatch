@@ -138,9 +138,71 @@ describe("PickerKeyParser", () => {
     expect(events[0]?.key.escape).toBe(true);
   });
 
-  it("貼り付けはブラケットなしの通常キー入力として流れる", () => {
+  it("bracketed paste の内容は query 用の文字だけになり、コマンド文字 (y/d 等) も ctrl にならない", () => {
     const parser = new PickerKeyParser();
-    const events = feed(parser, "feat-a\n");
-    expect(events.map((keyEvent) => keyEvent.input).join("")).toBe("feat-a");
+    const events = feed(parser, "\u001B[200~y d\u001B[201~");
+    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["y", " ", "d"]);
+    for (const keyEvent of events) {
+      expect(keyEvent.key.ctrl).toBe(false);
+    }
+  });
+
+  it("貼り付け内の Tab / CR / LF / Ctrl+X / Ctrl+R / 他の C0 は落とされ、キーイベントを生まない", () => {
+    const parser = new PickerKeyParser();
+    const events = feed(parser, "\u001B[200~a\tb\rc\nd\u0018e\u0012f\u0003g\u0001h\u001B[201~");
+    expect(events.map((keyEvent) => keyEvent.input)).toEqual([..."abcdefgh"]);
+    for (const keyEvent of events) {
+      expect(keyEvent.key).toEqual(
+        expect.objectContaining({ tab: false, return: false, ctrl: false }),
+      );
+    }
+  });
+
+  it("貼り付け内の DEL と C1 制御文字 (U+0080-U+009F) は query に混入しない", () => {
+    const parser = new PickerKeyParser();
+    const events = parser.feed(
+      Buffer.concat([
+        Buffer.from("\u001B[200~a\u007F", "latin1"),
+        Buffer.from("\u0085", "utf8"),
+        Buffer.from("b\u001B[201~", "latin1"),
+      ]),
+    );
+    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["a", "b"]);
+    for (const keyEvent of events) {
+      expect(keyEvent.key.backspace).toBe(false);
+    }
+  });
+
+  it("貼り付けの開始・終了マーカーがチャンク境界で分割されても検出する", () => {
+    const parser = new PickerKeyParser();
+    expect(feed(parser, "\u001B[20")).toEqual([]);
+    expect(feed(parser, "0~ab\t\u001B[20").map((keyEvent) => keyEvent.input)).toEqual(["a", "b"]);
+    expect(feed(parser, "1~c").map((keyEvent) => keyEvent.input)).toEqual(["c"]);
+  });
+
+  it("貼り付け終了後は通常のキー解釈に戻る", () => {
+    const parser = new PickerKeyParser();
+    feed(parser, "\u001B[200~x\u001B[201~");
+    expect(feed(parser, "\u0003")[0]).toEqual({
+      input: "c",
+      key: expect.objectContaining({ ctrl: true }),
+    });
+    expect(feed(parser, "\t")[0]?.key.tab).toBe(true);
+  });
+
+  it("貼り付け終端マーカーが単独 ESC で分割されても hasPendingEscape は立たない", () => {
+    const parser = new PickerKeyParser();
+    const events = feed(parser, "\u001B[200~x\u001B");
+    expect(events.map((keyEvent) => keyEvent.input)).toEqual(["x"]);
+    expect(parser.hasPendingEscape()).toBe(false);
+    expect(parser.flushPendingEscape()).toBeNull();
+    expect(feed(parser, "[201~y").map((keyEvent) => keyEvent.input)).toEqual(["y"]);
+  });
+
+  it("ブラケットなしの生 CR は Enter、生 Tab は Tab として流れる (貼り付け保護は bracketed paste が担う)", () => {
+    const parser = new PickerKeyParser();
+    const events = feed(parser, "a\r\t");
+    expect(events[1]?.key.return).toBe(true);
+    expect(events[2]?.key.tab).toBe(true);
   });
 });

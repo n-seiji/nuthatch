@@ -63,7 +63,7 @@ describe("resolvePickerKeyAction", () => {
     });
   });
 
-  it("矢印キーと Ctrl+P/N、Ctrl+K/J は up/down になる (emacs と vim の併存)", () => {
+  it("矢印キーと Ctrl+P/N、Ctrl+K は up/down になる (emacs と vim の併存)", () => {
     expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, upArrow: true })).toEqual({
       type: "up",
     });
@@ -140,7 +140,7 @@ describe("resolvePanelKeyAction", () => {
     });
   });
 
-  it("矢印キーと Ctrl+P/N、Ctrl+K/J は up/down になる", () => {
+  it("矢印キーと Ctrl+P/N、Ctrl+K は up/down になる", () => {
     expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, upArrow: true })).toEqual({
       type: "up",
     });
