@@ -1,5 +1,5 @@
 import type { PickerActionKind } from "../domain/actions.ts";
-import type { PickCandidate } from "../domain/candidates.ts";
+import type { PickCandidate } from "../domain/schema.ts";
 import type { PickerCancelReason } from "./picker-keys.ts";
 
 /** An in-picker mutation's failure, shown inline in the panel (e.g. "dirty, use rm --force"). */
@@ -37,7 +37,7 @@ export type PickerOutcome =
  * 0, empty stdout — the shell wrapper just doesn't cd), Ctrl+C reads as a
  * real interrupt (exit 130, matching a genuine SIGINT).
  */
-export interface PickerCancellation {
+interface PickerCancellation {
   readonly type: "cancelled";
   readonly reason: PickerCancelReason;
 }

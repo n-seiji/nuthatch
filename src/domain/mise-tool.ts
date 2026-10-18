@@ -2,15 +2,12 @@ import { baseName, parentDir } from "./posix-path.ts";
 
 /**
  * The pure half of recognising a mise install. mise keeps each tool under
- * `<mise data dir>/installs/<tool>/<version>/…` and records in the tool dir
- * how it was installed. Reading that marker is infra's job; where the tool dir
- * is, what the two marker formats look like, and whether the tool is *hop*
- * are decided here, so they stay unit-testable without a filesystem.
- *
- * The last point matters because `installs/` also holds the tools hop merely
- * lives inside: an `npm i -g` on a mise-managed node puts hop under
- * `installs/node/<version>/lib/node_modules/…`, next to node's own marker
- * (`core:node`). That marker says nothing about hop.
+ * `<mise data dir>/installs/<tool>/<version>/…` with a marker recording how
+ * it was installed. Infra reads the marker; locating the tool dir, parsing
+ * the two marker formats and deciding whether the tool is *hop* happen here.
+ * The last matters because `installs/` also holds tools hop merely lives
+ * inside: `npm i -g` on a mise-managed node puts hop under
+ * `installs/node/…`, next to node's own marker (`core:node`).
  */
 
 /** The mise tool directory hop lives in, and what its marker records. */

@@ -3,11 +3,10 @@ import { absoluteCandidates, splitPathEnv } from "./posix-path.ts";
 /**
  * Decides *where* the git executable may live. hop resolves git to an
  * absolute path itself instead of handing the bare name "git" to
- * `child_process` and hoping the spawn implementation searches PATH the way
- * we expect: a compiled Bun binary reported `ENOENT: no such file or
- * directory, posix_spawn 'git'` on macOS even with git installed
- * (see issue #9), and a GUI-launched shell can easily miss the dir git was
- * installed into. Probing the filesystem is infra's job (this layer stays
+ * `child_process` and hoping the spawn implementation searches PATH: a
+ * compiled Bun binary can fail with `ENOENT: no such file or directory,
+ * posix_spawn 'git'` on macOS even with git installed, and a GUI-launched
+ * shell can easily miss the dir git was installed into. Probing the filesystem is infra's job (this layer stays
  * pure); this module only produces the ordered candidate list and the
  * user-facing message when none of them exists.
  *

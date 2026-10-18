@@ -1,4 +1,4 @@
-import { isWithin } from "./classify.ts";
+import { isWithinOrSelf } from "./classify.ts";
 
 /**
  * Filters relative paths parsed from `git status --porcelain -z
@@ -31,7 +31,7 @@ export const filterOutNestedWorktreePaths = (
 
   return relativePaths.filter((relativePath) => {
     const absolutePath = stripTrailingSlash(`${target}/${relativePath}`);
-    return !others.some((other) => absolutePath === other || isWithin(other, absolutePath));
+    return !others.some((other) => isWithinOrSelf(other, absolutePath));
   });
 };
 

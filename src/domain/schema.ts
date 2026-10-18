@@ -97,13 +97,10 @@ const jsonEnvelopeSchema = <TDataSchema extends GenericSchema>(dataSchema: TData
   });
 
 export const LsEnvelopeSchema = jsonEnvelopeSchema(array(LsEntrySchema));
-export type LsEnvelope = InferOutput<typeof LsEnvelopeSchema>;
 
 export const JumpEnvelopeSchema = jsonEnvelopeSchema(JumpDataSchema);
-export type JumpEnvelope = InferOutput<typeof JumpEnvelopeSchema>;
 
 export const RmEnvelopeSchema = jsonEnvelopeSchema(RmDataSchema);
-export type RmEnvelope = InferOutput<typeof RmEnvelopeSchema>;
 
 const NullableStringSchema = nullable(string());
 
@@ -117,7 +114,6 @@ export const RootDataSchema = object({
 export type RootData = InferOutput<typeof RootDataSchema>;
 
 export const RootEnvelopeSchema = jsonEnvelopeSchema(RootDataSchema);
-export type RootEnvelope = InferOutput<typeof RootEnvelopeSchema>;
 
 export const GarbageReasonSchema = picklist(["prunable", "merged", "gone"]);
 export type GarbageReason = InferOutput<typeof GarbageReasonSchema>;
@@ -140,10 +136,8 @@ export const CleanDataSchema = object({
 export type CleanData = InferOutput<typeof CleanDataSchema>;
 
 export const CleanEnvelopeSchema = jsonEnvelopeSchema(CleanDataSchema);
-export type CleanEnvelope = InferOutput<typeof CleanEnvelopeSchema>;
 
 export const PickEnvelopeSchema = jsonEnvelopeSchema(PickDataSchema);
-export type PickEnvelope = InferOutput<typeof PickEnvelopeSchema>;
 
 const UpdateCommandSchema = array(string());
 
@@ -170,4 +164,3 @@ export const UpdateDataSchema = object({
 export type UpdateData = InferOutput<typeof UpdateDataSchema>;
 
 export const UpdateEnvelopeSchema = jsonEnvelopeSchema(UpdateDataSchema);
-export type UpdateEnvelope = InferOutput<typeof UpdateEnvelopeSchema>;

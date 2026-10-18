@@ -31,7 +31,7 @@ const QUERY_PREFIX = "hop: ";
  * truncated, not its head -- the user is actively typing at the end of
  * it, so cutting the end off (as picker-frame.ts's generic
  * truncateLineToWidth, applied to every other line, does) would hide the
- * very characters they just typed (Fable-reported). `maxWidth` is the
+ * very characters they just typed. `maxWidth` is the
  * full line's budget; the "hop: " prefix and, for an empty query, the "
  * (type to filter)" hint both come out of it first.
  */

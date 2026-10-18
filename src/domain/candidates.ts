@@ -1,7 +1,4 @@
-import type { Worktree } from "./model.ts";
-import type { PickCandidate } from "./schema.ts";
-
-export type { PickCandidate } from "./schema.ts";
+import type { PickCandidate, Worktree } from "./schema.ts";
 
 /**
  * Builds the full picker candidate list: every existing worktree, plus every

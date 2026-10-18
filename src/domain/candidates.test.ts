@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { buildPickCandidates, candidateBranchLabel, type PickCandidate } from "./candidates.ts";
-import type { Worktree } from "./model.ts";
+import { buildPickCandidates, candidateBranchLabel } from "./candidates.ts";
+import type { PickCandidate, Worktree } from "./schema.ts";
 
 const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
   path: "/repo",

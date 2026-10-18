@@ -1,5 +1,5 @@
 import { managerRootReason } from "./install-roots.ts";
-import { type ScriptInstall, detectScriptInstall } from "./install-script.ts";
+import { type ScriptInstall, detectScriptInstall, unsupported } from "./install-script.ts";
 import {
   type MiseToolFacts,
   isHopBackend,
@@ -11,11 +11,7 @@ import { NPM_PACKAGE, NPM_PACKAGE_LATEST } from "./self-update.ts";
 
 /**
  * Decides how this hop was installed, and therefore how `hop --update` may
- * update it. Gathering the facts (realpath, reading mise's marker file) is
- * infra's job; this layer only turns them into a decision, so the table in
- * `detectInstallMethod` stays unit-testable without touching the filesystem.
- *
- * Paths are POSIX: hop only ships for darwin/linux.
+ * update it. Infra gathers the facts; this layer only decides. Paths are POSIX.
  */
 
 /** Facts about this hop process, gathered once by infra. */
@@ -86,11 +82,6 @@ export const releaseAssetName = (platform: string, arch: string): string | null 
 const GITHUB_BACKEND_PREFIXES = ["github:", "ubi:", "aqua:"] as const;
 const NPM_BACKEND_PREFIX = "npm:";
 
-const unsupported = (reason: string): InstallMethod => ({
-  kind: "unsupported",
-  reason,
-});
-
 const miseChannel = (tool: string): ReleaseChannel | null => {
   if (tool.startsWith(NPM_BACKEND_PREFIX)) {
     return "npm";
@@ -123,16 +114,11 @@ const detectUnmarkedToolDir = (dir: string, compiled: boolean): InstallMethod | 
 
 /**
  * Whether mise installed hop: only if the tool dir hop lives in says so. A
- * readable marker for *another* tool (`core:node`, `core:bun`, …) means hop
- * is merely inside that tool's install. For a script (`npm i -g` on a
- * mise-managed node) that marker is ignored and hop is classified by the
- * other rules, as if mise were not there; a compiled binary there is the same
- * case as an unreadable marker and is refused. Neither keeps looking higher
- * up: a path inside one tool dir is never inside a second one that is hop's
- * own.
- *
- * The marker's id may carry options (`github:n-seiji/nuthatch[bin=hop]`);
- * they are not part of the tool's name, for matching or for `mise upgrade`.
+ * marker for *another* tool (`core:node`, …) means hop is merely inside that
+ * tool's install: a script is then classified by the other rules, a compiled
+ * binary is refused (as with an unreadable marker). Never looks higher up: a
+ * path inside one tool dir is never inside a second one that is hop's own.
+ * Options on the marker's id (`[bin=hop]`) are not part of the tool's name.
  *
  * Null: not a mise install of hop, keep classifying.
  */

@@ -203,7 +203,7 @@ const runInit = async (tokens: readonly string[]): Promise<void> => {
     return;
   }
   const { renderInit } = await import("./commands/init.ts");
-  process.stdout.write(renderInit({ shell: "zsh" }));
+  process.stdout.write(renderInit());
 };
 
 const RESERVED_COMMANDS: Readonly<Record<string, (tokens: readonly string[]) => Promise<void>>> = {
