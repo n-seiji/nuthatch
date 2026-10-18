@@ -1,4 +1,4 @@
-import { ESC } from "./ansi.ts";
+import { ESC } from "../domain/ansi.ts";
 
 const ENTER_ALT_SCREEN = `${ESC}[?1049h`;
 const LEAVE_ALT_SCREEN = `${ESC}[?1049l`;

@@ -1,5 +1,5 @@
 import { displayWidth, graphemes } from "../domain/display-width.ts";
-import { ESC } from "./ansi.ts";
+import { ESC, SGR, SGR_RESET } from "../domain/ansi.ts";
 
 /**
  * Pure frame builder for the self-drawn picker.
@@ -19,7 +19,6 @@ import { ESC } from "./ansi.ts";
 
 const CURSOR_HOME = `${ESC}[H`;
 const CLEAR_TO_END = `${ESC}[J`;
-const SGR_RESET = `${ESC}[0m`;
 
 export type LineStyle =
   | "plain"
@@ -40,24 +39,15 @@ export interface StyledSpan {
 /** One display line, as a sequence of spans (so e.g. "hop: " + cyan query + dim hint can share a row). */
 export type StyledLine = readonly StyledSpan[];
 
-const SGR_CODES: Record<LineStyle, string> = {
-  plain: "",
-  cyan: `${ESC}[36m`,
-  dim: `${ESC}[2m`,
-  "bold-dim": `${ESC}[1m${ESC}[2m`,
-  inverse: `${ESC}[7m`,
-  red: `${ESC}[31m`,
-  green: `${ESC}[32m`,
-  yellow: `${ESC}[33m`,
-  magenta: `${ESC}[35m`,
-};
+const sgrCode = (style: Exclude<LineStyle, "plain">): string =>
+  style === "bold-dim" ? `${SGR.bold}${SGR.dim}` : SGR[style];
 
 const renderSpan = (span: StyledSpan, colorEnabled: boolean): string => {
   const style = span.style ?? "plain";
   if (!colorEnabled || style === "plain") {
     return span.text;
   }
-  return `${SGR_CODES[style]}${span.text}${SGR_RESET}`;
+  return `${sgrCode(style)}${span.text}${SGR_RESET}`;
 };
 
 const lineWidth = (line: StyledLine): number =>

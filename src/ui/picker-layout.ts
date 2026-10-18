@@ -1,4 +1,5 @@
 import { candidateBranchLabel } from "../domain/candidates.ts";
+import { shortenHome } from "../domain/posix-path.ts";
 import type { PickCandidate, WorktreeKind } from "../domain/schema.ts";
 import {
   displayWidth,
@@ -130,13 +131,7 @@ export const shortenPath = (
   path: string,
   homeDir: string,
   maxLength: number = MAX_PATH_LENGTH,
-): string => {
-  const withTilde =
-    homeDir.length > 0 && (path === homeDir || path.startsWith(`${homeDir}/`))
-      ? `~${path.slice(homeDir.length)}`
-      : path;
-  return truncateToWidthKeepingTail(withTilde, maxLength);
-};
+): string => truncateToWidthKeepingTail(shortenHome(path, homeDir), maxLength);
 
 const candidatePathLabel = (
   candidate: PickCandidate,

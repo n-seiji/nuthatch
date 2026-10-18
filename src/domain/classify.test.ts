@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { classifyWorktreePath } from "./classify.ts";
+import { classifyWorktreePath, isWithin, isWithinOrSelf } from "./classify.ts";
 
 describe("classifyWorktreePath", () => {
   const root = "/home/user/ghq/github.com/user/repo";
@@ -28,5 +28,23 @@ describe("classifyWorktreePath", () => {
 
   it("managed root 自体は managed と分類する", () => {
     expect(classifyWorktreePath(managedRoot, root, managedRoot)).toBe("managed");
+  });
+});
+
+describe("isWithin / isWithinOrSelf", () => {
+  it("子孫は内側、自身は isWithinOrSelf のみ内側と判定する", () => {
+    expect(isWithin("/a/foo", "/a/foo/b")).toBe(true);
+    expect(isWithin("/a/foo", "/a/foo")).toBe(false);
+    expect(isWithinOrSelf("/a/foo", "/a/foo")).toBe(true);
+    expect(isWithinOrSelf("/a/foo", "/a/foo/b")).toBe(true);
+  });
+
+  it("名前の接頭辞が同じだけの兄弟は内側と判定しない", () => {
+    expect(isWithinOrSelf("/a/f", "/a/foo")).toBe(false);
+  });
+
+  it("末尾スラッシュ付きの parent でも同じ結果になる", () => {
+    expect(isWithinOrSelf("/a/foo/", "/a/foo/b")).toBe(true);
+    expect(isWithinOrSelf("/a/foo/", "/a/foo/")).toBe(true);
   });
 });

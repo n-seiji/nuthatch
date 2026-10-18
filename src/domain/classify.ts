@@ -17,6 +17,10 @@ export const isWithin = (parent: string, child: string): boolean => {
   return child.startsWith(parentWithSlash);
 };
 
+/** `isWithin` that also accepts `child === parent`. */
+export const isWithinOrSelf = (parent: string, child: string): boolean =>
+  parent === child || isWithin(parent, child);
+
 /**
  * Classifies a worktree path relative to the repo's root clone path and its
  * managed worktree root (`_worktree/<repo>`). All inputs must be realpath'd.

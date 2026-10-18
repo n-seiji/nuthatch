@@ -22,7 +22,7 @@ const NODE_MODULES_MARKER = `/node_modules/${NPM_PACKAGE}/`;
 const PNPM_GLOBAL_MARKER = "/pnpm/global/";
 const YARN_GLOBAL_MARKER = "/yarn/global/";
 
-const unsupported = (reason: string): ScriptInstall => ({ kind: "unsupported", reason });
+export const unsupported = (reason: string): ScriptInstall => ({ kind: "unsupported", reason });
 
 /**
  * The npm global prefix `scriptPath` would belong to if it were an npm global

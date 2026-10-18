@@ -1,5 +1,5 @@
 import { managerRootReason } from "./install-roots.ts";
-import { type ScriptInstall, detectScriptInstall } from "./install-script.ts";
+import { type ScriptInstall, detectScriptInstall, unsupported } from "./install-script.ts";
 import {
   type MiseToolFacts,
   isHopBackend,
@@ -85,11 +85,6 @@ export const releaseAssetName = (platform: string, arch: string): string | null 
 
 const GITHUB_BACKEND_PREFIXES = ["github:", "ubi:", "aqua:"] as const;
 const NPM_BACKEND_PREFIX = "npm:";
-
-const unsupported = (reason: string): InstallMethod => ({
-  kind: "unsupported",
-  reason,
-});
 
 const miseChannel = (tool: string): ReleaseChannel | null => {
   if (tool.startsWith(NPM_BACKEND_PREFIX)) {

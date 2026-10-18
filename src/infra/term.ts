@@ -1,6 +1,10 @@
 import { createInterface } from "node:readline";
 import type { TermPort } from "../domain/ports.ts";
 
+/** Whether SGR color codes should go to `stream`: it is a TTY and NO_COLOR is unset or empty (the NO_COLOR convention). */
+export const colorEnabled = (stream: { readonly isTTY?: boolean }): boolean =>
+  stream.isTTY === true && (process.env["NO_COLOR"] ?? "") === "";
+
 export const createTermPort = (): TermPort => ({
   isTTY() {
     // Checks stderr (and stdin), not stdout: the shell wrapper always

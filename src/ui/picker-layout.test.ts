@@ -43,18 +43,6 @@ describe("candidateKindLabel", () => {
 });
 
 describe("shortenPath", () => {
-  it("$HOME 配下のパスは ~ に置換する", () => {
-    expect(shortenPath("/Users/seiji/ghq/repo", "/Users/seiji")).toBe("~/ghq/repo");
-  });
-
-  it("$HOME と完全一致する場合は ~ そのもの", () => {
-    expect(shortenPath("/Users/seiji", "/Users/seiji")).toBe("~");
-  });
-
-  it("$HOME 配下でないパスはそのまま", () => {
-    expect(shortenPath("/tmp/repo", "/Users/seiji")).toBe("/tmp/repo");
-  });
-
   it("上限を超える場合は先頭を … で省略し末尾を残す", () => {
     const long = "/Users/seiji/ghq/github.com/n-seiji/some-very-long-repo-name/subdir";
     const result = shortenPath(long, "/Users/seiji", 20);

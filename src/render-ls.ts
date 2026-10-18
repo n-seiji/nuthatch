@@ -4,8 +4,12 @@ import {
   truncateToWidth,
   truncateToWidthKeepingTail,
 } from "./domain/display-width.ts";
+import { SGR, SGR_RESET } from "./domain/ansi.ts";
+import { isWithinOrSelf } from "./domain/classify.ts";
+import { shortenHome } from "./domain/posix-path.ts";
 import type { CommandResult } from "./domain/result.ts";
 import type { LsEntry, WorktreeKind } from "./domain/schema.ts";
+import { colorEnabled } from "./infra/term.ts";
 import { reportResult } from "./render.ts";
 
 /**
@@ -15,20 +19,7 @@ import { reportResult } from "./render.ts";
  * render.ts's reportResult unchanged, so the JSON contract is untouched.
  */
 
-const ESC = "\u001B";
-
 type Tone = "plain" | "bold" | "dim" | "green" | "yellow" | "red" | "magenta" | "cyan";
-
-const SGR: Record<Tone, string> = {
-  plain: "",
-  bold: `${ESC}[1m`,
-  dim: `${ESC}[2m`,
-  green: `${ESC}[32m`,
-  yellow: `${ESC}[33m`,
-  red: `${ESC}[31m`,
-  magenta: `${ESC}[35m`,
-  cyan: `${ESC}[36m`,
-};
 
 interface Cell {
   readonly text: string;
@@ -38,7 +29,7 @@ interface Cell {
 const cell = (text: string, tone: Tone = "plain"): Cell => ({ text, tone });
 
 const paint = (value: Cell, color: boolean): string =>
-  !color || value.tone === "plain" ? value.text : `${SGR[value.tone]}${value.text}${ESC}[0m`;
+  !color || value.tone === "plain" ? value.text : `${SGR[value.tone]}${value.text}${SGR_RESET}`;
 
 const SHORT_SHA_LENGTH = 7;
 const MIN_PATH_WIDTH = 12;
@@ -107,23 +98,10 @@ const syncCells = (entry: LsEntry): Cell[] => {
   return cells;
 };
 
-const shortenHome = (path: string, home: string): string => {
-  if (home === "" || home === "/") {
-    return path;
-  }
-  if (path === home) {
-    return "~";
-  }
-  return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
-};
-
-const isInside = (cwd: string, path: string): boolean =>
-  cwd === path || cwd.startsWith(path.endsWith("/") ? path : `${path}/`);
-
 /** The worktree `cwd` is in: the deepest path containing it (an external worktree can live inside root). */
 const currentPath = (entries: readonly LsEntry[], cwd: string): string | null =>
   entries
-    .filter((entry) => isInside(cwd, entry.path))
+    .filter((entry) => isWithinOrSelf(entry.path, cwd))
     .reduce<string | null>(
       (best, entry) => (best === null || entry.path.length > best.length ? entry.path : best),
       null,
@@ -208,17 +186,13 @@ export const formatLsTable = (entries: readonly LsEntry[], options: LsTableOptio
   return `${lines.join("\n")}\n`;
 };
 
-/** Whether stdout should carry colors: a terminal, and NO_COLOR unset or empty. */
-const stdoutColor = (): boolean =>
-  process.stdout.isTTY === true && (process.env["NO_COLOR"] ?? "") === "";
-
 /** `hop ls` output: the table for plain success, render.ts's usual path for `--json` and errors. */
 export const reportLs = (result: CommandResult<LsEntry[]>, json: boolean): void => {
   if (json || !result.ok || result.data === undefined) {
     reportResult("ls", result, json);
     return;
   }
-  const color = stdoutColor();
+  const color = colorEnabled(process.stdout);
   process.stdout.write(
     formatLsTable(result.data, {
       color,
