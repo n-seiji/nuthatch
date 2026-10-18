@@ -29,7 +29,6 @@ describe("rm — 失敗・拒否される入力 (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/no-worktree",
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(false);
@@ -42,28 +41,11 @@ describe("rm — 失敗・拒否される入力 (integration)", () => {
       cwd: repo.repoPath,
       branch: "main",
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(2);
     expect(result.errorMessage).toBe("Cannot remove the root clone.");
     expect(await fs.exists(repo.repoPath)).toBe(true);
-  });
-
-  it("--ext 付きで失敗する場合も、失敗結果に非推奨の警告が 1 件含まれる", async () => {
-    await repo.git(["branch", "feat/no-worktree"]);
-
-    const result = await rm(git, fs, {
-      cwd: repo.repoPath,
-      branch: "feat/no-worktree",
-      force: false,
-      ext: true,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.exitCode).toBe(1);
-    expect(result.errorMessage).toContain("No worktree found for branch");
-    expect(result.warnings).toEqual([expect.stringContaining("--ext is deprecated")]);
   });
 });

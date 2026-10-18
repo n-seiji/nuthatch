@@ -31,11 +31,7 @@ export interface RmOptions {
    */
   readonly allowPrunable?: boolean;
   readonly force: boolean;
-  readonly ext: boolean;
 }
-
-const EXT_DEPRECATION_WARNING =
-  "--ext is deprecated and no longer required: hop rm can now remove external worktrees without it.";
 
 const lockedRejection = <T>(branch: string, lockReason: string | null): CommandResult<T> =>
   fail(
@@ -165,19 +161,6 @@ const validateRemoval = async (check: RemovalCheck): Promise<Checked<Worktree, R
   return rejection === null ? resolved : reject(rejection);
 };
 
-/*
- * --ext is a deprecated no-op kept for backward compatibility: it no longer
- * gates anything, but every return path still surfaces the warning when it
- * was passed, so callers can migrate off it.
- */
-const withExtWarning = (ext: boolean, result: CommandResult<RmData>): CommandResult<RmData> =>
-  ext
-    ? {
-        ...result,
-        warnings: [...(result.warnings ?? []), EXT_DEPRECATION_WARNING],
-      }
-    : result;
-
 const removeWorktree = async (
   git: GitPort,
   fs: FsPort,
@@ -210,9 +193,5 @@ const removeWorktree = async (
   });
 };
 
-export const rm = async (
-  git: GitPort,
-  fs: FsPort,
-  options: RmOptions,
-): Promise<CommandResult<RmData>> =>
-  withExtWarning(options.ext, await removeWorktree(git, fs, options));
+export const rm = (git: GitPort, fs: FsPort, options: RmOptions): Promise<CommandResult<RmData>> =>
+  removeWorktree(git, fs, options);

@@ -87,7 +87,6 @@ describe("jump → ls → rm (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/dirty",
       force: false,
-      ext: false,
     });
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(3);
@@ -103,7 +102,6 @@ describe("jump → ls → rm (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/clean",
       force: false,
-      ext: false,
     });
     expect(result.ok).toBe(true);
 
@@ -121,7 +119,6 @@ describe("jump → ls → rm (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/ext",
       force: false,
-      ext: false,
     });
     expect(result.ok).toBe(true);
 
@@ -140,7 +137,6 @@ describe("jump → ls → rm (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/ext-dirty",
       force: false,
-      ext: false,
     });
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(3);
@@ -156,7 +152,6 @@ describe("jump → ls → rm (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/ext-force",
       force: true,
-      ext: false,
     });
     expect(result.ok).toBe(true);
   });
@@ -171,7 +166,6 @@ describe("jump → ls → rm (integration)", () => {
       cwd: repo.repoPath,
       branch: "feat/locked",
       force: true,
-      ext: false,
     });
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(3);
@@ -204,7 +198,6 @@ describe("jump → ls → rm (integration)", () => {
       cwd: repo.repoPath,
       branch: "parent",
       force: true,
-      ext: false,
     });
     expect(result.ok).toBe(false);
     expect(result.exitCode).toBe(3);
@@ -226,24 +219,8 @@ describe("jump → ls → rm (integration)", () => {
       cwd: repo.repoPath,
       branch: "plain",
       force: false,
-      ext: false,
     });
     expect(result.ok).toBe(true);
-  });
-
-  it("--ext は非推奨の no-op として動作し、成功時に警告を出す", async () => {
-    await repo.git(["branch", "feat/ext-deprecated"]);
-    const externalPath = `${repo.rootDir}/agent-worktrees/feat-ext-deprecated`;
-    await repo.git(["worktree", "add", externalPath, "feat/ext-deprecated"]);
-
-    const result = await rm(git, fs, {
-      cwd: repo.repoPath,
-      branch: "feat/ext-deprecated",
-      force: false,
-      ext: true,
-    });
-    expect(result.ok).toBe(true);
-    expect(result.warnings?.some((warning) => warning.includes("--ext is deprecated"))).toBe(true);
   });
 
   it("予約語と同名の branch も -- でエスケープして扱える", async () => {
