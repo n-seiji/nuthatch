@@ -40,8 +40,8 @@ hop -- <branch>    # 予約コマンドと被る branch 名をエスケープ
 hop --help         # usage を表示 (-h / hop help でも同じ)
 
 hop --version          # hop の version を表示
-hop --update           # 最新リリースへ、インストールした方法のまま更新
-hop --update --check   # --update が何をするかを報告するだけ — 何も変更しない
+hop --update           # standalone バイナリを最新リリースへ置換 (それ以外は更新方法を表示)
+hop --update --check   # 更新があるかを報告するだけ — 何も変更しない
 ```
 
 同じ branch が複数の worktree で checkout されている場合、branch だけを指定する
@@ -145,27 +145,27 @@ install script は `hop` を `~/.local/bin` に置き (`HOP_INSTALL_DIR` で
 ### 更新
 
 ```sh
-hop --update          # 最新リリースへ、インストールした方法のまま更新
-hop --update --check  # 報告だけ: current / latest / method / 実行されるコマンド
+hop --update          # standalone バイナリを最新リリースへ置換
+hop --update --check  # 報告だけ: current / latest / インストール方法 / すべきこと
 hop --version         # 今どの version か
 ```
 
-`hop --update` は hop のインストール方法を判定する。`install.sh` で入れた
-バイナリは、置き場のディレクトリに書き込めて (バイナリと checksum の
-ダウンロードの前に確認する)、かつリリースに添付された `.sha256` と SHA-256 が
-一致した場合にだけその場で差し替える — 不一致なら何も置換しない。
-mise / npm / bun 経由の install は、そのツール自身の upgrade コマンド
-(`mise upgrade …`、
-`npm install -g --prefix <hop が入っている prefix> @n-seiji/nuthatch@latest`、
-`bun add -g @n-seiji/nuthatch@latest`) をホームディレクトリで実行して更新する
-ので、グローバルの mise 設定で固定した version が優先され (hop は先に mise へ
-問い合わせ、upgrade するものが無ければ警告する)、プロジェクトの `mise.toml`
-には左右されず、npm の更新は hop が今入っている prefix に入る。`npx` / `bunx`、
-ソースチェックアウト、Homebrew・Nix・aqua・proto など他のバージョン管理ツール
-が自分用にコピーを持っているバイナリ、hop が扱わない配置 (pnpm・yarn の
-global、プロジェクトの依存) は、代わりにどうすればよいかを示して拒否する。
-hop がネットワークに出るのはこれだけで、GitHub と npm の固定アドレスへの
-HTTPS リクエストのみ (タイムアウトとサイズ上限つき)。
+`hop --update` が置換するのは `install.sh` で入れたバイナリだけで、置き場の
+ディレクトリに書き込めて (バイナリと checksum のダウンロードの前に確認する)、
+かつリリースに添付された `.sha256` と SHA-256 が一致した場合に限る — 不一致なら
+何も置換しない。それ以外のインストールでは、何も実行せず、リクエストも送らず、
+正しいコマンドを 1 行表示して終了する (exit 1):
+
+| インストール方法 | 更新方法 |
+|---|---|
+| `install.sh` (`~/.local/bin` のバイナリ) | `hop --update`、または `install.sh` を再実行 |
+| mise | `mise upgrade` |
+| npm / bun / pnpm / yarn の global | `npm i -g @n-seiji/nuthatch@latest` (または使っているパッケージマネージャの同等コマンド) |
+| Homebrew・Nix・aqua・proto・ソースチェックアウト・その他のツール | そのツール自身の upgrade コマンド |
+
+`hop --update --check` はどのインストール方法でも使え、同じ案内を報告する。
+hop がネットワークに出るのは GitHub の固定アドレスへの HTTPS リクエストだけで、
+タイムアウトとサイズ上限つき。
 
 ## トラブルシューティング
 
