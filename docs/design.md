@@ -473,9 +473,9 @@ src/
 ├── commands/             # 1 command = 1 component. Cross-imports forbidden
 │   ├── jump.ts / ls.ts / pick.ts / rm.ts / clean.ts / root.ts / init.ts / self-update.ts
 │   │                    #   ★ Never renders. Only returns a structured Result
+│   │                    #   init.ts holds the `hop init zsh` template (strict quoting, idempotent)
 ├── ui/                  # Self-drawn picker (raw-mode stdin, alternate screen on stderr). Wired to commands only via cli-pick.ts
 └── render.ts            # cli layer only: Result → plain / JSON. Never imported from commands
-shell/init.zsh           # Template for `hop init zsh` (strict quoting, idempotent)
 ```
 
 - **Tests sit next to the code** (`foo.ts` → `foo.test.ts`): domain gets unit

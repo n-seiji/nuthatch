@@ -15,8 +15,7 @@
     "hop": "dist/cli.js"
   },
   "files": [
-    "dist",
-    "shell"
+    "dist"
   ],
   "type": "module",
   "publishConfig": {
