@@ -44,3 +44,12 @@ export const fail = <T>(
   errorMessage,
   ...(warnings === undefined || warnings.length === 0 ? {} : { warnings }),
 });
+
+/** A gate's outcome: carry on with `value`, or stop and return `rejection` as the command's result. */
+export type Checked<V, T> =
+  | { readonly ok: true; readonly value: V }
+  | { readonly ok: false; readonly rejection: CommandResult<T> };
+
+export const pass = <V>(value: V) => ({ ok: true, value }) as const;
+
+export const reject = <T>(rejection: CommandResult<T>) => ({ ok: false, rejection }) as const;

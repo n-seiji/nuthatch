@@ -123,7 +123,7 @@ describe("resolveBranchCheckout", () => {
 
     const result = await checkout(git, "feat/a");
 
-    expect(result).toEqual({ ok: true, options: { createBranch: false } });
+    expect(result).toEqual({ ok: true, value: { createBranch: false } });
     expect(remoteLookups).toEqual([]);
   });
 
@@ -134,7 +134,7 @@ describe("resolveBranchCheckout", () => {
 
     expect(result).toEqual({
       ok: true,
-      options: { createBranch: true, track: "upstream/feat/a" },
+      value: { createBranch: true, track: "upstream/feat/a" },
     });
     expect(remoteLookups).toEqual([]);
   });
@@ -146,7 +146,7 @@ describe("resolveBranchCheckout", () => {
 
     expect(result).toEqual({
       ok: true,
-      options: { createBranch: true, track: "origin/feat/a" },
+      value: { createBranch: true, track: "origin/feat/a" },
     });
     expect(remoteLookups).toEqual(["feat/a"]);
   });
