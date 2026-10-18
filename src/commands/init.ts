@@ -50,9 +50,5 @@ hop() {
 }
 `;
 
-export interface InitOptions {
-  readonly shell: "zsh";
-}
-
 /** Returns the shell function template for `hop init <shell>`. Only zsh exists, so every shell gets it. */
-export const renderInit = (_options: InitOptions): string => ZSH_TEMPLATE;
+export const renderInit = (): string => ZSH_TEMPLATE;

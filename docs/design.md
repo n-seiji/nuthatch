@@ -439,7 +439,7 @@ src/
 ├── cli.ts               # Entry point. Parses args → runs a command → renders the result
 ├── cli-args.ts          # cli.ts only: the small argv parser (flags / positionals)
 ├── domain/              # Pure functions only. May only import from within domain
-│   ├── model.ts         #   Worktree type (kind: root|managed|external)
+│   ├── schema.ts        #   valibot schemas: the JSON output contract and the Worktree type (kind: root|managed|external)
 │   ├── porcelain.ts     #   worktree list --porcelain parser
 │   ├── sanitize.ts      #   branch name → dir name
 │   ├── classify.ts      #   root/managed/external classification
@@ -450,7 +450,8 @@ src/
 │   ├── install-script.ts #  script path → npm / bun / refused (and the npm prefix it implies)
 │   ├── install-roots.ts #   compiled binaries inside Homebrew / Nix / aqua / proto trees
 │   ├── mise-tool.ts     #   mise tool dir, its two marker formats, "is that tool hop?"
-│   ├── posix-path.ts    #   parentDir / baseName (domain cannot import node:path)
+│   ├── posix-path.ts    #   parentDir / baseName / shortenHome (domain cannot import node:path)
+│   ├── ansi.ts          #   ESC and the SGR codes shared by hop ls and the picker
 │   ├── self-update.ts   #   versions, checksum file, fixed release URLs, npm package name, PATH candidates
 │   └── fatal-error.ts   #   escaped error → message + exit code
 ├── infra/               # The only place with external dependencies. Implements domain's ports

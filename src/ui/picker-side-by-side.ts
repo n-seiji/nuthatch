@@ -23,7 +23,9 @@ const CANDIDATE_ROW_CHROME_WIDTH =
  * columns, half the path budget, the gutter and the panel -- not the full
  * candidate row width or the full footer hint, which both degrade
  * gracefully when squeezed (constrainRowColumnWidths shrinks the path
- * first; footerHintForWidth has a short fallback).
+ * first; footerHintForWidth has a short fallback). Half the path budget
+ * keeps side-by-side available from about 100 columns; the full budget
+ * would stack every 80-139 column terminal.
  */
 const HALF_DIVISOR = 2;
 const MIN_PATH_DISPLAY_LENGTH = Math.ceil(MAX_PATH_LENGTH / HALF_DIVISOR);

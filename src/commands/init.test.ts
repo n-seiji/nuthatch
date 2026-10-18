@@ -41,7 +41,7 @@ describeIfZsh("hop init zsh (real zsh)", () => {
   });
 
   const runInZsh = (script: string): { stdout: string; stderr: string; status: number } => {
-    const init = renderInit({ shell: "zsh" });
+    const init = renderInit();
     try {
       const stdout = execFileSync("zsh", ["-c", `${init}\n${script}`], {
         env: { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH}` },
