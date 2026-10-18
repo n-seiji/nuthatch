@@ -7,7 +7,7 @@ import { reportResult } from "./render.ts";
  * failure, a missing git binary) is rendered through the same path as a
  * rejection the command returned itself, so `hop: <line>` goes to stderr and
  * a requested `--json` still gets its envelope instead of the runtime's raw
- * stack trace (issue #9).
+ * stack trace.
  */
 
 /**

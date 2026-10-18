@@ -103,30 +103,27 @@ export interface SelfUpdatePort {
   /** Lowercase hex SHA-256 of `bytes`. */
   sha256Hex: (bytes: Uint8Array) => string;
   /**
-   * Resolves when files can be created in `dir`; rejects with the underlying
-   * fs error (e.g. `code: "EACCES"` or `"EROFS"`) when they cannot. A cheap
-   * early answer, not a promise: `replaceExecutable` can still fail.
+   * Resolves when files can be created in `dir`; otherwise rejects with the
+   * fs error (e.g. `EACCES`, `EROFS`). Advisory: `replaceExecutable` can still fail.
    */
   assertWritableDir: (dir: string) => Promise<void>;
   /**
-   * Atomically replaces the executable at `path` (through a symlink, the
-   * link's target) with `bytes`, mode 0755. Rejects with the underlying fs
-   * error (e.g. `code: "EACCES"`) when it cannot, leaving nothing behind.
+   * Atomically replaces the executable at `path` (the link's target, for a
+   * symlink) with `bytes`, mode 0755. Rejects with the fs error and leaves
+   * nothing behind on failure.
    */
   replaceExecutable: (path: string, bytes: Uint8Array) => Promise<void>;
   /**
-   * Absolute path of the executable `name`: in `preferredDir` if it is there
-   * (null: no preference), else in the first absolute PATH entry that has it;
-   * null if it is in neither.
+   * Absolute path of the executable `name`: in `preferredDir` if present,
+   * else in the first absolute PATH entry that has it; null if neither.
    */
   resolveExecutable: (name: string, preferredDir: string | null) => Promise<string | null>;
   /**
-   * Runs `argv` (a program by absolute path, then its arguments) in the
-   * user's home directory — never the directory hop was started in, whose own
-   * project config must not steer a package manager's update — with stdin
-   * inherited and both of the child's output streams sent to hop's stderr,
-   * and resolves to its exit code. Rejects if the process cannot be started
-   * or is killed by a signal (the message names the signal).
+   * Runs `argv` (program by absolute path, then arguments) in the user's home
+   * directory — not the start directory, whose project config must not steer
+   * a package manager's update — with stdin inherited and stdout/stderr sent
+   * to hop's stderr; resolves to the exit code. Rejects if the process cannot
+   * start or is killed by a signal.
    */
   runCommand: (argv: CommandArgv) => Promise<number>;
 }

@@ -122,10 +122,9 @@ export const runInteractivePicker = (
 /**
  * Renders a completed switchRoot outcome (Ctrl+R / panel "switch root
  * here") as the CLI's cd contract expects. Threads detachedHolder and
- * warnings all the way through — previously these were dropped here, so
- * `--json` never reported a holder that switchRootHere detached, and its
- * warning (`Put <path> into detached HEAD`) never reached stderr either,
- * unlike the non-picker `hop root <branch>` path.
+ * warnings through, so `--json` reports a holder that switchRootHere
+ * detached and its warning (`Put <path> into detached HEAD`) reaches stderr,
+ * as on the non-picker `hop root <branch>` path.
  */
 export const renderSwitchRootOutcome = (
   path: string,

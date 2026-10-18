@@ -14,17 +14,11 @@
  * to the list rather than doubling as movement — Tab also toggles it, for
  * terminals (e.g. Ghostty) that remap a chord like Cmd+K to Tab.
  *
- * Terminal-protocol caveat (confirmed with a real pty, not just synthetic
- * key objects — see picker-keys.test.ts and the investigation report):
- * Ctrl+J and Ctrl+H are ASCII control bytes 0x0A (LF) and 0x08 (BS), the
- * same bytes a plain Enter-as-newline or Backspace key can send.
- * picker-key-parser.ts special-cases those bytes *before* its generic
- * Ctrl+letter range check, so they never come through as
- * `key.ctrl && input === "j"/"h"` the way Ctrl+K, Ctrl+L, Ctrl+N, Ctrl+F,
- * etc. do (those bytes — 0x0B, 0x0C, 0x0E, 0x06 — aren't special-cased, so
- * the ctrl flag IS set correctly for them; Ctrl+F was re-verified the same
- * way before adding it as an openPanel key). Two different byte-level
- * signals are used instead for J and H:
+ * Terminal-protocol caveat: Ctrl+J and Ctrl+H are the ASCII control bytes
+ * 0x0A (LF) and 0x08 (BS). picker-key-parser.ts special-cases them *before*
+ * its generic Ctrl+letter range check, so they never arrive as
+ * `key.ctrl && input === "j"/"h"` the way Ctrl+K, Ctrl+L, Ctrl+N, Ctrl+F do.
+ * Two byte-level signals are used instead:
  *   - Ctrl+J arrives as `input === "\n"` with every flag false (not
  *     `key.return` — that's `\r`/CR only). A literal "\n" can't otherwise
  *     reach a single keypress event, so treating it as "down" is safe.
@@ -117,7 +111,7 @@ export type PanelKeyAction =
   | { readonly type: "ignore" };
 
 /**
- * Key handling for the action panel (now a side column, not an overlay).
+ * Key handling for the action panel (a side column beside the list).
  * Enter always runs the currently-highlighted action ("every action can be
  * completed with Enter" in the design); c/d/r are shortcuts that run that action
  * immediately regardless of highlight. Esc, Tab, ←, Ctrl+H, and physical

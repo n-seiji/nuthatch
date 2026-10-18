@@ -167,10 +167,8 @@ const wrapLineToWidth = (line: StyledLine, width: number): StyledLine[] => {
  * Wraps `content` in a round-cornered border, `width` display columns wide
  * -- the box around the action/confirm side panel. A content line wider
  * than the inner width wraps onto additional rows (display-width based,
- * grapheme-safe) rather than being clipped -- losing the tail of a branch
- * name or the "?" off a confirm prompt left the user unable to tell what
- * they were about to delete (astra/Fable-reported regression from the
- * previous renderer, which wrapped the same way).
+ * grapheme-safe) rather than being clipped, so the user can always read
+ * the full branch name and the "?" of a confirm prompt.
  */
 export const wrapInBox = (content: readonly StyledLine[], width: number): StyledLine[] => {
   const innerWidth = Math.max(0, width - BOX_BORDER_WIDTH - BOX_PADDING_TOTAL);
@@ -199,9 +197,8 @@ const ELLIPSIS = "…";
  * the known terminal width (picker-side-by-side.ts's
  * constrainRowColumnWidths and footerHintForWidth), but this guarantees no
  * line can ever exceed the terminal's actual width regardless of what
- * produced it (astra/Fable-reported: an overflowing line gets wrapped by
- * the terminal itself, which throws off picker-viewport.ts's rowBudget
- * estimate and can scroll the screen).
+ * produced it (the terminal would wrap it, breaking picker-viewport.ts's
+ * rowBudget count and scrolling the screen).
  */
 export const truncateLineToWidth = (line: StyledLine, width: number): StyledLine => {
   if (lineWidth(line) <= width) {

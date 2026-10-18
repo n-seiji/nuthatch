@@ -3,7 +3,7 @@ import { GUTTER } from "./picker-frame.ts";
 import { KIND_COLUMN_WIDTH, MAX_BRANCH_COLUMN_WIDTH, MAX_PATH_LENGTH } from "./picker-layout.ts";
 import { SIDE_PANEL_WIDTH } from "./side-panel.ts";
 
-/** Non-column, always-present chrome in a rendered candidate row: the 2-column "❯ "/"  " selection marker, the 1-column status marker, a space after it, the 2-column gutter between the branch and kind columns, and a space before the path -- mirrors picker-render.ts's candidateRowLine format string exactly. */
+/** Fixed chrome in a rendered candidate row; mirrors picker-render.ts's candidateRowLine format string: selection marker, status marker + space, branch/kind gutter, space before the path. */
 const SELECTION_MARKER_WIDTH = 2;
 const STATUS_MARKER_WIDTH = 1;
 const STATUS_MARKER_GAP_WIDTH = 1;
@@ -17,27 +17,13 @@ const CANDIDATE_ROW_CHROME_WIDTH =
   KIND_PATH_GAP_WIDTH;
 
 /**
- * Whether the picker's side panel (action panel / confirm) fits beside the
- * list, or must fall back to stacking below it -- split out of
- * picker-layout.ts (which stays focused on row content) to keep that file
- * under the lint line-count limit. `isNarrowTerminal` used to compare
- * `columns` against a fixed 60-column threshold, which badly underestimated
- * the list column's own content width (a candidate row easily reaches
- * 75+ columns), so side-by-side got picked even when it didn't actually
- * fit and the resulting row wrapped in the terminal (Fable-reported
- * regression from the ink version, which never let this happen).
+ * Whether the side panel fits beside the list or must stack below it.
  *
- * The threshold is *not* sized off the full candidate row width
- * (MAX_CANDIDATE_ROW_WIDTH, which assumes the full MAX_PATH_LENGTH path
- * budget) or the full-length footer hint: both degrade gracefully when
- * squeezed (constrainRowColumnWidths shrinks the path first; the footer
- * has a short fallback, footerHintForWidth below), so neither should
- * decide whether side-by-side is even attempted. Sizing the threshold off
- * the 104-column footer instead needlessly forced 80-139 column terminals
- * (most real terminals) into stacked mode -- a Fable-reported regression,
- * since the ink version went side-by-side around 100 columns. Requiring
- * only half the path budget (rather than all of it) plus the row's fixed
- * columns keeps the threshold in that same ballpark.
+ * The threshold is sized off the fixed row chrome, the branch and kind
+ * columns, half the path budget, the gutter and the panel -- not the full
+ * candidate row width or the full footer hint, which both degrade
+ * gracefully when squeezed (constrainRowColumnWidths shrinks the path
+ * first; footerHintForWidth has a short fallback).
  */
 const HALF_DIVISOR = 2;
 const MIN_PATH_DISPLAY_LENGTH = Math.ceil(MAX_PATH_LENGTH / HALF_DIVISOR);
@@ -64,13 +50,10 @@ const PANEL_FOOTER_HINT =
 /**
  * Shrinks a candidate row's branch/path column widths to fit `maxRowWidth`,
  * squeezing the path column first (down to nothing) and only then the
- * branch column -- a full-width row was previously built at its natural
- * (candidate-driven) width regardless of the terminal, so it could exceed
- * the terminal's actual width and get line-wrapped there, throwing off
- * picker-viewport.ts's rowBudget row-count estimate (astra/Fable-reported).
+ * branch column, so a row never exceeds the terminal width and wraps
+ * (which would break picker-viewport.ts's rowBudget row count).
  * `rawBranchWidth` is the natural width (picker-layout.ts's
- * branchColumnWidth); the kind column and the row's fixed chrome always
- * keep their space since neither shrinks.
+ * branchColumnWidth); the kind column and the row's fixed chrome never shrink.
  */
 export const constrainRowColumnWidths = (
   rawBranchWidth: number,
@@ -88,15 +71,7 @@ export const constrainRowColumnWidths = (
   return { branchWidth, pathMaxLength };
 };
 
-/**
- * Shortened footer hints, kept to just the essentials (move / confirm /
- * cancel) for terminals too narrow for the full hint -- a narrow terminal
- * losing every hint down to the sub-second-truncated tail end (astra/Fable-
- * reported: a 104-column footer overflowing an 80-column terminal) is worse
- * than dropping the less-essential shortcuts (Tab/actions, Ctrl+X delete,
- * etc.), since knowing how to move, confirm, and get out (Esc) is what
- * actually matters when the terminal is this tight.
- */
+/** Essentials only (move / confirm / cancel), for terminals too narrow for the full hint. */
 const SHORT_LIST_FOOTER_HINT = "↑↓ move · Enter cd · Esc cancel";
 const SHORT_PANEL_FOOTER_HINT = "↑↓ move · Enter run · Esc close";
 

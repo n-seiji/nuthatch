@@ -9,8 +9,8 @@ const execFile = promisify(execFileCb);
 
 /**
  * Spawns git by absolute path, resolved once per process: handing the bare
- * name "git" to the spawn implementation is what produced issue #9's
- * `ENOENT ... posix_spawn 'git'` crash. See git-executable.ts.
+ * name "git" can fail in a compiled Bun binary with
+ * `ENOENT ... posix_spawn 'git'`. See git-executable.ts.
  */
 const gitExecutable = createGitExecutableResolver(process.env);
 

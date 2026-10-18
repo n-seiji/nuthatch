@@ -10,13 +10,10 @@ import { runTerminalSession } from "./terminal-session.ts";
 const DEFAULT_TERMINAL_WIDTH = 80;
 
 /**
- * `stream.columns`/`stream.rows` is `undefined` when the stream isn't a
- * TTY at all, but some pty implementations (notably the one this repo's own
- * integration tests drive, before any resize) report a real `0` from
- * `TIOCGWINSZ` instead -- `??`'s fallback never triggers on `0`, so a
- * literal 0 used to flow all the way into truncateLineToWidth as the
- * terminal width and collapse every line down to just an ellipsis. Treat
- * anything not strictly positive as "unknown" too.
+ * `stream.columns`/`stream.rows` is `undefined` for a non-TTY stream, but
+ * some ptys (before any resize) report a real `0` from `TIOCGWINSZ`, which
+ * `??` would not replace and which would collapse every line to an
+ * ellipsis. Treat anything not strictly positive as "unknown".
  */
 const terminalDimension = (value: number | undefined, fallback: number): number =>
   value !== undefined && value > 0 ? value : fallback;

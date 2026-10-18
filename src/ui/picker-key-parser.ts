@@ -95,14 +95,10 @@ const isPrintableChar = (char: string): boolean => {
  * (newlines included) rather than passing them through as literal input.
  * Pasted text commonly carries a trailing newline (copying a branch name
  * out of `git branch`'s output, e.g.) or embedded CR/LF from a multi-line
- * clipboard selection; without this, a bare "\n" reaches the same
- * `event("\n")` shape a *real* Ctrl+J keypress produces (see the module
- * comment above), and picker-keys.ts's isCtrlJByte can't tell them apart --
- * so a pasted branch name silently moved the selection instead of just
- * filling the query (astra/Fable-reported). Paste content has no legitimate
- * use for control bytes in a single-line query field, so dropping them
- * outright (rather than trying to tag paste-origin events some other way)
- * is both simpler and correct.
+ * clipboard selection; a bare "\n" would be indistinguishable from a real
+ * Ctrl+J keypress (see the module comment above) and move the selection
+ * instead of filling the query. Paste content has no legitimate use for
+ * control bytes in a single-line query field, so they are dropped.
  */
 const pastedTextToEvents = (text: string): PickerKeyEvent[] =>
   [...text].filter((char) => isPrintableChar(char)).map((char) => event(char));

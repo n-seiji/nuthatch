@@ -1,20 +1,10 @@
 /**
  * Picker viewport math: which slice of the (filtered, sorted) candidate
- * list actually gets drawn, given the terminal's height.
+ * list gets drawn, given the terminal's height. The window is a function of
+ * the current selection, so it always contains `selectedIndex` and Enter /
+ * Ctrl+X / Ctrl+R never act on a candidate the user can't see.
  *
- * Bug this replaces (astra-reported): the picker always rendered the first
- * `MAX_VISIBLE_ROWS` candidates (picker.ts used to do
- * `filtered.slice(0, MAX_VISIBLE_ROWS)`), but the cursor could move across
- * the *entire* filtered list — `clampedIndex` in picker-store.ts is an
- * index into `filtered`, unbounded by what's on screen. Once the cursor
- * moved past row 15, nothing was highlighted, but Enter/Ctrl+X/Ctrl+R still
- * ran against `filtered[clampedIndex]` — a candidate the user couldn't
- * even see. This module makes "which candidates are visible" a function of
- * the current selection, not a fixed head slice, so the two can never
- * disagree: the window always contains `selectedIndex`.
- *
- * Kept pure (no process.stdout) so it's unit testable without a real
- * terminal — see picker-viewport.test.ts.
+ * Pure (no process.stdout) so it is unit testable without a terminal.
  */
 
 /** Assumed terminal height when it can't be measured (e.g. stream.rows is undefined — not a TTY, or a very early resize event). Matches common defaults (macOS Terminal.app, most CI TTYs default near 24). */
@@ -52,9 +42,8 @@ export interface RowBudgetInputs {
    * picker-side-by-side.ts's isNarrowTerminal); 0 when there's no panel or it
    * sits beside the list instead. Pass the real rendered row count (the
    * panel's content wraps onto extra rows for long branch names/errors —
-   * see picker-frame.ts's wrapInBox), not an estimate: a fixed guess here
-   * previously under-reserved for a wrapped panel, pushing the frame past
-   * the terminal height and scrolling the screen (astra/Fable-reported).
+   * see picker-frame.ts's wrapInBox), not an estimate: under-reserving
+   * pushes the frame past the terminal height and scrolls the screen.
    */
   readonly stackedPanelRows: number;
 }
