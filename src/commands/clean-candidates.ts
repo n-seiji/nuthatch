@@ -33,6 +33,35 @@ export const buildCleanCandidates = async (
   return results.filter((candidate): candidate is CleanCandidate => candidate !== null);
 };
 
+export interface BranchPolicyFacts {
+  readonly defaultRef: string | null;
+  readonly upstreams: ReadonlyMap<string, UpstreamState>;
+}
+
+export const branchMergeFacts = async (
+  git: GitPort,
+  rootPath: string,
+  branch: string,
+  { defaultRef, upstreams }: BranchPolicyFacts,
+): Promise<Omit<GarbageInput, "clean">> => {
+  const upstreamGone = upstreamStateOf(upstreams, branch).kind === "gone";
+  const mergedIntoDefault =
+    defaultRef === null ? "unknown" : await git.isAncestor(rootPath, branch, defaultRef);
+  // "gone" also needs to recognize squash/rebase merges, whose commits are
+  // Never literal ancestors of the branch they were merged into. The answer
+  // Only matters for a gone upstream on a branch that isn't merged outright.
+  const allCommitsReachableFromDefault =
+    defaultRef === null || mergedIntoDefault === true || !upstreamGone
+      ? "unknown"
+      : await git.hasEquivalentCommits(rootPath, branch, defaultRef);
+  return {
+    prunable: false,
+    upstreamGone,
+    mergedIntoDefault,
+    allCommitsReachableFromDefault,
+  };
+};
+
 interface ClassifyWorktreeContext {
   readonly git: GitPort;
   readonly fs: FsPort;
@@ -61,23 +90,7 @@ const classifyWorktree = async (
   }
 
   const { rootPath, worktrees } = context;
-  const upstreamGone = upstreamStateOf(upstreams, wt.branch).kind === "gone";
-  const mergedIntoDefault =
-    defaultRef === null ? "unknown" : await git.isAncestor(rootPath, wt.branch, defaultRef);
-  // "gone" also needs to recognize squash/rebase merges, whose commits are
-  // Never literal ancestors of the branch they were merged into. The answer
-  // Only matters for a gone upstream on a branch that isn't merged outright.
-  const allCommitsReachableFromDefault =
-    defaultRef === null || mergedIntoDefault === true || !upstreamGone
-      ? "unknown"
-      : await git.hasEquivalentCommits(rootPath, wt.branch, defaultRef);
-
-  const facts = {
-    prunable: false,
-    mergedIntoDefault,
-    upstreamGone,
-    allCommitsReachableFromDefault,
-  };
+  const facts = await branchMergeFacts(git, rootPath, wt.branch, { defaultRef, upstreams });
   // A dirty worktree is never a candidate, so when the branch facts already
   // Rule this one out, skip the status scan: it is by far the most expensive
   // Check, and most worktrees in use are neither merged nor gone.
