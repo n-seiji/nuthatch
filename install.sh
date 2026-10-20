@@ -38,6 +38,36 @@ sha256_digest() {
   fi
 }
 
+# Verifies build provenance with the GitHub CLI. Missing gh or missing gh
+# auth (exit 4) only warns, since the sha256 check above already ran; any
+# other failure is fatal, including "no attestation found", because that is
+# also what a swapped binary looks like.
+verify_attestation() {
+  path=$1
+  asset_name=$2
+  if [ "${HOP_SKIP_ATTESTATION:-}" = "1" ]; then
+    log "HOP_SKIP_ATTESTATION=1: skipping build provenance verification."
+    return 0
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    log "Warning: gh not found, build provenance was not verified. To verify manually: gh attestation verify <file> --repo ${REPO}"
+    return 0
+  fi
+  if output=$(gh attestation verify "$path" --repo "$REPO" \
+    --signer-workflow "github.com/${REPO}/.github/workflows/release.yml" 2>&1); then
+    log "Verified build provenance."
+    return 0
+  else
+    status=$?
+  fi
+  if [ "$status" -eq 4 ]; then
+    log "Warning: gh is not authenticated (run 'gh auth login'), build provenance was not verified."
+    return 0
+  fi
+  log "$output"
+  fail "Build provenance verification failed for ${asset_name}. If gh's token expired, check 'gh auth status'. v0.2.0 and earlier have no attestations; set HOP_SKIP_ATTESTATION=1 to install one anyway."
+}
+
 cleanup() {
   if [ -n "${tmp:-}" ]; then
     rm -f "$tmp"
@@ -100,6 +130,8 @@ main() {
 
   rm -f "$checksum_tmp"
   checksum_tmp=""
+
+  verify_attestation "$tmp" "$asset"
 
   chmod +x "$tmp"
   mv "$tmp" "$dest"

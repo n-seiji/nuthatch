@@ -456,7 +456,13 @@ exist for a binary whose run later fails before publish; it proves only that
 this workflow built the binary, not that it was released. It can be verified
 manually with `gh attestation verify <file> --repo n-seiji/nuthatch
 --signer-workflow github.com/n-seiji/nuthatch/.github/workflows/release.yml`.
-`install.sh` and `hop --update` check the SHA-256 only.
+`install.sh` runs that check (with the explicit `github.com/` host, so a
+`GH_HOST` pointing at GHE does not break it) after the SHA-256 check and
+before placing the binary. No `gh` on PATH, or `gh` exiting 4 (not
+authenticated), prints a warning and continues. Any other failure aborts,
+"no attestation found" included, since a swapped binary looks the same.
+`HOP_SKIP_ATTESTATION=1` opts out; v0.2.0 and earlier have no attestation, so
+`HOP_VERSION=v0.2.0` needs it. `hop --update` checks the SHA-256 only.
 
 ## Install (post-release)
 

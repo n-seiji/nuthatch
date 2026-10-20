@@ -159,7 +159,12 @@ gh attestation verify ./hop-darwin-arm64 --repo n-seiji/nuthatch \
   --signer-workflow github.com/n-seiji/nuthatch/.github/workflows/release.yml
 ```
 
-`install.sh` does not check it; it verifies the SHA-256 only.
+When `gh` is installed and logged in, `install.sh` runs this check (pinned to
+this repo's release workflow) after the SHA-256 check and aborts on failure.
+Without `gh`, or without `gh auth login`, it prints a warning and installs
+anyway. v0.2.0 and earlier have no attestation, so `HOP_VERSION=v0.2.0` needs
+`HOP_SKIP_ATTESTATION=1`. If the check fails with an expired token, run
+`gh auth status`.
 
 ### Updating
 

@@ -153,7 +153,12 @@ gh attestation verify ./hop-darwin-arm64 --repo n-seiji/nuthatch \
   --signer-workflow github.com/n-seiji/nuthatch/.github/workflows/release.yml
 ```
 
-`install.sh` は attestation を確認せず、SHA-256 だけを検証する。
+`gh` が入っていてログイン済みなら、`install.sh` は SHA-256 の確認の後にこの
+検証 (このリポジトリの release workflow に固定) を行い、失敗したら中止する。
+`gh` がない、または `gh auth login` 未実施なら、警告を出してそのままインス
+トールする。v0.2.0 以前のリリースには attestation がないため、
+`HOP_VERSION=v0.2.0` では `HOP_SKIP_ATTESTATION=1` が必要。トークン期限切れで
+失敗した場合は `gh auth status` を確認する。
 
 ### 更新
 
