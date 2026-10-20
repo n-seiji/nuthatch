@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { refArgumentRejection } from "../domain/branch-name.ts";
 import { messageOf } from "../domain/fatal-error.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import {
@@ -37,6 +38,11 @@ export const jump = async (
       path: previous,
       data: { branch: options.target, created: false },
     });
+  }
+
+  const refRejection = refArgumentRejection<JumpData>(options.target, options.track);
+  if (refRejection !== null) {
+    return refRejection;
   }
 
   const context = await loadRepoContext(git, fs, options.cwd);

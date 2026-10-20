@@ -329,6 +329,15 @@ clone.
   and the exit code from the list above — never a JS stack trace. Plain
   (non-JSON) runs keep stdout empty, so the shell wrapper never `cd`s after
   a crash.
+- **option-like branch names**: a branch or `--track` ref whose name starts
+  with `-` (e.g. a remote branch `-M`) is refused with exit code 2 by
+  `hop <branch>`, `hop root <branch>` and `hop rm <branch>` before any git
+  call: git would parse it as an option (`git worktree add` re-parses it in an
+  inner `git branch` call, and `--end-of-options` does not protect that path).
+  The bare `-` (previous worktree / `@{-1}`) is not affected. The picker and
+  `hop clean` never offer such branches. As defence in depth, `branch -D`,
+  `merge-base`, `cherry` and `switch <ref>` pass `--end-of-options` before the
+  ref (git >= 2.24, within the minimum below).
 - **creating from a remote branch**: if origin has a branch of the same
   name, origin always wins. If origin doesn't have it but multiple other
   remotes do, this is an ambiguity error. The created branch uses

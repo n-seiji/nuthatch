@@ -1,3 +1,4 @@
+import { isOptionLikeRef } from "./branch-name.ts";
 import type { PickCandidate, Worktree } from "./schema.ts";
 
 /**
@@ -22,11 +23,11 @@ export const buildPickCandidates = (
     dirty: dirtyByPath.get(worktree.path) ?? null,
   }));
 
-  const localOnly = localBranches.filter((branch) => !existingBranches.has(branch));
+  const usable = (branch: string): boolean =>
+    !existingBranches.has(branch) && !isOptionLikeRef(branch);
+  const localOnly = localBranches.filter((branch) => usable(branch));
   const localSet = new Set(localBranches);
-  const remoteOnly = remoteBranches.filter(
-    (branch) => !existingBranches.has(branch) && !localSet.has(branch),
-  );
+  const remoteOnly = remoteBranches.filter((branch) => usable(branch) && !localSet.has(branch));
 
   return [
     ...worktreeCandidates,

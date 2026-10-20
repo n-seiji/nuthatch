@@ -16,6 +16,16 @@ const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
   ...overrides,
 });
 
+describe("buildPickCandidates (option-like names)", () => {
+  it("先頭が - の local / remote branch は creatable に含めない", () => {
+    const wt = worktree({ path: "/repo", branch: "main" });
+    const result = buildPickCandidates([wt], new Map(), ["-M", "feat/a"], ["-c", "feat/b"]);
+    expect(
+      result.map((candidate) => (candidate.kind === "creatable" ? candidate.branch : null)),
+    ).toEqual([null, "feat/a", "feat/b"]);
+  });
+});
+
 describe("buildPickCandidates", () => {
   it("既存 worktree をすべて候補にし、dirty 情報を反映する", () => {
     const wt = worktree({ path: "/repo", branch: "main" });
