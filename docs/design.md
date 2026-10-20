@@ -432,7 +432,8 @@ nothing.
 
 build (verify tag `vX.Y.Z` matches the `package.json` version) → `npm pack`
 → smoke test the npm build, linux-x64, and darwin-arm64 → darwin-x64 is
-compile-checked only → generate SHA-256 for each binary → npm publish
+compile-checked only → generate SHA-256 for each binary → attest build provenance for each
+binary (`actions/attest-build-provenance`, in `build-binaries`) → npm publish
 (--access public, provenance; skip if the same version already exists) →
 attach to the Release. **publish happens last** (to avoid publishing a
 broken version).
@@ -447,6 +448,15 @@ darwin-arm64. Since there's no runner available to execute on for
 darwin-x64, only a successful compile is confirmed for it; install.sh and
 `hop --update` both verify the binary against the `.sha256` attached to the
 Release before placing it.
+
+The `.sha256` lives in the same Release as the binary, so it cannot detect a
+tampered Release. Each binary therefore also gets a build-provenance
+attestation (releases after v0.2.0). It is created at build time, so it can
+exist for a binary whose run later fails before publish; it proves only that
+this workflow built the binary, not that it was released. It can be verified
+manually with `gh attestation verify <file> --repo n-seiji/nuthatch
+--signer-workflow github.com/n-seiji/nuthatch/.github/workflows/release.yml`.
+`install.sh` and `hop --update` check the SHA-256 only.
 
 ## Install (post-release)
 

@@ -127,6 +127,10 @@ jobs:
   build-binaries:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         include:
@@ -173,6 +177,11 @@ jobs:
           cd /tmp/smoke-repo
           git -c user.email=ci@example.com -c user.name=ci commit --allow-empty -m init
           "$bin" ls --json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: out/hop-${{ matrix.target }}
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
