@@ -15,9 +15,14 @@ const commandAvailable = (command: string, args: readonly string[]): boolean => 
 };
 
 const zshAvailable = commandAvailable("zsh", ["--version"]);
+const python3Available = commandAvailable("python3", ["-c", "import pty"]);
+// On CI a missing zsh/python3 must fail loudly instead of silently skipping these tests.
+if (process.env.CI !== undefined && process.env.CI !== "" && !(zshAvailable && python3Available)) {
+  throw new Error("CI requires zsh and python3 (with pty) for the hop init zsh tests");
+}
 const describeIfZsh = zshAvailable ? describe : describe.skip;
 // The wrapper only cds when stdout is a terminal, so those cases need a pty.
-const itWithPty = zshAvailable && commandAvailable("python3", ["-c", "import pty"]) ? it : it.skip;
+const itWithPty = zshAvailable && python3Available ? it : it.skip;
 
 // Runs zsh with a pty as stdout/stdin/stderr (output is the pty's, CR stripped).
 const PTY_RUNNER = [

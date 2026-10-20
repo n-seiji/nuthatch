@@ -1,4 +1,5 @@
 import { basename, dirname, join } from "node:path";
+import { optionLikeRefRejection } from "../domain/branch-name.ts";
 import { classifyWorktreePath, isWithin } from "../domain/classify.ts";
 import type { Worktree } from "../domain/schema.ts";
 import { parsePorcelain } from "../domain/porcelain.ts";
@@ -135,6 +136,11 @@ export const resolveBranchCheckout = async <T>(
       );
     }
     if (resolution.kind === "track") {
+      // A remote named with a leading dash would make the derived ref option-like.
+      const rejection = optionLikeRefRejection<T>("--track ref", resolution.ref);
+      if (rejection !== null) {
+        return reject(rejection);
+      }
       track = resolution.ref;
     }
   }

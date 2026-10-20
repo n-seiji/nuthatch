@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { join } from "node:path";
 import { createFsPort } from "../infra/fs.ts";
 import { createGitPort } from "../infra/git.ts";
 import { createTestRepo, type TestRepo } from "../testing/repo.ts";
@@ -41,6 +42,42 @@ describe("option-like branch names (integration)", () => {
     expect(await currentBranch()).toBe("main");
   });
 
+  it("jump --create は remote にだけある '-M' も exit 2 で拒否し、branch を変更しない", async () => {
+    const originDir = join(repo.rootDir, "origin.git");
+    await repo.git(["init", "--bare", originDir]);
+    await repo.git(["remote", "add", "origin", originDir]);
+    await repo.git(["push", "origin", "HEAD:refs/heads/-M"]);
+    await repo.git(["update-ref", "-d", "refs/heads/-M"]);
+    await repo.git(["fetch", "origin"]);
+    expect(await repo.git(["branch", "--list", "--", "-M"])).toBe("");
+    expect(await repo.git(["rev-parse", "--verify", "refs/remotes/origin/-M"])).not.toBe("");
+
+    const result = await jump(git, fs, {
+      cwd: repo.repoPath,
+      target: "-M",
+      create: true,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(2);
+    expect(await currentBranch()).toBe("main");
+  });
+
+  it("jump は '-' で始まる remote 名から導出した track ref も exit 2 で拒否する", async () => {
+    const remoteDir = join(repo.rootDir, "dash-remote.git");
+    await repo.git(["init", "--bare", remoteDir]);
+    await repo.git(["remote", "add", "--", "-q", remoteDir]);
+    await repo.git(["update-ref", "refs/remotes/-q/feat", "HEAD"]);
+
+    const result = await jump(git, fs, {
+      cwd: repo.repoPath,
+      target: "feat",
+      create: true,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(2);
+    expect(await currentBranch()).toBe("main");
+  });
+
   it("jump は option-like な --track も exit 2 で拒否する", async () => {
     const result = await jump(git, fs, {
       cwd: repo.repoPath,
@@ -52,13 +89,24 @@ describe("option-like branch names (integration)", () => {
     expect(await currentBranch()).toBe("main");
   });
 
-  it("jump '-' は option-like 拒否の対象外 (OLDPWD の経路を維持する)", async () => {
-    const result = await jump(git, fs, {
-      cwd: repo.repoPath,
-      target: "-",
-      create: false,
-    });
-    expect(result.exitCode).not.toBe(2);
+  it("jump '-' は option-like 拒否の対象外で、OLDPWD のパスを返す", async () => {
+    const savedOldpwd = process.env.OLDPWD;
+    process.env.OLDPWD = repo.repoPath;
+    try {
+      const result = await jump(git, fs, {
+        cwd: repo.repoPath,
+        target: "-",
+        create: false,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.path).toBe(repo.repoPath);
+    } finally {
+      if (savedOldpwd === undefined) {
+        delete process.env.OLDPWD;
+      } else {
+        process.env.OLDPWD = savedOldpwd;
+      }
+    }
   });
 
   it("root '-M' は exit 2 で拒否し、root の branch を変更しない", async () => {
