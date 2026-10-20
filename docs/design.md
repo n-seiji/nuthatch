@@ -229,6 +229,15 @@ A worktree is never a candidate if removing it would lose anything.
 - TTY: presents the candidate list (branch / reason / path) for a single
   batch confirmation. Non-TTY: `--dry-run` returns the candidates as JSON,
   and `--yes` executes.
+- A worktree git reports as locked is never a candidate (hop never unlocks):
+  it is left out of the list and the confirmation, and a warning on stderr
+  names its path and lock reason.
+- Removal is best-effort per candidate: one that drops out on the
+  lock-protected re-validation, turns out locked or nested, or that git
+  refuses (e.g. it contains submodules) is skipped and the rest are still
+  removed. Every skip is a warning on stderr naming the path and, for a git
+  refusal, git's own message — `removed` is never silently shorter than what
+  was confirmed. Exit stays 0.
 - `--with-branch` also deletes the branch itself (only when merged/gone has
   been confirmed). Since a prunable worktree has already disappeared, if the
   branch's merged/gone status can't be separately confirmed, only the
