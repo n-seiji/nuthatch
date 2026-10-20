@@ -6,6 +6,9 @@
 
 <p align="center"><em>ナットハッチが木々を渡るように、git worktree 間を hop する。</em></p>
 
+**git worktree を、作る・移る・消す。ぜんぶ `hop` ひとつで。**
+([Web サイト](https://www.sijis.me/projects/nuthatch))
+
 `nuthatch` は zero-setup な git worktree manager。単一コマンド **`hop`** が、
 任意の branch の worktree へジャンプする — 存在しなければその場で作成する。
 人間 (対話的 picker) と AI coding agent (非対話、`--json`) の両方に対応。
