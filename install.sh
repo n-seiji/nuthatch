@@ -19,9 +19,9 @@ download() {
   url=$1
   output=$2
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$url" -o "$output"
+    curl -fsSL --proto '=https' --tlsv1.2 "$url" -o "$output"
   elif command -v wget >/dev/null 2>&1; then
-    wget -q "$url" -O "$output"
+    wget -q --https-only "$url" -O "$output"
   else
     fail "Neither curl nor wget is available."
   fi
@@ -98,10 +98,12 @@ main() {
     fail "Checksum verification failed for ${asset}."
   fi
 
+  rm -f "$checksum_tmp"
+  checksum_tmp=""
+
   chmod +x "$tmp"
   mv "$tmp" "$dest"
   tmp=""
-  checksum_tmp=""
   log "Installed hop to ${dest}"
 
   case ":$PATH:" in

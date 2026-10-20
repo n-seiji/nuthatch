@@ -81,6 +81,7 @@ describe("install.sh", () => {
 
     const installedBinary = await readFile(join(installDir, "hop"), "utf8");
     expect(installedBinary).toBe(BINARY_CONTENT);
+    expect(await readdir(installDir)).toEqual(["hop"]);
     const curlLog = await readFile(logPath, "utf8");
     const urls = curlLog.trim().split("\n");
     expect(urls).toHaveLength(2);
