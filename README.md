@@ -148,6 +148,16 @@ The install script places `hop` in `~/.local/bin` (override with
 specific version with `HOP_VERSION=vX.Y.Z`. Linux arm64 has no prebuilt
 binary yet — use the npm install instead.
 
+Release binaries from releases after v0.2.0 carry a build-provenance
+attestation. To verify a downloaded binary by hand:
+
+```sh
+gh attestation verify ./hop-darwin-arm64 --repo n-seiji/nuthatch \
+  --signer-workflow github.com/n-seiji/nuthatch/.github/workflows/release.yml
+```
+
+`install.sh` does not check it; it verifies the SHA-256 only.
+
 ### Updating
 
 ```sh
@@ -159,7 +169,7 @@ hop --version         # which version do I have?
 `hop --update` only replaces the binary that `install.sh` installs, and only if
 its directory is writable (checked before the binary or its checksum is
 downloaded) and its SHA-256 matches the `.sha256` attached to the release; on a
-mismatch nothing is replaced. For any other install it runs nothing, makes no
+mismatch nothing is replaced (SHA-256 only; attestations are not checked). For any other install it runs nothing, makes no
 request, and prints one line saying how to update it (exit 1):
 
 | Installed with | Update with |

@@ -142,6 +142,16 @@ install script は `hop` を `~/.local/bin` に置き (`HOP_INSTALL_DIR` で
 には `HOP_VERSION=vX.Y.Z` を使う。Linux arm64 はビルド済みバイナリが
 まだないため、npm install を使う。
 
+v0.2.0 より後のリリースのバイナリにはビルド来歴 (build provenance) の attestation
+が付く。ダウンロードしたバイナリを手動で検証するには:
+
+```sh
+gh attestation verify ./hop-darwin-arm64 --repo n-seiji/nuthatch \
+  --signer-workflow github.com/n-seiji/nuthatch/.github/workflows/release.yml
+```
+
+`install.sh` は attestation を確認せず、SHA-256 だけを検証する。
+
 ### 更新
 
 ```sh
@@ -153,7 +163,7 @@ hop --version         # 今どの version か
 `hop --update` が置換するのは `install.sh` で入れたバイナリだけで、置き場の
 ディレクトリに書き込めて (バイナリと checksum のダウンロードの前に確認する)、
 かつリリースに添付された `.sha256` と SHA-256 が一致した場合に限る — 不一致なら
-何も置換しない。それ以外のインストールでは、何も実行せず、リクエストも送らず、
+何も置換しない (確認するのは SHA-256 のみで、attestation は見ない)。それ以外のインストールでは、何も実行せず、リクエストも送らず、
 更新方法を 1 行表示して終了する (exit 1):
 
 | インストール方法 | 更新方法 |
