@@ -1,3 +1,4 @@
+import { refArgumentRejection } from "../domain/branch-name.ts";
 import { messageOf } from "../domain/fatal-error.ts";
 import type { FsPort, GitPort, SwitchBranchOptions } from "../domain/ports.ts";
 import { type CommandResult, EXIT_SAFE_REJECTION, fail, ok } from "../domain/result.ts";
@@ -42,6 +43,13 @@ export const root = async (
   fs: FsPort,
   options: RootOptions,
 ): Promise<CommandResult<RootData>> => {
+  if (options.target !== undefined && options.target !== "-") {
+    const refRejection = refArgumentRejection<RootData>(options.target, options.track);
+    if (refRejection !== null) {
+      return refRejection;
+    }
+  }
+
   const context = await loadRepoContext(git, fs, options.cwd);
 
   if (options.target === undefined) {

@@ -1,3 +1,4 @@
+import { optionLikeRefRejection } from "../domain/branch-name.ts";
 import { messageOf } from "../domain/fatal-error.ts";
 import type { RmData, Worktree } from "../domain/schema.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
@@ -166,6 +167,10 @@ const removeWorktree = async (
   fs: FsPort,
   options: RmOptions,
 ): Promise<CommandResult<RmData>> => {
+  const refRejection = optionLikeRefRejection<RmData>("branch", options.branch);
+  if (refRejection !== null) {
+    return refRejection;
+  }
   const context = await loadRepoContext(git, fs, options.cwd);
   const validation = await validateRemoval({ git, fs, context, options });
   if (!validation.ok) {

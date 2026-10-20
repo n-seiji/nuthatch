@@ -35,7 +35,9 @@ There is exactly one command: `hop`. Only five names are reserved as
 subcommands — `ls / rm / clean / root / init` — and a branch name that
 collides with one of them is escaped with `hop -- <branch>` (uniform across
 all commands). `eval "$(hop init zsh)"` defines the shell function used for
-auto-`cd`. `--update` and `--version` are flags, not reserved words (see
+auto-`cd`; the function only `cd`s when its stdout is a terminal, and
+otherwise (`p=$(hop …)`, a pipe) just prints the path like `command hop`.
+`--update` and `--version` are flags, not reserved words (see
 [Self-update](#self-update)), so the reserved list stays at five.
 
 ### Navigation
@@ -278,7 +280,10 @@ clone.
   stdout) / 1=generic error / 2=usage error / 3=safety rejection (e.g.
   dirty) / 130=SIGINT (a picker Ctrl+C cancel is treated the same way). The
   shell wrapper preserves the exit code and `cd`s only when rc=0 and stdout
-  is non-empty. For `hop --update`: 0=updated, already up to date (never a
+  is non-empty, and only when its own stdout is a terminal: under a command
+  substitution (`p=$(hop feat/x --create)`) or a pipe it passes straight
+  through to `command hop`, so the path is printed instead of `cd`-ing inside
+  the capturing subshell and leaving `p` empty. For `hop --update`: 0=updated, already up to date (never a
   downgrade), or `--check`; 1=an install hop does not replace (the one-line
   hint is the message: mise, a package manager's `node_modules`, a source
   checkout, a binary inside another tool's tree, no prebuilt binary for the
@@ -329,6 +334,16 @@ clone.
   and the exit code from the list above — never a JS stack trace. Plain
   (non-JSON) runs keep stdout empty, so the shell wrapper never `cd`s after
   a crash.
+- **option-like branch names**: a branch or `--track` ref whose name starts
+  with `-` (e.g. a remote branch `-M`) is refused with exit code 2 by
+  `hop <branch>`, `hop root <branch>` and `hop rm <branch>` before any git
+  call: git would parse it as an option (`git worktree add` re-parses it in an
+  inner `git branch` call, and `--end-of-options` does not protect that path).
+  The bare `-` (previous worktree / `@{-1}`) is not affected. The picker never
+  offers such branches, and `hop clean` conservatively skips the whole
+  worktree whose branch starts with `-`. As defence in depth, `branch -D`,
+  `merge-base`, `cherry` and `switch <ref>` pass `--end-of-options` before the
+  ref.
 - **creating from a remote branch**: if origin has a branch of the same
   name, origin always wins. If origin doesn't have it but multiple other
   remotes do, this is an ambiguity error. The created branch uses
