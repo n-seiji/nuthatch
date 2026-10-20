@@ -6,6 +6,9 @@
 
 <p align="center"><em>Hop between git worktrees like a nuthatch hops between trees.</em></p>
 
+**Create, jump between, and remove git worktrees. All with `hop`.**
+([Website](https://www.sijis.me/en/projects/nuthatch))
+
 `nuthatch` is a zero-setup git worktree manager. Its single command, **`hop`**,
 jumps you to the worktree of any branch — creating it on the fly when it
 doesn't exist yet. Built for humans (interactive picker) and AI coding agents
