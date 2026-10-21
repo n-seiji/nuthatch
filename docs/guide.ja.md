@@ -117,9 +117,6 @@ eval "$(hop init zsh)"
 
 ## Install
 
-> まだリリースされていない — バージョンは publish も tag もされていない。
-> 最初の `v*` tag が出た後は、以下の選択肢が記載どおりに動く。
-
 推奨: GitHub Release のバイナリ (bun 製、mise なら
 `mise use github:n-seiji/nuthatch`)。npm 版は Node で動くため git 呼び出しが遅い
 (hop ls ~400ms vs ~60ms) — CI や頻繁な呼び出しにはバイナリを使う。
