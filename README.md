@@ -54,22 +54,22 @@ For npm, mise, Linux arm64, verifying binaries, and updating, see the [guide](do
 | `hop root` | `cd` into the root clone |
 | `hop ls [--json]` | List worktrees (dirty, ahead/behind, kind) |
 | `hop rm <branch>` | Remove a worktree. The branch is kept |
-| `hop clean` | Find and remove garbage worktrees (managed only) |
+| `hop clean` | Find and remove garbage worktrees (managed only by default) |
 | `hop --update` | Replace a standalone binary with the latest release |
 
 The [guide](docs/guide.md#usage) covers the picker and its keys, `hop root <branch>`, and the rest.
 
 ## Safe by default
 
-- A dirty worktree is refused unless you pass `--force`.
+- `hop rm` refuses a dirty worktree unless you pass `--force`. `hop clean` and `hop root` never touch one.
 - A worktree that git reports as locked is never removed, even with `--force`.
-- Deleting a worktree outside `_worktree` (external) from the picker asks y/N. Ctrl+X always asks.
-- `hop clean` only removes worktrees that hop manages.
+- Deleting an external worktree (one not under `_worktree/<repo>/`) from the picker asks y/N. Ctrl+X always asks.
+- By default, `hop clean` only picks worktrees that hop manages. External ones need `--ext`.
 - `hop rm` keeps the branch.
 
 ## For AI coding agents
 
-Every command runs non-interactively. `--json` works everywhere, paths go to stdout, and logs go to stderr. The repo ships the [`using-hop`](skills/using-hop/SKILL.md) skill as a plugin.
+Every command can complete non-interactively. `--json` works everywhere, paths go to stdout, and logs go to stderr. The repo ships the [`using-hop`](plugins/hop/skills/using-hop/SKILL.md) skill as a plugin. It teaches agents to drive `hop` safely.
 
 ```sh
 # Claude Code

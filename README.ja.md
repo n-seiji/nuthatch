@@ -54,22 +54,22 @@ npm、mise、Linux arm64、バイナリの検証、更新については [ガイ
 | `hop root` | root clone へ `cd` |
 | `hop ls [--json]` | worktree 一覧 (dirty, ahead/behind, kind) |
 | `hop rm <branch>` | worktree を削除 (branch は残す) |
-| `hop clean` | ゴミ worktree を自動判定して削除 (managed のみ) |
+| `hop clean` | ゴミ worktree を自動判定して削除 (既定では managed のみ) |
 | `hop --update` | standalone バイナリを最新リリースへ置換 |
 
 picker とそのキー、`hop root <branch>` などは [ガイド](docs/guide.ja.md#使い方) にある。
 
 ## 安全がデフォルト
 
-- dirty な worktree は、`--force` を付けない限り拒否する。
+- `hop rm` は、`--force` を付けない限り dirty な worktree を拒否する。`hop clean` と `hop root` は dirty な worktree に触れない。
 - git が locked と報告する worktree は、`--force` でも削除しない。
-- `_worktree` の外にある (external) worktree を picker から削除するときは y/N を確認する。Ctrl+X は常に確認する。
-- `hop clean` が削除するのは、hop が管理する worktree だけ。
+- `_worktree/<repo>/` の外にある (external) worktree を picker から削除するときは y/N を確認する。Ctrl+X は常に確認する。
+- `hop clean` が既定で対象にするのは、hop が管理する worktree だけ。external は `--ext` を付けたときだけ対象になる。
 - `hop rm` は branch を残す。
 
 ## AI coding agent 向け
 
-全コマンドが非対話で完結する。`--json` はどこでも使え、path は stdout、ログは stderr に出る。このリポジトリは [`using-hop`](skills/using-hop/SKILL.md) skill を plugin として配布している。
+全コマンドが非対話で完結する。`--json` はどこでも使え、path は stdout、ログは stderr に出る。このリポジトリは [`using-hop`](plugins/hop/skills/using-hop/SKILL.md) skill を plugin として配布している。agent が `hop` を安全に使うための skill。
 
 ```sh
 # Claude Code
@@ -81,7 +81,7 @@ codex plugin marketplace add n-seiji/nuthatch
 codex plugin install hop
 ```
 
-## More
+## その他
 
 - [Web サイト](https://www.sijis.me/projects/nuthatch)
 - [ガイド](docs/guide.ja.md): 使い方、picker、インストール、更新、トラブルシューティング
