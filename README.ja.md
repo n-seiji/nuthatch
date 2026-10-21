@@ -1,206 +1,75 @@
-[English](README.md)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
+  <img src="docs/assets/wordmark-light.svg" alt="nuthatch" width="320">
+</picture>
 
-<p align="center">
-  <img src="docs/assets/logo.png" alt="nuthatch — hop between git worktrees" width="560">
-</p>
-
-<p align="center"><em>ナットハッチが木々を渡るように、git worktree 間を hop する。</em></p>
+[English](README.md) · **日本語**
 
 **git worktree を、作る・移る・消す。ぜんぶ `hop` ひとつで。**
-([Web サイト](https://www.sijis.me/projects/nuthatch))
 
-`nuthatch` は zero-setup な git worktree manager。単一コマンド **`hop`** が、
-任意の branch の worktree へジャンプする — 存在しなければその場で作成する。
-人間 (対話的 picker) と AI coding agent (非対話、`--json`) の両方に対応。
+`nuthatch` は、人間と AI coding agent のための zero-setup な git worktree manager。コマンドは `hop` ひとつで、設定も状態ファイルもいらない。[Web サイト](https://www.sijis.me/projects/nuthatch)
 
-## なぜ
-
-- **Zero setup** — 状態ファイルなし、init コマンドなし。
-  `git worktree list --porcelain` が唯一の正本。任意のリポジトリで即動く。
-- **Convention over config** — worktree は常に
-  `<root の親>/_worktree/<repo>/<branch>` に置かれるため、一覧やパスの推測が
-  速く予測可能。
-- **AI native** — 全コマンドが非対話で完結し、`--json` はどこでも使え、path
-  は stdout・ログは stderr に出て、エラーは次の一手を教えてくれる。
-
-## 使い方
-
-```sh
-hop                # worktree/branch を対話的に選んで cd
-hop feat/foo       # feat/foo の worktree へ cd (未作成なら --create でその場で作成)
-hop root           # root clone へ cd
-hop -              # 直前の worktree へ戻る
-
-hop ls [--json]    # worktree 一覧 (dirty, ahead/behind, kind)
-hop rm <branch>    # worktree を削除 (branch は残す) — managed/external 問わず、dirty には --force が必要
-hop clean          # ゴミ worktree を自動判定して削除 (managed のみ)
-hop root <branch>  # root clone を一時的に切替 (動作確認用) —
-                   # 対象 branch が他所で checkout 済みなら、clean かつ unlocked な holder を swap する
-hop root -         # root clone を元に戻す (root の branch のみ; swap で detach した holder はそのまま)
-
-hop -- <branch>    # 予約コマンドと被る branch 名をエスケープ
-                   # (`hop` 自体と同名の branch (例: `hop -- hop`) にも必要)
-hop --help         # usage を表示 (-h / hop help でも同じ)
-
-hop --version          # hop の version を表示
-hop --update           # standalone バイナリを最新リリースへ置換 (それ以外は更新方法を表示)
-hop --update --check   # 更新があるかを報告するだけ — 何も変更しない
-```
-
-同じ branch が複数の worktree で checkout されている場合、branch だけを指定する
-`hop rm` は削除対象を推測せず拒否する。対話的 picker は選択した path を、lock 内の
-最終安全確認まで保持する。
-
-### 対話的 picker
-
-picker は候補を section に分けて表示する — 既存の worktree (root が先頭) と
-未作成の branch — ステータスマーカー・整列した列・短縮パス付きで:
-
-```
-  WORKTREES
-❯ ● main          root     ~/ghq/.../nuthatch
-  ○ feat/picker   managed  …/_worktree/feat__picker
-  ● codex/fix-x   ext      …/.claude/worktrees/x
-
-  BRANCHES — Enter creates a worktree
-  + feat/idea     local
-  + origin/hotfix remote
-
-  (●=dirty ○=clean +=not created)
-```
-
-candidate が 0 件になった section は (header ごと) 丸ごと消える —
-検索クエリで絞り込んだ結果 0 件になった場合も同様。
-
-各 section 内の順序は insertion 順ではなく固定: WORKTREES は root が先頭、
-次に managed、その次に external (各グループ内は branch 名昇順、detached
-HEAD の worktree はグループ内最後); BRANCHES は remote より local が先
-(各グループ内は branch 名昇順)。これは検索フィルタ中も保たれる —
-絞り込んでも残った項目の並びは変わらない。BRANCHES の行は dim 表示になり、
-○/●/+ マーカーに加えて「既に worktree」か「まだ未作成」かが一目でわかる。
-
-picker は terminal の alternate screen buffer (fzf や vim と同じ仕組み) で
-動くため、scrollback 履歴に残らない — 実行のたびに画面を上書きし、
-どう終了しても (選択、Esc/Ctrl-C、割り込み) shell の画面をきれいに復元する。
-
-### 対話的 picker のキー
-
-action panel は候補一覧の隣に列として表示される (overlay ではない) ので、
-action を選ぶ間も一覧が見え続ける。横に並べられない幅 (おおよそ 94 列
-未満) の terminal では、一覧の下にスタックする形にフォールバックする。
-
-| キー | 動作 |
-|---|---|
-| `Enter` | 選択中の候補へ cd |
-| `Tab`, `→`, `Ctrl+L`, `Ctrl+F` | 選択中の候補の action panel を開く (ここで cd / 削除 / root 切替) |
-| `Ctrl+X` | 選択中の worktree を削除 (常に先に y/N を確認) |
-| `Ctrl+R` | root clone を選択中の branch へ切替 (`external` は先に y/N を確認) |
-| `↑`/`↓`, `Ctrl+P`/`Ctrl+N`, `Ctrl+K` | 選択を移動 (矢印・emacs・vim キーがすべて併用可) |
-| `Esc` | 静かにキャンセル — exit 0、stdout は空のまま (shell wrapper は cd しない) |
-| `Ctrl+C` | 割り込みとしてキャンセル — exit 130、実際の SIGINT と同じ |
-
-action panel 内: 同じ上下移動キー (左右は閉じる操作に予約されており、
-移動としては使われない)、`Enter` でハイライト中の action を実行、
-`c`/`d`/`r` で cd/delete/switch-root を直接実行、`Esc`、`Tab`、`←`、
-`Ctrl+H` で一覧に戻る (`←`/`Ctrl+H` は開く操作の `→`/`Ctrl+L`/`Ctrl+F` と
-対になっている; `Tab` はどちらの状態からでもトグルする — Ghostty のように
-Cmd+K のようなキーの組み合わせを Tab に remap する terminal で便利)。
-`delete` はすでに作成済みの worktree (`managed` / `external`) すべてに
-表示される (panel からの削除は、`external` worktree と、git が作業ツリーを
-見失った prunable な worktree なら先に y/N を確認する。Ctrl+X は常に
-確認する); `switch root here` は root worktree 自身には表示されず、
-`external` worktree に対しては HEAD を detach する可能性があるため
-同じく先に y/N を確認する。削除すると候補一覧が再読み込みされ、picker を
-抜けずに削除を続けられる; cd と switch-root は終了して結果の path を
-出力する (hop の stdout 契約どおり)。
-
-Shell 統合 (自動 `cd`):
-
-```sh
-# ~/.zshrc
-eval "$(hop init zsh)"
-```
+<table>
+  <tr>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/tile-create.svg" width="200" alt="worktree を作る"><br>
+      <b>作る</b><br>
+      <sub>branch も worktree も、その場で。</sub>
+    </td>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/tile-jump.svg" width="200" alt="worktree へ移る"><br>
+      <b>移る</b><br>
+      <sub><code>hop</code> で選び、<code>hop -</code> で戻る。</sub>
+    </td>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/tile-remove.svg" width="200" alt="worktree を消す"><br>
+      <b>消す</b><br>
+      <sub>1 つずつ、または merge 済みをまとめて。</sub>
+    </td>
+  </tr>
+</table>
 
 ## Install
 
-> まだリリースされていない — バージョンは publish も tag もされていない。
-> 最初の `v*` tag が出た後は、以下の選択肢が記載どおりに動く。
-
-推奨: GitHub Release のバイナリ (bun 製、mise なら
-`mise use github:n-seiji/nuthatch`)。npm 版は Node で動くため git 呼び出しが遅い
-(hop ls ~400ms vs ~60ms) — CI や頻繁な呼び出しにはバイナリを使う。
-
 ```sh
-# ビルド済みバイナリ (macOS arm64/x64, Linux x64) — Node.js 不要、最速:
 curl -fsSL https://raw.githubusercontent.com/n-seiji/nuthatch/main/install.sh | sh
-mise use github:n-seiji/nuthatch # mise、GitHub Release のバイナリ経由
-
-# npm (低速: Node 経由で git を呼ぶ — バイナリの hop ls ~60ms に対し ~400ms)
-npm i -g @n-seiji/nuthatch        # または: bunx @n-seiji/nuthatch
-mise use -g npm:@n-seiji/nuthatch # mise、npm 経由
 ```
 
-install script は `hop` を `~/.local/bin` に置き (`HOP_INSTALL_DIR` で
-上書き可)、常に最新の GitHub Release を取得する; 特定バージョンに固定する
-には `HOP_VERSION=vX.Y.Z` を使う。Linux arm64 はビルド済みバイナリが
-まだないため、npm install を使う。
-
-v0.2.0 より後のリリースのバイナリにはビルド来歴 (build provenance) の attestation
-が付く。ダウンロードしたバイナリを手動で検証するには:
+続けて `~/.zshrc` に次を足すと、`hop` が `cd` までしてくれる。
 
 ```sh
-gh attestation verify ./hop-darwin-arm64 --repo n-seiji/nuthatch \
-  --signer-workflow github.com/n-seiji/nuthatch/.github/workflows/release.yml
+eval "$(hop init zsh)"
 ```
 
-`gh` が入っていてログイン済みなら、`install.sh` は SHA-256 の確認の後にこの
-検証 (このリポジトリの release workflow に固定) を行い、失敗したら中止する。
-`gh` がない、または `gh auth login` 未実施なら、警告を出してそのままインス
-トールする。v0.2.0 以前のリリースには attestation がないため、
-`HOP_VERSION=v0.2.0` では `HOP_SKIP_ATTESTATION=1` が必要。トークン期限切れで
-失敗した場合は `gh auth status` を確認する。
+npm、mise、Linux arm64、バイナリの検証、更新については [ガイド](docs/guide.ja.md#install) を参照。
 
-### 更新
+## 使い方
 
-```sh
-hop --update          # standalone バイナリを最新リリースへ置換
-hop --update --check  # 報告だけ: current / latest / インストール方法 / すべきこと
-hop --version         # 今どの version か
-```
-
-`hop --update` が置換するのは `install.sh` で入れたバイナリだけで、置き場の
-ディレクトリに書き込めて (バイナリと checksum のダウンロードの前に確認する)、
-かつリリースに添付された `.sha256` と SHA-256 が一致した場合に限る — 不一致なら
-何も置換しない (確認するのは SHA-256 のみで、attestation は見ない)。それ以外のインストールでは、何も実行せず、リクエストも送らず、
-更新方法を 1 行表示して終了する (exit 1):
-
-| インストール方法 | 更新方法 |
+| コマンド | 動作 |
 |---|---|
-| `install.sh` (`~/.local/bin` のバイナリ) | `hop --update`、または `install.sh` を再実行 |
-| mise | `mise upgrade` |
-| npm / bun / pnpm / yarn の global | `npm i -g @n-seiji/nuthatch@latest` (または使っているパッケージマネージャの同等コマンド) |
-| Homebrew・Nix・aqua・proto・ソースチェックアウト・その他のツール | そのツール自身の upgrade コマンド |
+| `hop` | worktree/branch を対話的に選んで `cd` |
+| `hop <branch>` | その branch の worktree へ `cd` |
+| `hop <branch> --create` | 未作成ならその場で worktree を作成 |
+| `hop -` | 直前の worktree へ戻る |
+| `hop root` | root clone へ `cd` |
+| `hop ls [--json]` | worktree 一覧 (dirty, ahead/behind, kind) |
+| `hop rm <branch>` | worktree を削除 (branch は残す) |
+| `hop clean` | ゴミ worktree を自動判定して削除 (既定では managed のみ) |
+| `hop --update` | standalone バイナリを最新リリースへ置換 |
 
-`hop --update --check` はどのインストール方法でも使え、同じ案内を報告する。
-hop がネットワークに出るのは GitHub の固定アドレスへの HTTPS リクエストだけで、
-タイムアウトとサイズ上限つき。
+picker とそのキー、`hop root <branch>` などは [ガイド](docs/guide.ja.md#使い方) にある。
 
-## トラブルシューティング
+## 安全がデフォルト
 
-`hop: git executable not found. Looked in: …` は git のバイナリを見つけられ
-なかったという意味。hop は `PATH` の絶対パスエントリを順に探し、その後
-`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/bin` を見る。git が
-それ以外の場所にある場合は、直接指定する:
+- `hop rm` は、`--force` を付けない限り dirty な worktree を拒否する。`hop clean` と `hop root` は dirty な worktree に触れない。
+- git が locked と報告する worktree は、`--force` でも削除しない。
+- `_worktree/<repo>/` の外にある (external) worktree を picker から削除するときは y/N を確認する。Ctrl+X は常に確認する。
+- `hop clean` が既定で対象にするのは、hop が管理する worktree だけ。external は `--ext` を付けたときだけ対象になる。
+- `hop rm` は branch を残す。
 
-```sh
-export HOP_GIT=/path/to/git
-```
+## AI coding agent 向け
 
-## Agent skill (Claude Code / Codex plugin)
-
-このリポジトリは plugin marketplace も兼ねており、
-[`using-hop`](skills/using-hop/SKILL.md) skill を配布する —
-coding agent に `hop` を非対話・安全に扱う方法を教える skill。
+全コマンドが非対話で完結する。`--json` はどこでも使え、path は stdout、ログは stderr に出る。このリポジトリは [`using-hop`](plugins/hop/skills/using-hop/SKILL.md) skill を plugin として配布している。agent が `hop` を安全に使うための skill。
 
 ```sh
 # Claude Code
@@ -212,11 +81,10 @@ codex plugin marketplace add n-seiji/nuthatch
 codex plugin install hop
 ```
 
-## Docs
+## その他
 
-- [docs/design.md](docs/design.md) — 設計書 (全文)
-- [AGENTS.md](AGENTS.md) — このリポジトリで作業する coding agent 向けガイド
-
-## License
-
-GPL-3.0 — [LICENSE](LICENSE) 参照。
+- [Web サイト](https://www.sijis.me/projects/nuthatch)
+- [ガイド](docs/guide.ja.md): 使い方、picker、インストール、更新、トラブルシューティング
+- [docs/design.md](docs/design.md): 設計書
+- [AGENTS.md](AGENTS.md): このリポジトリで作業する coding agent 向けガイド
+- [LICENSE](LICENSE): GPL-3.0
