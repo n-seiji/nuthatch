@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
-  <img src="docs/assets/wordmark-light.svg" alt="nuthatch" width="320">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+  <img src="docs/assets/logo-light.svg" alt="nuthatch" width="360">
 </picture>
 
 [English](README.md) · **日本語**
