@@ -87,6 +87,8 @@ const runMutation = async (
 
 /** What the UI layer reads on every render — derived fields already computed. */
 export interface PickerSnapshot {
+  /** Every candidate, unfiltered -- the header counts what the repo has, not what the query matches. */
+  readonly candidates: readonly PickCandidate[];
   readonly query: string;
   readonly filtered: readonly PickCandidate[];
   readonly clampedIndex: number;
@@ -167,6 +169,7 @@ export const createPickerStore = (
     const filtered = getFiltered(state);
     const clampedIndex = Math.min(state.index, Math.max(filtered.length - 1, 0));
     snapshotCache = {
+      candidates: state.candidates,
       query: state.query,
       filtered,
       clampedIndex,

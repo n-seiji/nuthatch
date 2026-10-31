@@ -45,6 +45,7 @@ const frameLines = (frame: string): string[] => {
 const buildSnapshotWithPanelOpen = (branch: string): PickerSnapshot => {
   const candidate = worktreeCandidate(branch, `/repo/${branch}`);
   return {
+    candidates: [candidate],
     query: "",
     filtered: [candidate],
     clampedIndex: 0,
@@ -55,6 +56,7 @@ const buildSnapshotWithPanelOpen = (branch: string): PickerSnapshot => {
 };
 
 const buildListSnapshot = (candidates: readonly PickCandidate[]): PickerSnapshot => ({
+  candidates,
   query: "",
   filtered: candidates,
   clampedIndex: 0,
@@ -90,24 +92,21 @@ describe("renderPickerFrame (all rows fit the terminal width)", () => {
     }
   });
 
-  it.each([60, 80, 100, 140])(
-    "%i 桁端末でも候補行から branch 名と状態マーカーが消えない",
-    (width) => {
-      const snapshot = buildListSnapshot([longBranchCandidate]);
-      const frame = renderPickerFrame({
-        snapshot,
-        width,
-        height: 24,
-        colorEnabled: false,
-      });
-      const lines = frameLines(frame);
-      const candidateLine = lines.find((line) => line.includes("❯"));
-      expect(candidateLine).toBeDefined();
-      // The status marker ("○" clean) and at least the start of the branch name must survive -- only the path column is allowed to shrink first.
-      expect(candidateLine).toContain("○");
-      expect(candidateLine).toContain("feature/a-genuinely");
-    },
-  );
+  it.each([60, 80, 100, 140])("%i 桁端末でも候補行から branch 名と状態語が消えない", (width) => {
+    const snapshot = buildListSnapshot([longBranchCandidate]);
+    const frame = renderPickerFrame({
+      snapshot,
+      width,
+      height: 24,
+      colorEnabled: false,
+    });
+    const lines = frameLines(frame);
+    const candidateLine = lines.find((line) => line.includes("❯"));
+    expect(candidateLine).toBeDefined();
+    // The state word ("✓ clean") and at least the start of the branch name must survive -- only the path column is allowed to shrink first.
+    expect(candidateLine).toContain("✓ clean");
+    expect(candidateLine).toContain("feature/a-genuinely");
+  });
 
   it.each([60, 80, 100, 140])("%i 桁端末でもフッターに終了方法 (Esc) が残る", (width) => {
     const snapshot = buildListSnapshot([longBranchCandidate]);
@@ -245,6 +244,7 @@ describe("renderPickerFrame (stacked panel row budget follows actual panel heigh
       worktreeCandidate(`feature/branch-${index}`, `/repo/branch-${index}`),
     );
     const snapshot: PickerSnapshot = {
+      candidates: [candidate, ...manyCandidates],
       query: "",
       filtered: [candidate, ...manyCandidates],
       clampedIndex: 0,
@@ -272,6 +272,7 @@ describe("renderPickerFrame (stacked panel row budget follows actual panel heigh
   it("末尾に長いクエリを入力しても、末尾 (今打っている文字) が見える (先頭ではなく末尾を残して切り詰める)", () => {
     const query = "feature/a-genuinely-very-long-query-string-being-typed-right-now";
     const snapshot: PickerSnapshot = {
+      candidates: [],
       query,
       filtered: [],
       clampedIndex: 0,

@@ -50,21 +50,31 @@ lock-protected safety check.
 ### Interactive picker
 
 The picker groups candidates into sections — existing worktrees (root first)
-and not-yet-created branches — with a status marker, aligned columns, and
-shortened paths:
+and not-yet-created branches — under a header that names the repo and counts
+what is in it, with a colored state word, aligned columns, and shortened paths:
 
 ```
-  WORKTREES
-❯ ● main          root     ~/ghq/.../nuthatch
-  ○ feat/picker   managed  …/_worktree/feat__picker
-  ● codex/fix-x   ext      …/.claude/worktrees/x
-
-  BRANCHES — Enter creates a worktree
-  + feat/idea     local
-  + origin/hotfix remote
-
-  (●=dirty ○=clean +=not created)
+◆ app  5 worktrees · 1 with changes · 1 branch
+hop:  (type to filter)
+WORKTREES ──────────────────────────────────────────────────────────────────────
+❯ ✓ clean   main                root    ~/ghq/github.com/me/app
+  ✓ clean   chore/deps          managed …github.com/me/_worktree/app/chore__deps
+  ● changes feat/login          managed …github.com/me/_worktree/app/feat__login
+  ✓ clean   claude/agent-x      ext     ~/.claude-wt/agent-x
+BRANCHES — Enter creates a worktree ────────────────────────────────────────────
+  + new     feat/idea           local
+Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K move · Enter cd · Esc cancel
 ```
+
+The header counts come from every candidate (changed worktrees in yellow) and
+gain `· N matches` while a search query narrows the list. The state words are
+the ones `hop ls` uses — `✓ clean`, `● changes`, `⊘ locked`, `✗ missing` (and
+`- bare`) — plus `+ new` for a branch that has no worktree yet. Section
+headers are rules that stop where the widest row does. The selected row keeps
+its colors: a cyan `❯` marks it and the branch name is shown in inverse video
+(with color off — `NO_COLOR` or a non-TTY stderr — the `❯` alone marks it).
+In the footer each key is bold and its action dimmed; on a terminal too
+narrow for the full hint it shortens to `↑↓ move · Enter cd · Esc cancel`.
 
 A section (header included) disappears entirely when it has no candidates —
 including when a search query filters it down to zero.
@@ -74,9 +84,8 @@ root first, then managed worktrees, then external ones (branch name
 ascending within each group, detached-HEAD worktrees last within theirs);
 BRANCHES puts local branches before remote ones (branch name ascending
 within each group). This holds under search filtering too — narrowing the
-list never reshuffles what's left. BRANCHES rows render dim so "already a
-worktree" vs. "not created yet" reads at a glance, on top of the ○/●/+
-markers.
+list never reshuffles what's left. BRANCHES rows carry the cyan `+ new` state
+word, so "already a worktree" vs. "not created yet" reads at a glance.
 
 The picker runs in the terminal's alternate screen buffer (the same
 mechanism fzf and vim use), so it never gets pushed into your scrollback
@@ -87,7 +96,7 @@ screen on exit, however it exits (selection, Esc/Ctrl-C, or an interrupt).
 
 The action panel renders as a column beside the candidate list (not an
 overlay), so the list stays visible while you pick an action. On terminals
-too narrow to fit both (under about 94 columns) it falls back to stacking
+too narrow to fit both (under about 92 columns) it falls back to stacking
 below the list instead.
 
 | Key | Action |

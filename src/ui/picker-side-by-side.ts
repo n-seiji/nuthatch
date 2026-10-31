@@ -1,18 +1,22 @@
 import { displayWidth, truncateToWidth } from "../domain/display-width.ts";
 import { GUTTER } from "./picker-frame.ts";
-import { KIND_COLUMN_WIDTH, MAX_BRANCH_COLUMN_WIDTH, MAX_PATH_LENGTH } from "./picker-layout.ts";
+import {
+  KIND_COLUMN_WIDTH,
+  MAX_BRANCH_COLUMN_WIDTH,
+  MAX_PATH_LENGTH,
+  STATE_COLUMN_WIDTH,
+} from "./picker-layout.ts";
 import { SIDE_PANEL_WIDTH } from "./side-panel.ts";
 
-/** Fixed chrome in a rendered candidate row; mirrors picker-render.ts's candidateRowLine format string: selection marker, status marker + space, branch/kind gutter, space before the path. */
+/** Fixed chrome in a rendered candidate row; mirrors picker-render.ts's candidateRowLine format string: selection marker, state word + space, branch/kind gutter, space before the path. */
 const SELECTION_MARKER_WIDTH = 2;
-const STATUS_MARKER_WIDTH = 1;
-const STATUS_MARKER_GAP_WIDTH = 1;
+const STATE_GAP_WIDTH = 1;
 const BRANCH_KIND_GUTTER_WIDTH = 2;
 const KIND_PATH_GAP_WIDTH = 1;
 const CANDIDATE_ROW_CHROME_WIDTH =
   SELECTION_MARKER_WIDTH +
-  STATUS_MARKER_WIDTH +
-  STATUS_MARKER_GAP_WIDTH +
+  STATE_COLUMN_WIDTH +
+  STATE_GAP_WIDTH +
   BRANCH_KIND_GUTTER_WIDTH +
   KIND_PATH_GAP_WIDTH;
 
@@ -20,15 +24,17 @@ const CANDIDATE_ROW_CHROME_WIDTH =
  * Whether the side panel fits beside the list or must stack below it.
  *
  * The threshold is sized off the fixed row chrome, the branch and kind
- * columns, half the path budget, the gutter and the panel -- not the full
+ * columns, a quarter of the path budget, the gutter and the panel -- not the full
  * candidate row width or the full footer hint, which both degrade
  * gracefully when squeezed (constrainRowColumnWidths shrinks the path
- * first; footerHintForWidth has a short fallback). Half the path budget
- * keeps side-by-side available from about 100 columns; the full budget
- * would stack every 80-139 column terminal.
+ * first; footerHintForWidth has a short fallback). The state word column
+ * is 8 columns wider than the old one-character marker, so the path share
+ * dropped from half to a quarter to keep side-by-side available from 92
+ * columns (a 100-column terminal stays side by side, 80 stacks); the full
+ * budget would stack every 80-139 column terminal.
  */
-const HALF_DIVISOR = 2;
-const MIN_PATH_DISPLAY_LENGTH = Math.ceil(MAX_PATH_LENGTH / HALF_DIVISOR);
+const PATH_SHARE_DIVISOR = 4;
+const MIN_PATH_DISPLAY_LENGTH = Math.ceil(MAX_PATH_LENGTH / PATH_SHARE_DIVISOR);
 
 export const MAX_CANDIDATE_ROW_WIDTH =
   CANDIDATE_ROW_CHROME_WIDTH + MAX_BRANCH_COLUMN_WIDTH + KIND_COLUMN_WIDTH + MAX_PATH_LENGTH;
@@ -45,9 +51,9 @@ export const isNarrowTerminal = (columns: number): boolean => columns < MIN_SIDE
 
 /** The picker's two footer key-hint lines -- kept here (rather than in picker-render.ts) so footerHintForWidth (below) can pick between this and its short fallback. */
 const LIST_FOOTER_HINT =
-  "Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K,J move · Enter cd · Esc cancel";
+  "Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K move · Enter cd · Esc cancel";
 const PANEL_FOOTER_HINT =
-  "↑↓/Ctrl+P,N,K,J move · Enter run · c/d/r shortcuts · Esc/Tab/←/Ctrl+H close";
+  "↑↓/Ctrl+P,N,K move · Enter run · c/d/r shortcuts · Esc/Tab/←/Ctrl+H close";
 
 /**
  * Shrinks a candidate row's branch/path column widths to fit `maxRowWidth`,

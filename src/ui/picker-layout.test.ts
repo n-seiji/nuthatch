@@ -7,25 +7,53 @@ import {
   candidateKindLabel,
   KIND_COLUMN_WIDTH,
   shortenPath,
-  statusMarker,
+  STATE_COLUMN_WIDTH,
+  candidateState,
 } from "./picker-layout.ts";
-import { padToWidth } from "../domain/display-width.ts";
+import { displayWidth, padToWidth } from "../domain/display-width.ts";
 
-describe("statusMarker", () => {
-  it("dirty な worktree は ●", () => {
-    expect(statusMarker(worktreeCandidate({}, true))).toBe("●");
+describe("candidateState", () => {
+  it("clean な worktree は ✓ clean (green)", () => {
+    expect(candidateState(worktreeCandidate({}, false))).toEqual({
+      text: "✓ clean",
+      tone: "green",
+    });
   });
 
-  it("clean な worktree は ○", () => {
-    expect(statusMarker(worktreeCandidate({}, false))).toBe("○");
+  it("dirty な worktree は ● changes (yellow)", () => {
+    expect(candidateState(worktreeCandidate({}, true))).toEqual({
+      text: "● changes",
+      tone: "yellow",
+    });
   });
 
-  it("dirty 不明 (null) な worktree は空白", () => {
-    expect(statusMarker(worktreeCandidate({}, null))).toBe(" ");
+  it("locked / prunable は hop ls と同じ語で出す", () => {
+    expect(candidateState(worktreeCandidate({ locked: true }, true)).text).toBe("⊘ locked");
+    expect(candidateState(worktreeCandidate({ prunable: true }, null)).text).toBe("✗ missing");
   });
 
-  it("creatable (未作成 branch) は +", () => {
-    expect(statusMarker(creatableCandidate("feat/x", "local"))).toBe("+");
+  it("bare は - bare", () => {
+    expect(candidateState(worktreeCandidate({ bare: true }, null)).text).toBe("- bare");
+  });
+
+  it("creatable (未作成 branch) は + new (cyan)", () => {
+    expect(candidateState(creatableCandidate("feat/x", "local"))).toEqual({
+      text: "+ new",
+      tone: "cyan",
+    });
+  });
+
+  it("どの状態語も state 列の幅に収まる", () => {
+    const states = [
+      worktreeCandidate({}, false),
+      worktreeCandidate({}, true),
+      worktreeCandidate({ locked: true }, false),
+      worktreeCandidate({ prunable: true }, null),
+      worktreeCandidate({ bare: true }, null),
+      worktreeCandidate({}, null),
+      creatableCandidate("feat/x", "remote"),
+    ].map((candidate) => displayWidth(candidateState(candidate).text));
+    expect(Math.max(...states)).toBe(STATE_COLUMN_WIDTH);
   });
 });
 

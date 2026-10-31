@@ -1,17 +1,19 @@
 import { homedir } from "node:os";
-import { truncateToWidthKeepingTail } from "../domain/display-width.ts";
+import { padToWidth, truncateToWidthKeepingTail } from "../domain/display-width.ts";
 import {
   buildFrame,
   GUTTER,
+  lineWidth,
   truncateLineToWidth,
   type LineStyle,
   type StyledLine,
   wrapInBox,
 } from "./picker-frame.ts";
+import { footerLine, headerLine, ruleLine } from "./picker-chrome.ts";
 import {
   buildDisplayRows,
-  LEGEND_TEXT,
   rawBranchColumnWidth,
+  STATE_COLUMN_WIDTH,
   type DisplayRow,
 } from "./picker-layout.ts";
 import {
@@ -59,12 +61,6 @@ const hiddenCountLine = (count: number, direction: "above" | "below"): StyledLin
   ];
 };
 
-/** Status marker colors: changes stand out in yellow, a clean worktree reads as "fine" in green. */
-const STATUS_MARKER_STYLES: Record<string, LineStyle> = {
-  "●": "yellow",
-  "○": "green",
-};
-
 /** Kind label colors, keyed by the trimmed label picker-layout.ts produces. */
 const KIND_LABEL_STYLES: Record<string, LineStyle> = {
   root: "magenta",
@@ -72,38 +68,45 @@ const KIND_LABEL_STYLES: Record<string, LineStyle> = {
   ext: "yellow",
 };
 
+/**
+ * "❯ ✓ clean   main            root    ~/path". The state word keeps its color
+ * whether or not the row is selected; the selection is the cyan ❯ plus the
+ * branch name in inverse video (with color off the ❯ alone marks it).
+ */
 const candidateRowLine = (
   row: Extract<DisplayRow, { kind: "candidate" }>,
   selected: boolean,
 ): StyledLine => {
-  if (selected) {
-    const text = `❯ ${row.statusMarker} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`;
-    return [{ text, style: "inverse" }];
-  }
-  if (row.section === "branch") {
-    return [
-      {
-        text: `  ${row.statusMarker} ${row.branchLabel}  ${row.kindLabel} ${row.pathLabel}`,
-        style: "dim",
-      },
-    ];
-  }
+  const branch = row.branchLabel.trimEnd();
+  const branchPad = row.branchLabel.slice(branch.length);
   return [
-    { text: "  " },
-    { text: row.statusMarker, style: STATUS_MARKER_STYLES[row.statusMarker] ?? "plain" },
-    { text: ` ${row.branchLabel}  ` },
-    { text: row.kindLabel, style: KIND_LABEL_STYLES[row.kindLabel.trim()] ?? "plain" },
+    selected ? { text: "❯", style: "cyan" } : { text: " " },
+    { text: " " },
+    {
+      text: padToWidth(row.state.text, STATE_COLUMN_WIDTH),
+      style: row.state.tone,
+    },
+    { text: " " },
+    selected ? { text: branch, style: "inverse" } : { text: branch },
+    { text: `${branchPad}  ` },
+    {
+      text: row.kindLabel,
+      style: KIND_LABEL_STYLES[row.kindLabel.trim()] ?? "dim",
+    },
     { text: ` ${row.pathLabel}`, style: "dim" },
   ];
 };
 
-const displayRowLine = (row: DisplayRow, clampedIndex: number): StyledLine =>
+const displayRowLine = (row: DisplayRow, clampedIndex: number, ruleWidth: number): StyledLine =>
   row.kind === "header"
-    ? [{ text: row.label, style: "bold-dim" }]
+    ? ruleLine(row.label, ruleWidth)
     : candidateRowLine(row, row.index === clampedIndex);
 
 interface BuildListLinesInput {
+  readonly candidates: PickerSnapshot["candidates"];
   readonly query: string;
+  /** How many candidates the query matches. */
+  readonly matchCount: number;
   readonly maxWidth: number;
   readonly rows: readonly DisplayRow[];
   readonly clampedIndex: number;
@@ -112,7 +115,13 @@ interface BuildListLinesInput {
   readonly footerHint: string;
 }
 
+/** Section rules stop where the widest candidate row does (never past the column). */
+const ruleWidthFor = (rowLines: readonly StyledLine[], maxWidth: number): number =>
+  Math.min(maxWidth, Math.max(0, ...rowLines.map((line) => lineWidth(line))));
+
 const buildListLines = ({
+  candidates,
+  matchCount,
   query,
   maxWidth,
   rows,
@@ -121,7 +130,10 @@ const buildListLines = ({
   hiddenBelow,
   footerHint,
 }: BuildListLinesInput): StyledLine[] => {
-  const lines: StyledLine[] = [queryLine(query, maxWidth)];
+  const lines: StyledLine[] = [
+    headerLine(candidates, query.length === 0 ? null : matchCount),
+    queryLine(query, maxWidth),
+  ];
   if (rows.length === 0) {
     lines.push([{ text: "No matches.", style: "dim" }]);
   }
@@ -129,14 +141,18 @@ const buildListLines = ({
   if (above !== null) {
     lines.push(above);
   }
+  const candidateLines = rows.flatMap((row) =>
+    row.kind === "candidate" ? [candidateRowLine(row, row.index === clampedIndex)] : [],
+  );
+  const ruleWidth = ruleWidthFor(candidateLines, maxWidth);
   for (const row of rows) {
-    lines.push(displayRowLine(row, clampedIndex));
+    lines.push(displayRowLine(row, clampedIndex, ruleWidth));
   }
   const below = hiddenCountLine(hiddenBelow, "below");
   if (below !== null) {
     lines.push(below);
   }
-  lines.push([{ text: `(${LEGEND_TEXT})`, style: "dim" }], [{ text: footerHint, style: "dim" }]);
+  lines.push(footerLine(footerHint));
   return lines;
 };
 
@@ -180,7 +196,7 @@ export const renderPickerFrame = ({
   height,
   colorEnabled: color,
 }: RenderPickerInput): string => {
-  const { query, filtered, clampedIndex, mode, panelIndex, busy } = snapshot;
+  const { candidates, query, filtered, clampedIndex, mode, panelIndex, busy } = snapshot;
   const narrow = isNarrowTerminal(width);
   const right = buildSidePanelLines(mode, panelIndex, busy);
   // The panel only stacks below the list (consuming vertical rows the list would otherwise use) in narrow terminals; side-by-side it costs no rows.
@@ -196,6 +212,8 @@ export const renderPickerFrame = ({
   const rows = buildDisplayRows(visible, homedir(), viewport.start, columnWidths);
 
   const left = buildListLines({
+    candidates,
+    matchCount: filtered.length,
     query,
     maxWidth: listColumnWidth,
     rows,

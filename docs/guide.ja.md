@@ -48,20 +48,30 @@ hop --update --check   # 更新があるかを報告するだけ — 何も変�
 ### 対話的 picker
 
 picker は候補を section に分けて表示する — 既存の worktree (root が先頭) と
-未作成の branch — ステータスマーカー・整列した列・短縮パス付きで:
+未作成の branch。先頭の header に repo 名と件数を出し、各行は色付きの状態語・
+整列した列・短縮パス付き:
 
 ```
-  WORKTREES
-❯ ● main          root     ~/ghq/.../nuthatch
-  ○ feat/picker   managed  …/_worktree/feat__picker
-  ● codex/fix-x   ext      …/.claude/worktrees/x
-
-  BRANCHES — Enter creates a worktree
-  + feat/idea     local
-  + origin/hotfix remote
-
-  (●=dirty ○=clean +=not created)
+◆ app  5 worktrees · 1 with changes · 1 branch
+hop:  (type to filter)
+WORKTREES ──────────────────────────────────────────────────────────────────────
+❯ ✓ clean   main                root    ~/ghq/github.com/me/app
+  ✓ clean   chore/deps          managed …github.com/me/_worktree/app/chore__deps
+  ● changes feat/login          managed …github.com/me/_worktree/app/feat__login
+  ✓ clean   claude/agent-x      ext     ~/.claude-wt/agent-x
+BRANCHES — Enter creates a worktree ────────────────────────────────────────────
+  + new     feat/idea           local
+Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K move · Enter cd · Esc cancel
 ```
+
+header の件数は全候補から数える (変更ありの worktree は黄色)。検索クエリで
+絞り込んでいる間は `· N matches` が付く。状態語は `hop ls` と同じ
+(`✓ clean` / `● changes` / `⊘ locked` / `✗ missing`、bare は `- bare`) で、
+worktree がまだ無い branch は `+ new`。section の見出しは、最も幅の広い行で
+止まる罫線。選択行は色を保ったまま、cyan の `❯` と inverse 表示の branch 名で
+示す (色なし — `NO_COLOR` や stderr が TTY でないとき — は `❯` だけが目印)。
+footer はキーを太字、動作を薄く表示し、全文が収まらない幅では
+`↑↓ move · Enter cd · Esc cancel` に短縮される。
 
 candidate が 0 件になった section は (header ごと) 丸ごと消える —
 検索クエリで絞り込んだ結果 0 件になった場合も同様。
@@ -70,8 +80,8 @@ candidate が 0 件になった section は (header ごと) 丸ごと消える �
 次に managed、その次に external (各グループ内は branch 名昇順、detached
 HEAD の worktree はグループ内最後); BRANCHES は remote より local が先
 (各グループ内は branch 名昇順)。これは検索フィルタ中も保たれる —
-絞り込んでも残った項目の並びは変わらない。BRANCHES の行は dim 表示になり、
-○/●/+ マーカーに加えて「既に worktree」か「まだ未作成」かが一目でわかる。
+絞り込んでも残った項目の並びは変わらない。BRANCHES の行は cyan の `+ new` で、
+「既に worktree」か「まだ未作成」かが一目でわかる。
 
 picker は terminal の alternate screen buffer (fzf や vim と同じ仕組み) で
 動くため、scrollback 履歴に残らない — 実行のたびに画面を上書きし、
@@ -80,7 +90,7 @@ picker は terminal の alternate screen buffer (fzf や vim と同じ仕組み)
 ### 対話的 picker のキー
 
 action panel は候補一覧の隣に列として表示される (overlay ではない) ので、
-action を選ぶ間も一覧が見え続ける。横に並べられない幅 (おおよそ 94 列
+action を選ぶ間も一覧が見え続ける。横に並べられない幅 (おおよそ 92 列
 未満) の terminal では、一覧の下にスタックする形にフォールバックする。
 
 | キー | 動作 |
