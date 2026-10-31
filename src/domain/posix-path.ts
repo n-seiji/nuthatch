@@ -27,6 +27,12 @@ export const parentDir = (path: string): string => {
   return index === 0 ? "/" : trimmed.slice(0, index);
 };
 
+/** The last path segment: `app` for `/a/b/app/`; `/` stays `/`. */
+export const baseName = (path: string): string => {
+  const trimmed = withoutTrailingSlash(path);
+  return trimmed === "/" ? trimmed : trimmed.slice(trimmed.lastIndexOf("/") + 1);
+};
+
 /**
  * Absolute `dir/name` candidates in `dirs`' order, each entry trimmed and
  * deduplicated. A relative entry (`.`, `node_modules/.bin`) is dropped rather

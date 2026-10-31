@@ -80,6 +80,25 @@ tail) to fit the terminal width. Colors only when stdout is a terminal and
 `--json`. The zsh wrapper captures stdout only for commands that may `cd`, so
 `hop ls` reaches the terminal directly and keeps its colors.
 
+### Picker display
+
+The picker draws on stderr only (stdout, exit codes and JSON are untouched by
+how it looks). From top to bottom: a header (`◆ <repo>  N worktrees · N with
+changes · N branches`, counted over all candidates, plus `· N matches` while a
+query narrows the list), the `hop:` query line, a `WORKTREES` and a `BRANCHES`
+section each headed by a rule that stops where the widest row does, and the
+key-hint footer (key bold, action dimmed; it lists only keys that work and
+shortens on narrow terminals; while a y/N confirmation is open it reads
+`y confirm · any other key cancels`). Each row shows a colored state word using the
+same words as `hop ls`'s STATE (`✗ missing`, `⊘ locked`, `- bare`,
+`● changes`, `✓ clean`; the picker also reads a worktree whose directory is
+gone and not yet flagged prunable as `✗ missing`, whereas `hop ls` shows
+`✓ clean` for that case), and `+ new` for a branch that has no worktree. The selected row keeps its colors and is marked by a cyan `❯` with the
+branch name in inverse video; with color off the `❯` alone marks it. There is no
+legend line: the header takes its row, so the row budget is unchanged. The
+action panel sits beside the list from 92 columns up and stacks below it
+otherwise.
+
 ### Self-update
 
 | Command | Behavior |

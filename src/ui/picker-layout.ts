@@ -1,4 +1,5 @@
 import { candidateBranchLabel } from "../domain/candidates.ts";
+import { worktreeState, type WorktreeState } from "../domain/worktree-state.ts";
 import { shortenHome } from "../domain/posix-path.ts";
 import type { PickCandidate, WorktreeKind } from "../domain/schema.ts";
 import {
@@ -10,7 +11,7 @@ import {
 
 /**
  * Pure layout: turns the flat candidate list into the two-section, aligned
- * display the picker renders (WORKTREES / BRANCHES, status markers, padded
+ * display the picker renders (WORKTREES / BRANCHES, state words, padded
  * columns, shortened paths). Kept free of any rendering or terminal code so
  * it's unit-testable on its own — see picker-layout.test.ts.
  */
@@ -19,8 +20,6 @@ import {
 export const MAX_PATH_LENGTH = 40;
 /** Exported for picker-side-by-side.ts's MAX_CANDIDATE_ROW_WIDTH -- see MAX_PATH_LENGTH above. */
 export const MAX_BRANCH_COLUMN_WIDTH = 24;
-
-export const LEGEND_TEXT = "●=dirty ○=clean +=not created";
 
 const WORKTREE_KIND_LABELS: Record<WorktreeKind, string> = {
   root: "root",
@@ -33,16 +32,19 @@ const CREATABLE_SOURCE_LABELS: Record<"local" | "remote", string> = {
   remote: "remote",
 };
 
-/** ● dirty / ○ clean / space (dirty status unknown) / + not yet created. */
-export const statusMarker = (candidate: PickCandidate): string => {
-  if (candidate.kind === "creatable") {
-    return "+";
-  }
-  if (candidate.dirty === null) {
-    return " ";
-  }
-  return candidate.dirty ? "●" : "○";
-};
+/** Width of the state column: the widest word ("● changes", "✗ missing") -- picker-layout.test.ts checks every state fits. */
+export const STATE_COLUMN_WIDTH = 9;
+
+export interface CandidateState {
+  readonly text: string;
+  readonly tone: WorktreeState["tone"] | "cyan";
+}
+
+/** The same state words as `hop ls` for a worktree; "+ new" for a branch with no worktree yet. */
+export const candidateState = (candidate: PickCandidate): CandidateState =>
+  candidate.kind === "creatable"
+    ? { text: "+ new", tone: "cyan" }
+    : worktreeState(candidate.worktree, candidate.dirty);
 
 export const candidateKindLabel = (candidate: PickCandidate): string =>
   candidate.kind === "worktree"
@@ -160,9 +162,7 @@ interface CandidateRow {
   readonly kind: "candidate";
   /** Index into the candidate list this row was built from — used to match the picker's cursor position. */
   readonly index: number;
-  /** Which section this row belongs to — lets the renderer dim BRANCHES rows so worktree vs. not-yet-created reads at a glance. */
-  readonly section: "worktree" | "branch";
-  readonly statusMarker: string;
+  readonly state: CandidateState;
   readonly branchLabel: string;
   readonly kindLabel: string;
   readonly pathLabel: string;
@@ -172,7 +172,6 @@ export type DisplayRow = HeaderRow | CandidateRow;
 
 interface ToCandidateRowOptions {
   readonly index: number;
-  readonly section: "worktree" | "branch";
   readonly branchWidth: number;
   readonly pathMaxLength: number;
   readonly homeDir: string;
@@ -184,8 +183,7 @@ const toCandidateRow = (
 ): CandidateRow => ({
   kind: "candidate",
   index: options.index,
-  section: options.section,
-  statusMarker: statusMarker(candidate),
+  state: candidateState(candidate),
   branchLabel: padToWidth(
     truncateToWidth(candidateBranchLabel(candidate), options.branchWidth),
     options.branchWidth,
@@ -202,9 +200,8 @@ interface IndexedCandidate {
 /** A section header followed by one row per entry, or nothing at all when the section is empty. */
 const sectionRows = (
   label: string,
-  section: CandidateRow["section"],
   entries: readonly IndexedCandidate[],
-  rowOptions: Omit<ToCandidateRowOptions, "index" | "section">,
+  rowOptions: Omit<ToCandidateRowOptions, "index">,
 ): DisplayRow[] => {
   if (entries.length === 0) {
     return [];
@@ -212,7 +209,7 @@ const sectionRows = (
   return [
     { kind: "header", label },
     ...entries.map((entry) =>
-      toCandidateRow(entry.candidate, { ...rowOptions, index: entry.index, section }),
+      toCandidateRow(entry.candidate, { ...rowOptions, index: entry.index }),
     ),
   ];
 };
@@ -250,7 +247,7 @@ export const buildDisplayRows = (
 
   const rowOptions = { branchWidth, pathMaxLength, homeDir };
   return [
-    ...sectionRows("WORKTREES", "worktree", worktreeEntries, rowOptions),
-    ...sectionRows("BRANCHES — Enter creates a worktree", "branch", branchEntries, rowOptions),
+    ...sectionRows("WORKTREES", worktreeEntries, rowOptions),
+    ...sectionRows("BRANCHES — Enter creates a worktree", branchEntries, rowOptions),
   ];
 };

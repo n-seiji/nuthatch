@@ -3,7 +3,7 @@ import { ESC, SGR, SGR_RESET } from "../domain/ansi.ts";
 
 /**
  * Pure frame builder for the self-drawn picker.
- * Turns a list of styled lines (the left column: query/rows/legend/footer,
+ * Turns a list of styled lines (the left column: header/query/rows/footer,
  * and optionally a right column: the action/confirm panel) into one ANSI
  * string to write in a single `process.stderr.write` call per frame — see
  * terminal-session.ts for the write side.
@@ -23,6 +23,7 @@ const CLEAR_TO_END = `${ESC}[J`;
 export type LineStyle =
   | "plain"
   | "cyan"
+  | "bold"
   | "dim"
   | "bold-dim"
   | "inverse"
@@ -50,7 +51,7 @@ const renderSpan = (span: StyledSpan, colorEnabled: boolean): string => {
   return `${sgrCode(style)}${span.text}${SGR_RESET}`;
 };
 
-const lineWidth = (line: StyledLine): number =>
+export const lineWidth = (line: StyledLine): number =>
   line.reduce((total, span) => total + displayWidth(span.text), 0);
 
 const renderLine = (line: StyledLine, colorEnabled: boolean): string =>
@@ -63,7 +64,7 @@ const padRenderedLine = (line: StyledLine, rendered: string, width: number): str
 };
 
 export interface FrameInput {
-  /** The list column: query line, candidate rows, legend, footer. */
+  /** The list column: header, query line, candidate rows, footer. */
   readonly left: readonly StyledLine[];
   /** The side panel (action panel / confirm), or null when not shown. */
   readonly right: readonly StyledLine[] | null;

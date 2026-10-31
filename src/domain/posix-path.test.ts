@@ -1,5 +1,20 @@
 import { describe, expect, it } from "bun:test";
-import { absoluteCandidates, parentDir, shortenHome, splitPathEnv } from "./posix-path.ts";
+import {
+  absoluteCandidates,
+  baseName,
+  parentDir,
+  shortenHome,
+  splitPathEnv,
+} from "./posix-path.ts";
+
+describe("baseName", () => {
+  it("最後の path segment を返す (末尾の / は無視、/ はそのまま)", () => {
+    expect(baseName("/home/me/app")).toBe("app");
+    expect(baseName("/home/me/app/")).toBe("app");
+    expect(baseName("app")).toBe("app");
+    expect(baseName("/")).toBe("/");
+  });
+});
 
 describe("parentDir", () => {
   it("深いパスの場合、1 つ上のディレクトリを返す", () => {
