@@ -1,10 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import { displayWidth } from "../domain/display-width.ts";
 import { footerLine, headerLine, ruleLine } from "./picker-chrome.ts";
-import { lineWidth, renderLine } from "./picker-frame.ts";
+import { buildFrame, lineWidth, type StyledLine } from "./picker-frame.ts";
 import { creatableCandidate, worktreeCandidate } from "./picker-layout.fixtures.ts";
 
-const text = (line: Parameters<typeof renderLine>[0]): string => renderLine(line, false);
+const FRAME_PREFIX = "\u001B[H\u001B[J";
+
+/** A line's plain text, rendered through the public buildFrame (colour off) with the cursor-home/clear prefix stripped. */
+const text = (line: StyledLine): string =>
+  buildFrame({ left: [line], right: null, stacked: false, colorEnabled: false }).slice(
+    FRAME_PREFIX.length,
+  );
 
 describe("headerLine", () => {
   const candidates = [

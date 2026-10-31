@@ -163,3 +163,35 @@ describe("renderPickerFrame (chrome, color)", () => {
     expect(lines.at(-1)).toContain(`${SGR.bold}Enter${SGR_RESET}${SGR.dim} cd${SGR_RESET}`);
   });
 });
+
+describe("renderPickerFrame (confirm overlay footer)", () => {
+  const confirmSnapshot = (): PickerSnapshot => {
+    const [candidate] = sortCandidatesForDisplay(candidates);
+    if (candidate === undefined) {
+      throw new Error("fixture has no candidates");
+    }
+    return snapshot({ mode: { kind: "confirm", action: "delete", candidate } });
+  };
+
+  it.each([80, 200])(
+    "%i 桁端末で確認オーバーレイを開くと、フッターは y と「それ以外で中止」だけを案内する",
+    (width) => {
+      const lines = frameLines(width, { height: 40, snap: confirmSnapshot() });
+      const footer = lines.find((line) => line.includes("y confirm"));
+      expect(footer).toBeDefined();
+      expect(footer).toContain("any other key cancels");
+      // The list/panel hints advertise keys that the confirm overlay treats as "no".
+      expect(footer).not.toContain("Enter");
+      expect(footer).not.toContain("shortcuts");
+      expect(footer).not.toContain("Ctrl+X");
+    },
+  );
+
+  it.each([40, 60])("%i 桁の狭い端末でも確認フッターは幅に収まり、y が残る", (width) => {
+    const lines = frameLines(width, { height: 40, snap: confirmSnapshot() });
+    for (const line of lines) {
+      expect(displayWidth(line)).toBeLessThanOrEqual(width);
+    }
+    expect(lines.some((line) => line.includes("y confirm"))).toBe(true);
+  });
+});

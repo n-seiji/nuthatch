@@ -204,14 +204,4 @@ describe("buildDisplayRows", () => {
     const candidateRows = rows.filter((row) => row.kind === "candidate");
     expect(candidateRows.map((row) => row.index)).toEqual([0, 1]);
   });
-
-  it("candidate row の section は WORKTREES=worktree / BRANCHES=branch になる (dim 表示の出し分けに使う)", () => {
-    const candidates: PickCandidate[] = [
-      worktreeCandidate({ kind: "root" }),
-      creatableCandidate("feat/idea", "local"),
-    ];
-    const rows = buildDisplayRows(candidates, "/repo");
-    const candidateRows = rows.filter((row) => row.kind === "candidate");
-    expect(candidateRows.map((row) => row.section)).toEqual(["worktree", "branch"]);
-  });
 });

@@ -88,11 +88,12 @@ changes · N branches`, counted over all candidates, plus `· N matches` while a
 query narrows the list), the `hop:` query line, a `WORKTREES` and a `BRANCHES`
 section each headed by a rule that stops where the widest row does, and the
 key-hint footer (key bold, action dimmed; it lists only keys that work and
-shortens on narrow terminals). Each row shows a colored state word using the
-same definition as `hop ls`'s STATE (`✗ missing`, `⊘ locked`, `- bare`,
-`● changes`, `✓ clean`; a worktree whose directory is gone and was not yet
-flagged prunable also reads `✗ missing`), and `+ new` for a branch that has no
-worktree. The selected row keeps its colors and is marked by a cyan `❯` with the
+shortens on narrow terminals; while a y/N confirmation is open it reads
+`y confirm · any other key cancels`). Each row shows a colored state word using the
+same words as `hop ls`'s STATE (`✗ missing`, `⊘ locked`, `- bare`,
+`● changes`, `✓ clean`; the picker also reads a worktree whose directory is
+gone and not yet flagged prunable as `✗ missing`, whereas `hop ls` shows
+`✓ clean` for that case), and `+ new` for a branch that has no worktree. The selected row keeps its colors and is marked by a cyan `❯` with the
 branch name in inverse video; with color off the `❯` alone marks it. There is no
 legend line: the header takes its row, so the row budget is unchanged. The
 action panel sits beside the list from 92 columns up and stacks below it

@@ -54,6 +54,8 @@ const LIST_FOOTER_HINT =
   "Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K move · Enter cd · Esc cancel";
 const PANEL_FOOTER_HINT =
   "↑↓/Ctrl+P,N,K move · Enter run · c/d/r shortcuts · Esc/Tab/←/Ctrl+H close";
+/** The y/N overlay (resolveConfirmKeyAction): y/Y confirm, every other key cancels. Worded for any confirm, not just delete. */
+const CONFIRM_FOOTER_HINT = "y confirm · any other key cancels";
 
 /**
  * Shrinks a candidate row's branch/path column widths to fit `maxRowWidth`,
@@ -82,6 +84,15 @@ export const constrainRowColumnWidths = (
 /** Essentials only (move / confirm / cancel), for terminals too narrow for the full hint. */
 const SHORT_LIST_FOOTER_HINT = "↑↓ move · Enter cd · Esc cancel";
 const SHORT_PANEL_FOOTER_HINT = "↑↓ move · Enter run · Esc close";
+const SHORT_CONFIRM_FOOTER_HINT = "y confirm · Esc cancel";
+
+type FooterHintKind = "list" | "panel" | "confirm";
+
+const FOOTER_HINTS: Record<FooterHintKind, { readonly full: string; readonly short: string }> = {
+  list: { full: LIST_FOOTER_HINT, short: SHORT_LIST_FOOTER_HINT },
+  panel: { full: PANEL_FOOTER_HINT, short: SHORT_PANEL_FOOTER_HINT },
+  confirm: { full: CONFIRM_FOOTER_HINT, short: SHORT_CONFIRM_FOOTER_HINT },
+};
 
 /**
  * Picks the widest footer hint variant that still fits `width`: the full
@@ -89,9 +100,8 @@ const SHORT_PANEL_FOOTER_HINT = "↑↓ move · Enter run · Esc close";
  * tiny terminal) the short one truncated to width. Never returns a string
  * wider than `width`.
  */
-export const footerHintForWidth = (kind: "list" | "panel", width: number): string => {
-  const full = kind === "list" ? LIST_FOOTER_HINT : PANEL_FOOTER_HINT;
-  const short = kind === "list" ? SHORT_LIST_FOOTER_HINT : SHORT_PANEL_FOOTER_HINT;
+export const footerHintForWidth = (kind: FooterHintKind, width: number): string => {
+  const { full, short } = FOOTER_HINTS[kind];
   if (displayWidth(full) <= width) {
     return full;
   }

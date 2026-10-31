@@ -39,11 +39,7 @@ const COLUMN_GAP = "  ";
 /** The "@ " current-worktree marker column. */
 const MARKER_WIDTH = 2;
 
-const KIND_ORDER: Record<WorktreeKind, number> = {
-  root: 0,
-  managed: 1,
-  external: 2,
-};
+const KIND_ORDER: Record<WorktreeKind, number> = { root: 0, managed: 1, external: 2 };
 
 const KIND_CELLS: Record<WorktreeKind, Cell> = {
   root: cell("root", "magenta"),

@@ -51,18 +51,19 @@ lock-protected safety check.
 
 The picker groups candidates into sections — existing worktrees (root first)
 and not-yet-created branches — under a header that names the repo and counts
-what is in it, with a colored state word, aligned columns, and shortened paths:
+what is in it, with a colored state word, aligned columns, and shortened paths
+(the frame below is real output at 110 columns, where the full footer fits):
 
 ```
-◆ app  5 worktrees · 1 with changes · 1 branch
+◆ app  4 worktrees · 1 with changes · 1 branch
 hop:  (type to filter)
-WORKTREES ──────────────────────────────────────────────────────────────────────
-❯ ✓ clean   main                root    ~/ghq/github.com/me/app
-  ✓ clean   chore/deps          managed …github.com/me/_worktree/app/chore__deps
-  ● changes feat/login          managed …github.com/me/_worktree/app/feat__login
-  ✓ clean   claude/agent-x      ext     ~/.claude-wt/agent-x
-BRANCHES — Enter creates a worktree ────────────────────────────────────────────
-  + new     feat/idea           local
+WORKTREES ──────────────────────────────────────────────────────────────────
+❯ ✓ clean   main            root    ~/ghq/github.com/me/app
+  ✓ clean   chore/deps      managed …github.com/me/_worktree/app/chore__deps
+  ● changes feat/login      managed …github.com/me/_worktree/app/feat__login
+  ✓ clean   claude/agent-x  ext     ~/.claude-wt/agent-x
+BRANCHES — Enter creates a worktree ────────────────────────────────────────
+  + new     feat/idea       local
 Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K move · Enter cd · Esc cancel
 ```
 

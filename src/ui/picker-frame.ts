@@ -54,7 +54,7 @@ const renderSpan = (span: StyledSpan, colorEnabled: boolean): string => {
 export const lineWidth = (line: StyledLine): number =>
   line.reduce((total, span) => total + displayWidth(span.text), 0);
 
-export const renderLine = (line: StyledLine, colorEnabled: boolean): string =>
+const renderLine = (line: StyledLine, colorEnabled: boolean): string =>
   line.map((span) => renderSpan(span, colorEnabled)).join("");
 
 /** Pads a rendered left-column line (already containing SGR codes) out to `width` display columns, by appending plain spaces — SGR codes take no display width so displayWidth-based padding on the raw text is computed first. */

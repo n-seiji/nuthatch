@@ -49,18 +49,19 @@ hop --update --check   # 更新があるかを報告するだけ — 何も変�
 
 picker は候補を section に分けて表示する — 既存の worktree (root が先頭) と
 未作成の branch。先頭の header に repo 名と件数を出し、各行は色付きの状態語・
-整列した列・短縮パス付き:
+整列した列・短縮パス付き
+(下は 110 桁端末での実際の出力。全文の footer が収まる幅):
 
 ```
-◆ app  5 worktrees · 1 with changes · 1 branch
+◆ app  4 worktrees · 1 with changes · 1 branch
 hop:  (type to filter)
-WORKTREES ──────────────────────────────────────────────────────────────────────
-❯ ✓ clean   main                root    ~/ghq/github.com/me/app
-  ✓ clean   chore/deps          managed …github.com/me/_worktree/app/chore__deps
-  ● changes feat/login          managed …github.com/me/_worktree/app/feat__login
-  ✓ clean   claude/agent-x      ext     ~/.claude-wt/agent-x
-BRANCHES — Enter creates a worktree ────────────────────────────────────────────
-  + new     feat/idea           local
+WORKTREES ──────────────────────────────────────────────────────────────────
+❯ ✓ clean   main            root    ~/ghq/github.com/me/app
+  ✓ clean   chore/deps      managed …github.com/me/_worktree/app/chore__deps
+  ● changes feat/login      managed …github.com/me/_worktree/app/feat__login
+  ✓ clean   claude/agent-x  ext     ~/.claude-wt/agent-x
+BRANCHES — Enter creates a worktree ────────────────────────────────────────
+  + new     feat/idea       local
 Tab/→/Ctrl+L actions · Ctrl+X delete · Ctrl+R switch root · ↑↓/Ctrl+P,N,K move · Enter cd · Esc cancel
 ```
 

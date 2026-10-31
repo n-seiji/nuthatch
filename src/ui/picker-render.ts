@@ -182,6 +182,9 @@ const buildSidePanelLines = (
   return null;
 };
 
+const footerKindFor = (mode: PickerMode): "list" | "panel" | "confirm" =>
+  mode.kind === "list" ? "list" : mode.kind;
+
 interface RenderPickerInput {
   readonly snapshot: PickerSnapshot;
   readonly width: number;
@@ -220,7 +223,7 @@ export const renderPickerFrame = ({
     clampedIndex,
     hiddenAbove: viewport.hiddenAbove,
     hiddenBelow: viewport.hiddenBelow,
-    footerHint: footerHintForWidth(right === null ? "list" : "panel", listColumnWidth),
+    footerHint: footerHintForWidth(footerKindFor(mode), listColumnWidth),
   }).map((line) => truncateLineToWidth(line, listColumnWidth));
 
   return buildFrame({ left, right, stacked, colorEnabled: color });

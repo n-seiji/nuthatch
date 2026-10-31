@@ -162,8 +162,6 @@ interface CandidateRow {
   readonly kind: "candidate";
   /** Index into the candidate list this row was built from — used to match the picker's cursor position. */
   readonly index: number;
-  /** Which section this row belongs to — lets the renderer dim BRANCHES rows so worktree vs. not-yet-created reads at a glance. */
-  readonly section: "worktree" | "branch";
   readonly state: CandidateState;
   readonly branchLabel: string;
   readonly kindLabel: string;
@@ -174,7 +172,6 @@ export type DisplayRow = HeaderRow | CandidateRow;
 
 interface ToCandidateRowOptions {
   readonly index: number;
-  readonly section: "worktree" | "branch";
   readonly branchWidth: number;
   readonly pathMaxLength: number;
   readonly homeDir: string;
@@ -186,7 +183,6 @@ const toCandidateRow = (
 ): CandidateRow => ({
   kind: "candidate",
   index: options.index,
-  section: options.section,
   state: candidateState(candidate),
   branchLabel: padToWidth(
     truncateToWidth(candidateBranchLabel(candidate), options.branchWidth),
@@ -204,9 +200,8 @@ interface IndexedCandidate {
 /** A section header followed by one row per entry, or nothing at all when the section is empty. */
 const sectionRows = (
   label: string,
-  section: CandidateRow["section"],
   entries: readonly IndexedCandidate[],
-  rowOptions: Omit<ToCandidateRowOptions, "index" | "section">,
+  rowOptions: Omit<ToCandidateRowOptions, "index">,
 ): DisplayRow[] => {
   if (entries.length === 0) {
     return [];
@@ -214,7 +209,7 @@ const sectionRows = (
   return [
     { kind: "header", label },
     ...entries.map((entry) =>
-      toCandidateRow(entry.candidate, { ...rowOptions, index: entry.index, section }),
+      toCandidateRow(entry.candidate, { ...rowOptions, index: entry.index }),
     ),
   ];
 };
@@ -252,7 +247,7 @@ export const buildDisplayRows = (
 
   const rowOptions = { branchWidth, pathMaxLength, homeDir };
   return [
-    ...sectionRows("WORKTREES", "worktree", worktreeEntries, rowOptions),
-    ...sectionRows("BRANCHES — Enter creates a worktree", "branch", branchEntries, rowOptions),
+    ...sectionRows("WORKTREES", worktreeEntries, rowOptions),
+    ...sectionRows("BRANCHES — Enter creates a worktree", branchEntries, rowOptions),
   ];
 };
