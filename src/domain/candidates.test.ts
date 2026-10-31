@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { buildPickCandidates, candidateBranchLabel, type PickCandidate } from "./candidates.ts";
-import type { Worktree } from "./model.ts";
+import { buildPickCandidates, candidateBranchLabel } from "./candidates.ts";
+import type { PickCandidate, Worktree } from "./schema.ts";
 
 const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
   path: "/repo",
@@ -14,6 +14,16 @@ const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
   prunableReason: null,
   kind: "root",
   ...overrides,
+});
+
+describe("buildPickCandidates (option-like names)", () => {
+  it("先頭が - の local / remote branch は creatable に含めない", () => {
+    const wt = worktree({ path: "/repo", branch: "main" });
+    const result = buildPickCandidates([wt], new Map(), ["-M", "feat/a"], ["-c", "feat/b"]);
+    expect(
+      result.map((candidate) => (candidate.kind === "creatable" ? candidate.branch : null)),
+    ).toEqual([null, "feat/a", "feat/b"]);
+  });
 });
 
 describe("buildPickCandidates", () => {

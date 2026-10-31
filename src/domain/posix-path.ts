@@ -6,6 +6,17 @@
 const withoutTrailingSlash = (path: string): string =>
   path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
 
+/** Replaces a leading `home` directory with `~`; paths outside it (and an empty or `/` home) pass through. */
+export const shortenHome = (path: string, home: string): string => {
+  if (home === "" || home === "/") {
+    return path;
+  }
+  if (path === home) {
+    return "~";
+  }
+  return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
+};
+
 /** The directory holding `path`: `/` for a top-level entry, `.` for a bare name. */
 export const parentDir = (path: string): string => {
   const trimmed = withoutTrailingSlash(path);
@@ -14,12 +25,6 @@ export const parentDir = (path: string): string => {
     return ".";
   }
   return index === 0 ? "/" : trimmed.slice(0, index);
-};
-
-/** The last segment of `path`. */
-export const baseName = (path: string): string => {
-  const trimmed = withoutTrailingSlash(path);
-  return trimmed.slice(trimmed.lastIndexOf("/") + 1);
 };
 
 /**

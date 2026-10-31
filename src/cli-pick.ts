@@ -1,16 +1,13 @@
 import { pick } from "./commands/pick.ts";
 import { rm } from "./commands/rm.ts";
 import { root } from "./commands/root.ts";
-import { candidateBranchName, type PickCandidate } from "./domain/candidates.ts";
+import { candidateBranchName } from "./domain/candidates.ts";
+import type { PickCandidate } from "./domain/schema.ts";
 import type { FsPort, GitPort } from "./domain/ports.ts";
 import { ok } from "./domain/result.ts";
 import { render, reportResult } from "./render.ts";
-import {
-  runPicker,
-  type ActionOutcome,
-  type PickerCallbacks,
-  type PickerResult,
-} from "./ui/picker.ts";
+import type { DeleteWorktreeOutcome, PickerCallbacks, PickerResult } from "./ui/picker-types.ts";
+import { runPicker } from "./ui/picker.ts";
 
 /**
  * Loads the fresh candidate list for the picker (used both for the initial
@@ -34,7 +31,7 @@ const deleteWorktree = async (
   git: GitPort,
   fs: FsPort,
   candidate: PickCandidate,
-): Promise<ActionOutcome> => {
+): Promise<DeleteWorktreeOutcome> => {
   const branch = candidateBranchName(candidate);
   if (branch === null) {
     return { ok: false, message: "This candidate has no branch to remove." };
@@ -46,7 +43,6 @@ const deleteWorktree = async (
     // The picker asked y/N only for a row that was already prunable when it loaded.
     allowPrunable: candidate.kind === "worktree" && candidate.worktree.prunable,
     force: false,
-    ext: false,
   });
   if (!result.ok) {
     return {
@@ -95,7 +91,7 @@ export const createPickerCallbacks = (
         candidate.kind === "worktree" && candidate.worktree.kind === "external",
       ...(candidate.kind === "worktree" ? { expectedHolderPath: candidate.worktree.path } : {}),
     });
-    if (!result.ok) {
+    if (!result.ok || result.path === undefined) {
       return {
         ok: false,
         message: result.errorMessage ?? "Failed to switch root.",
@@ -106,10 +102,7 @@ export const createPickerCallbacks = (
       detachedHolder: result.data?.detachedHolder ?? null,
       warnings: result.warnings ?? [],
     });
-    return {
-      ok: true,
-      ...(result.path === undefined ? {} : { path: result.path }),
-    };
+    return { ok: true, path: result.path };
   },
   reloadCandidates: async () => (await loadPickCandidates(git, fs, json)) ?? [],
 });
@@ -128,10 +121,9 @@ export const runInteractivePicker = (
 /**
  * Renders a completed switchRoot outcome (Ctrl+R / panel "switch root
  * here") as the CLI's cd contract expects. Threads detachedHolder and
- * warnings all the way through — previously these were dropped here, so
- * `--json` never reported a holder that switchRootHere detached, and its
- * warning (`Put <path> into detached HEAD`) never reached stderr either,
- * unlike the non-picker `hop root <branch>` path.
+ * warnings through, so `--json` reports a holder that switchRootHere
+ * detached and its warning (`Put <path> into detached HEAD`) reaches stderr,
+ * as on the non-picker `hop root <branch>` path.
  */
 export const renderSwitchRootOutcome = (
   path: string,

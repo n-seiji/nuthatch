@@ -8,7 +8,6 @@ import {
 
 const NO_MODIFIERS: PickerKeyModifiers = {
   ctrl: false,
-  meta: false,
   escape: false,
   return: false,
   tab: false,
@@ -25,15 +24,7 @@ const withCtrl = (input: string): [string, PickerKeyModifiers] => [
   { ...NO_MODIFIERS, ctrl: true },
 ];
 
-/**
- * The real key shapes a plain (non-kitty) terminal sends for Ctrl+J and
- * Ctrl+H, captured with a pty running ink's own parser (not the synthetic
- * `withCtrl(...)` shape the other tests use) — see picker-keys.ts's module
- * comment. Ctrl+J: input "\n", every flag false. Ctrl+H: key.backspace
- * true, ctrl false, input "" (ink gives it the exact same shape as the
- * Backspace key).
- */
-const REAL_CTRL_J: [string, PickerKeyModifiers] = ["\n", NO_MODIFIERS];
+/** The real key shape a plain terminal sends for Ctrl+H: key.backspace true, ctrl false, input "" (the same as the Backspace key). */
 const REAL_CTRL_H: [string, PickerKeyModifiers] = ["", { ...NO_MODIFIERS, backspace: true }];
 
 describe("resolvePickerKeyAction", () => {
@@ -72,7 +63,7 @@ describe("resolvePickerKeyAction", () => {
     });
   });
 
-  it("矢印キーと Ctrl+P/N、Ctrl+K/J は up/down になる (emacs と vim の併存)", () => {
+  it("矢印キーと Ctrl+P/N、Ctrl+K は up/down になる (emacs と vim の併存)", () => {
     expect(resolvePickerKeyAction("", { ...NO_MODIFIERS, upArrow: true })).toEqual({
       type: "up",
     });
@@ -82,18 +73,6 @@ describe("resolvePickerKeyAction", () => {
       type: "down",
     });
     expect(resolvePickerKeyAction(...withCtrl("n"))).toEqual({ type: "down" });
-    expect(resolvePickerKeyAction(...withCtrl("j"))).toEqual({ type: "down" });
-  });
-
-  it("実端末が Ctrl+J に送る生バイト (input が LF、ctrl フラグなし) も down になる (pty 実測、synthetic な withCtrl('j') とは別経路)", () => {
-    expect(resolvePickerKeyAction(...REAL_CTRL_J)).toEqual({ type: "down" });
-  });
-
-  it("生の LF はクエリへの文字入力 (char) にはならない (down 判定が char 判定より先)", () => {
-    expect(resolvePickerKeyAction(...REAL_CTRL_J)).not.toEqual({
-      type: "char",
-      char: "\n",
-    });
   });
 
   it("Ctrl+U は検索クエリのクリア", () => {
@@ -116,11 +95,8 @@ describe("resolvePickerKeyAction", () => {
     });
   });
 
-  it("ctrl/meta 修飾された未知のキーは検索クエリに混入せず ignore になる", () => {
+  it("ctrl 修飾された未知のキーは検索クエリに混入せず ignore になる", () => {
     expect(resolvePickerKeyAction(...withCtrl("z"))).toEqual({
-      type: "ignore",
-    });
-    expect(resolvePickerKeyAction("a", { ...NO_MODIFIERS, meta: true })).toEqual({
       type: "ignore",
     });
   });
@@ -164,7 +140,7 @@ describe("resolvePanelKeyAction", () => {
     });
   });
 
-  it("矢印キーと Ctrl+P/N、Ctrl+K/J は up/down になる", () => {
+  it("矢印キーと Ctrl+P/N、Ctrl+K は up/down になる", () => {
     expect(resolvePanelKeyAction("", { ...NO_MODIFIERS, upArrow: true })).toEqual({
       type: "up",
     });
@@ -174,11 +150,6 @@ describe("resolvePanelKeyAction", () => {
       type: "down",
     });
     expect(resolvePanelKeyAction(...withCtrl("n"))).toEqual({ type: "down" });
-    expect(resolvePanelKeyAction(...withCtrl("j"))).toEqual({ type: "down" });
-  });
-
-  it("実端末が Ctrl+J に送る生バイトも down になる", () => {
-    expect(resolvePanelKeyAction(...REAL_CTRL_J)).toEqual({ type: "down" });
   });
 
   it("c / d / r は letter ショートカット", () => {
@@ -196,7 +167,7 @@ describe("resolvePanelKeyAction", () => {
     });
   });
 
-  it("それ以外の文字や ctrl/meta 修飾は ignore", () => {
+  it("それ以外の文字や ctrl 修飾は ignore", () => {
     expect(resolvePanelKeyAction("z", NO_MODIFIERS)).toEqual({
       type: "ignore",
     });

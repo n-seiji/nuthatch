@@ -11,10 +11,12 @@ verification checkout; make code changes in a worktree.
 
 ## Start work
 
-Use a unique branch and capture the returned absolute path:
+Use a unique branch and capture the returned absolute path. Call
+`command hop` so a loaded shell wrapper cannot swallow the path, and stop if
+it comes back empty:
 
 ```bash
-worktree_path=$(hop feat/my-task --create)
+worktree_path=$(command hop feat/my-task --create) && [ -n "$worktree_path" ] || exit 1
 git -C "$worktree_path" status --short
 ```
 

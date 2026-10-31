@@ -145,7 +145,7 @@ const runJumpFromArgs = async (tokens: readonly string[]): Promise<void> => {
 const runRm = async (tokens: readonly string[]): Promise<void> => {
   const args = parseCliArgs(tokens, {
     positionals: [{ name: "branch", required: true }],
-    booleans: ["force", "ext", JSON_FLAG],
+    booleans: ["force", JSON_FLAG],
   });
   const { rm } = await import("./commands/rm.ts");
   const { git, fs } = getPorts();
@@ -153,7 +153,6 @@ const runRm = async (tokens: readonly string[]): Promise<void> => {
     cwd: process.cwd(),
     branch: args.positionals.branch ?? "",
     force: args.booleans.force ?? false,
-    ext: args.booleans.ext ?? false,
   });
   reportResult("rm", result, args.booleans.json ?? false);
 };
@@ -203,7 +202,7 @@ const runInit = async (tokens: readonly string[]): Promise<void> => {
     return;
   }
   const { renderInit } = await import("./commands/init.ts");
-  process.stdout.write(renderInit({ shell: "zsh" }));
+  process.stdout.write(renderInit());
 };
 
 const RESERVED_COMMANDS: Readonly<Record<string, (tokens: readonly string[]) => Promise<void>>> = {

@@ -1,9 +1,6 @@
 import { type PickerActionKind, availableActions } from "../domain/actions.ts";
-import {
-  candidateBranchLabel,
-  candidateBranchName,
-  type PickCandidate,
-} from "../domain/candidates.ts";
+import { candidateBranchLabel, candidateBranchName } from "../domain/candidates.ts";
+import type { PickCandidate } from "../domain/schema.ts";
 import type { StyledLine } from "./picker-frame.ts";
 
 /**

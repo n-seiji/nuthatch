@@ -1,9 +1,10 @@
 import { basename, dirname, join } from "node:path";
+import { optionLikeRefRejection } from "../domain/branch-name.ts";
 import { classifyWorktreePath, isWithin } from "../domain/classify.ts";
-import type { Worktree } from "../domain/model.ts";
+import type { Worktree } from "../domain/schema.ts";
 import { parsePorcelain } from "../domain/porcelain.ts";
 import type { AddWorktreeOptions, FsPort, GitPort } from "../domain/ports.ts";
-import { type CommandResult, EXIT_USAGE_ERROR, fail } from "../domain/result.ts";
+import { type Checked, EXIT_USAGE_ERROR, fail, pass, reject } from "../domain/result.ts";
 import { resolveTrackingRef } from "../domain/tracking.ts";
 
 export interface RepoContext {
@@ -56,8 +57,9 @@ export const loadRepoContext = async (
 };
 
 /**
- * Registered worktree paths nested *inside* `path`, for excluding
- * nested-worktree noise from a dirty check on `path` (see domain/dirty.ts).
+ * Registered worktrees nested *inside* `path`, for excluding
+ * nested-worktree noise from a dirty check on `path` (see domain/dirty.ts) and for
+ * refusing to remove a worktree that still contains one (commands/rm.ts, commands/clean.ts).
  * `worktrees` must come from `loadRepoContext`, whose paths are already
  * realpath'd, so the comparison in dirty.ts is robust to macOS realpath
  * differences (/var vs /private/var) without resolving again here.
@@ -75,18 +77,6 @@ export const loadRepoContext = async (
  * real untracked files that later reappear at that same path from a dirty
  * check — making the containing worktree look clean when it isn't.
  */
-export const nestedWorktreePaths = (worktrees: readonly Worktree[], path: string): string[] =>
-  nestedWorktrees(worktrees, path).map((wt) => wt.path);
-
-/**
- * Registered worktrees nested *inside* `path` (see nestedWorktreePaths'
- * doc for the descendants-only / prunable-excluded rules — this returns
- * the same set, but as full Worktree records rather than bare paths, for
- * callers that need to report what's inside (see commands/rm.ts and
- * commands/clean.ts: removing a worktree that still contains a live,
- * registered worktree must be refused, since that would destroy the
- * inner worktree's files too).
- */
 export const nestedWorktrees = (worktrees: readonly Worktree[], path: string): Worktree[] =>
   worktrees.filter((wt) => wt.path !== path && !wt.prunable && isWithin(path, wt.path));
 
@@ -95,7 +85,11 @@ export const isWorktreeDirty = (
   git: GitPort,
   worktrees: readonly Worktree[],
   path: string,
-): Promise<boolean> => git.isDirty(path, nestedWorktreePaths(worktrees, path));
+): Promise<boolean> =>
+  git.isDirty(
+    path,
+    nestedWorktrees(worktrees, path).map((wt) => wt.path),
+  );
 
 /**
  * Dirty state of `wt`, or null when there is no working tree on disk to
@@ -114,10 +108,6 @@ export const worktreeDirtyState = async (
   return isWorktreeDirty(git, worktrees, wt.path);
 };
 
-export type BranchCheckoutResolution<T> =
-  | { readonly ok: true; readonly options: AddWorktreeOptions }
-  | { readonly ok: false; readonly rejection: CommandResult<T> };
-
 /**
  * How to check out `branch` for a command that may have to create it
  * (`jump --create`, `root`). `explicitTrack` always wins; otherwise a branch
@@ -129,7 +119,7 @@ export const resolveBranchCheckout = async <T>(
   rootPath: string,
   branch: string,
   explicitTrack: string | undefined,
-): Promise<BranchCheckoutResolution<T>> => {
+): Promise<Checked<AddWorktreeOptions, T>> => {
   const localBranches = await git.listBranches(rootPath);
   const createBranch = !localBranches.includes(branch);
 
@@ -138,20 +128,24 @@ export const resolveBranchCheckout = async <T>(
     const remotes = await git.remotesWithBranch(rootPath, branch);
     const resolution = resolveTrackingRef(branch, remotes);
     if (resolution.kind === "ambiguous") {
-      return {
-        ok: false,
-        rejection: fail(
+      return reject(
+        fail(
           EXIT_USAGE_ERROR,
           `Branch "${branch}" exists on multiple remotes (${remotes.join(", ")}). Use --track to disambiguate.`,
         ),
-      };
+      );
     }
     if (resolution.kind === "track") {
+      // A remote named with a leading dash would make the derived ref option-like.
+      const rejection = optionLikeRefRejection<T>("--track ref", resolution.ref);
+      if (rejection !== null) {
+        return reject(rejection);
+      }
       track = resolution.ref;
     }
   }
 
-  return { ok: true, options: { createBranch, ...(track === undefined ? {} : { track }) } };
+  return pass({ createBranch, ...(track === undefined ? {} : { track }) });
 };
 
 const realpathOrRaw = async (fs: FsPort, path: string): Promise<string> => {

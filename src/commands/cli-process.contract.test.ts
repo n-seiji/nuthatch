@@ -62,17 +62,6 @@ describe("hop CLI process contract", () => {
     expect(listing.stdout).toContain("child");
   });
 
-  it("`--ext` 付きの外部 worktree 削除は warning: prefix で警告を出す", async () => {
-    await repo.git(["branch", "feat/ext"]);
-    const externalPath = `${repo.rootDir}/agent-worktrees/feat-ext`;
-    await repo.git(["worktree", "add", externalPath, "feat/ext"]);
-
-    const result = await runHop(["rm", "feat/ext", "--ext"], repo.repoPath, repo.env);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stderr).toContain("warning: --ext is deprecated");
-  });
-
   it("holder が2つある branch への hop root は exit 3 で拒否する", async () => {
     await repo.git(["branch", "dup"]);
     const h1Path = `${repo.rootDir}/agent-worktrees/dup-1`;

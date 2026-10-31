@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { PickCandidate } from "../domain/candidates.ts";
-import type { Worktree } from "../domain/model.ts";
+import type { PickCandidate, Worktree } from "../domain/schema.ts";
 import { wrapInBox } from "./picker-frame.ts";
 import { buildConfirmPanelRows, SIDE_PANEL_WIDTH } from "./side-panel.ts";
 

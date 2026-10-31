@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import type { InstallFacts } from "../domain/install-method.ts";
 import { EXIT_GENERAL_ERROR, EXIT_SUCCESS } from "../domain/result.ts";
 import {
-  bunFacts,
   createFakeSelfUpdate,
   miseFacts,
   npmFacts,
@@ -73,7 +72,7 @@ describe("selfUpdate: すでに最新の場合", () => {
 describe("selfUpdate --check", () => {
   const check = { currentVersion: CURRENT, check: true };
 
-  it("standalone で更新がある場合、報告だけして何も変更せず、command は null になる", async () => {
+  it("standalone で更新がある場合、置換先を報告するだけで何も変更せず、command は null になる", async () => {
     const fake = createFakeSelfUpdate({
       ...facts(standaloneFacts()),
       latestGithubVersion: () => Promise.resolve(LATEST),
@@ -95,9 +94,10 @@ describe("selfUpdate --check", () => {
     });
     expect(fake.calls).toEqual(["installFacts", "latestGithubVersion"]);
     expect(fake.logs.join("\n")).toContain(`${CURRENT} -> ${LATEST}`);
+    expect(fake.logs.join("\n")).toContain("/home/u/.local/bin/hop");
   });
 
-  it("mise で更新がある場合、実行されるはずのコマンドを bare name の argv で報告する (PATH 解決も spawn もしない)", async () => {
+  it("mise で更新がある場合、案内の 1 行と実行すべきコマンドを報告し、何も実行しない", async () => {
     const fake = createFakeSelfUpdate({
       ...facts(miseFacts()),
       latestGithubVersion: () => Promise.resolve(LATEST),
@@ -105,55 +105,53 @@ describe("selfUpdate --check", () => {
 
     const result = await selfUpdate(fake.port, fake.term, check);
 
+    expect(result).toMatchObject({ ok: true, exitCode: EXIT_SUCCESS });
     expect(result.data).toEqual({
       current: CURRENT,
       latest: LATEST,
       updateAvailable: true,
       method: "mise",
       action: "none",
-      command: ["mise", "upgrade", "github:n-seiji/nuthatch"],
+      command: ["mise", "upgrade"],
     });
     expect(fake.calls).toEqual(["installFacts", "latestGithubVersion"]);
+    expect(fake.logs.join("\n")).toContain("Update with mise: mise upgrade");
   });
 
-  it("npm / bun の場合、最新版は npm から取り、npm install -g / bun add -g を報告する", async () => {
-    for (const [value, method, command] of [
-      [
-        npmFacts(),
-        "npm",
-        ["npm", "install", "-g", "--prefix", "/usr/local", "@n-seiji/nuthatch@latest"],
-      ],
-      [bunFacts(), "bun", ["bun", "add", "-g", "@n-seiji/nuthatch@latest"]],
-    ] as const) {
-      const fake = createFakeSelfUpdate({
-        ...facts(value),
-        latestNpmVersion: () => Promise.resolve(LATEST),
-      });
-
-      // oxlint-disable-next-line no-await-in-loop
-      const result = await selfUpdate(fake.port, fake.term, check);
-
-      expect(result.data).toMatchObject({ method, action: "none", command });
-      expect(fake.calls).toEqual(["installFacts", "latestNpmVersion"]);
-    }
-  });
-
-  it("mise の npm バックエンドの場合、最新版は npm から取る", async () => {
+  it("npm / bun などのパッケージマネージャ経由の場合、最新版は GitHub から取り、npm i -g を案内する", async () => {
     const fake = createFakeSelfUpdate({
-      ...facts(miseFacts("npm:@n-seiji/nuthatch")),
-      latestNpmVersion: () => Promise.resolve(LATEST),
+      ...facts(npmFacts()),
+      latestGithubVersion: () => Promise.resolve(LATEST),
     });
 
     const result = await selfUpdate(fake.port, fake.term, check);
 
     expect(result.data).toMatchObject({
-      method: "mise",
-      command: ["mise", "upgrade", "npm:@n-seiji/nuthatch"],
+      method: "package-manager",
+      action: "none",
+      command: ["npm", "i", "-g", "@n-seiji/nuthatch@latest"],
     });
-    expect(fake.calls).toEqual(["installFacts", "latestNpmVersion"]);
+    expect(fake.calls).toEqual(["installFacts", "latestGithubVersion"]);
+    expect(fake.logs.join("\n")).toContain("Update with your package manager");
   });
 
-  it("更新が無い場合、package manager のコマンドも報告しない (command: null)", async () => {
+  it("ソースチェックアウトの場合、method: other で報告し、コマンドは出さない", async () => {
+    const fake = createFakeSelfUpdate({
+      ...facts(sourceCheckoutFacts()),
+      latestGithubVersion: () => Promise.resolve(LATEST),
+    });
+
+    const result = await selfUpdate(fake.port, fake.term, check);
+
+    expect(result.data).toMatchObject({
+      method: "other",
+      action: "none",
+      command: null,
+    });
+    expect(fake.logs.join("\n")).toContain("Update hop with the tool you installed it with.");
+  });
+
+  it("更新が無い場合、コマンドも報告しない (command: null)", async () => {
     const fake = createFakeSelfUpdate({
       ...facts(miseFacts()),
       latestGithubVersion: () => Promise.resolve(CURRENT),
@@ -169,9 +167,7 @@ describe("selfUpdate --check", () => {
   });
 });
 
-describe("selfUpdate: 更新の実行を委譲する", () => {
-  const run = { currentVersion: CURRENT, check: false };
-
+describe("selfUpdate: 更新を実行する", () => {
   it("standalone の場合、ダウンロード → 検証 → 置換まで進み action: replaced になる", async () => {
     const replaced: { path: string; text: string }[] = [];
     const digest = "a".repeat(64);
@@ -188,7 +184,10 @@ describe("selfUpdate: 更新の実行を委譲する", () => {
       },
     });
 
-    const result = await selfUpdate(fake.port, fake.term, run);
+    const result = await selfUpdate(fake.port, fake.term, {
+      currentVersion: CURRENT,
+      check: false,
+    });
 
     expect(result.data).toMatchObject({
       action: "replaced",
@@ -197,61 +196,39 @@ describe("selfUpdate: 更新の実行を委譲する", () => {
     });
     expect(replaced).toEqual([{ path: "/home/u/.local/bin/hop", text: "new binary" }]);
   });
+});
 
-  it("mise の場合、PATH で解決した絶対パスで dry-run の確認のあと mise upgrade を実行し action: delegated になる", async () => {
-    const ran: (readonly string[])[] = [];
-    const fake = createFakeSelfUpdate({
-      ...facts(miseFacts()),
-      latestGithubVersion: () => Promise.resolve(LATEST),
-      resolveExecutable: () => Promise.resolve("/opt/bin/mise"),
-      runCommand: (argv) => {
-        ran.push(argv);
-        return Promise.resolve(argv.includes("--dry-run-code") ? 1 : 0);
-      },
-    });
+describe("selfUpdate: hop が置き換えない install の場合", () => {
+  const run = { currentVersion: CURRENT, check: false };
 
-    const result = await selfUpdate(fake.port, fake.term, run);
+  it("method ごとの案内を 1 行だけメッセージにして exit 1 で拒否し、ネットワークに出ない", async () => {
+    for (const [value, hint] of [
+      [miseFacts(), "Update with mise: mise upgrade"],
+      [npmFacts(), "Update with your package manager, e.g. npm i -g @n-seiji/nuthatch@latest"],
+      [sourceCheckoutFacts(), "Update hop with the tool you installed it with."],
+      [
+        { ...standaloneFacts("/opt/homebrew/Cellar/hop/0.1.4/bin/hop") },
+        "Update hop with the tool you installed it with.",
+      ],
+    ] as const) {
+      const fake = createFakeSelfUpdate(facts(value));
 
-    expect(result.data).toMatchObject({
-      method: "mise",
-      action: "delegated",
-      command: ["mise", "upgrade", "github:n-seiji/nuthatch"],
-    });
-    expect(ran).toEqual([
-      ["/opt/bin/mise", "upgrade", "--dry-run-code", "github:n-seiji/nuthatch"],
-      ["/opt/bin/mise", "upgrade", "github:n-seiji/nuthatch"],
-    ]);
+      // oxlint-disable-next-line no-await-in-loop
+      const result = await selfUpdate(fake.port, fake.term, run);
+
+      expect(result).toMatchObject({
+        ok: false,
+        exitCode: EXIT_GENERAL_ERROR,
+        errorMessage: hint,
+      });
+      expect(result.data).toBeUndefined();
+      expect(fake.calls).toEqual(["installFacts"]);
+    }
   });
 });
 
-describe("selfUpdate: 更新できない場合", () => {
+describe("selfUpdate: 失敗する場合", () => {
   const run = { currentVersion: CURRENT, check: false };
-
-  it("ソースチェックアウトの場合、ネットワークに出る前に exit 1 で拒否する", async () => {
-    const fake = createFakeSelfUpdate(facts(sourceCheckoutFacts()));
-
-    const result = await selfUpdate(fake.port, fake.term, {
-      ...run,
-      check: true,
-    });
-
-    expect(result).toMatchObject({ ok: false, exitCode: EXIT_GENERAL_ERROR });
-    expect(result.errorMessage).toContain("source checkout");
-    expect(result.data).toBeUndefined();
-    expect(fake.calls).toEqual(["installFacts"]);
-  });
-
-  it("対応バイナリの無いプラットフォームの場合、npm での入れ直しを案内して exit 1 になる", async () => {
-    const fake = createFakeSelfUpdate(
-      facts({ ...standaloneFacts(), platform: "linux", arch: "arm64" }),
-    );
-
-    const result = await selfUpdate(fake.port, fake.term, run);
-
-    expect(result).toMatchObject({ ok: false, exitCode: EXIT_GENERAL_ERROR });
-    expect(result.errorMessage).toMatch(/linux-arm64.*npm/u);
-    expect(fake.calls).toEqual(["installFacts"]);
-  });
 
   it("最新版の取得に失敗した場合、原因を含めて exit 1 になり、何も変更しない", async () => {
     const fake = createFakeSelfUpdate({

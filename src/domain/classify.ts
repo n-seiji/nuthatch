@@ -1,4 +1,4 @@
-import type { WorktreeKind } from "./model.ts";
+import type { WorktreeKind } from "./schema.ts";
 
 /**
  * Returns true if `child` is inside `parent`, respecting path boundaries
@@ -16,6 +16,10 @@ export const isWithin = (parent: string, child: string): boolean => {
   const parentWithSlash = parent.endsWith("/") ? parent : `${parent}/`;
   return child.startsWith(parentWithSlash);
 };
+
+/** `isWithin` that also accepts `child === parent`. */
+export const isWithinOrSelf = (parent: string, child: string): boolean =>
+  parent === child || isWithin(parent, child);
 
 /**
  * Classifies a worktree path relative to the repo's root clone path and its

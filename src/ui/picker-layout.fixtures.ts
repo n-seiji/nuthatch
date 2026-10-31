@@ -1,5 +1,4 @@
-import type { PickCandidate } from "../domain/candidates.ts";
-import type { Worktree } from "../domain/model.ts";
+import type { PickCandidate, Worktree } from "../domain/schema.ts";
 
 /**
  * Shared candidate fixtures for picker-layout's test files (unit tests split

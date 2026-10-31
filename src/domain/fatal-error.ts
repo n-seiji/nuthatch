@@ -2,7 +2,7 @@
  * Turns anything that escaped a command into the one line hop prints on
  * stderr plus the exit code from docs/design.md's CLI contract. Without this
  * an unexpected throw reaches the runtime's default handler, which prints a
- * raw JS stack trace (issue #9) — unreadable, and exit 1 even for a git
+ * raw JS stack trace — unreadable, and exit 1 even for a git
  * failure the contract pins at 3.
  */
 import { GIT_NOT_FOUND_HINT } from "./git-executable.ts";

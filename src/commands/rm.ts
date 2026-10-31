@@ -1,15 +1,18 @@
+import { optionLikeRefRejection } from "../domain/branch-name.ts";
 import { messageOf } from "../domain/fatal-error.ts";
-import type { Worktree } from "../domain/model.ts";
+import type { RmData, Worktree } from "../domain/schema.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
 import {
+  type Checked,
   type CommandResult,
   EXIT_GENERAL_ERROR,
   EXIT_SAFE_REJECTION,
   EXIT_USAGE_ERROR,
   fail,
   ok,
+  pass,
+  reject,
 } from "../domain/result.ts";
-import type { RmData } from "../domain/schema.ts";
 import { withRepoLock } from "../infra/lock.ts";
 import {
   loadRepoContext,
@@ -29,11 +32,7 @@ export interface RmOptions {
    */
   readonly allowPrunable?: boolean;
   readonly force: boolean;
-  readonly ext: boolean;
 }
-
-const EXT_DEPRECATION_WARNING =
-  "--ext is deprecated and no longer required: hop rm can now remove external worktrees without it.";
 
 const lockedRejection = <T>(branch: string, lockReason: string | null): CommandResult<T> =>
   fail(
@@ -58,29 +57,31 @@ const resolveTarget = (
   worktrees: readonly Worktree[],
   branch: string,
   expectedPath?: string,
-): { readonly target?: Worktree; readonly rejection?: CommandResult<RmData> } => {
+): Checked<Worktree, RmData> => {
   const matches = worktrees.filter((wt) => wt.branch === branch);
   if (expectedPath !== undefined) {
     const target = matches.find((wt) => wt.path === expectedPath);
     return target === undefined
-      ? {
-          rejection: fail(
+      ? reject(
+          fail(
             EXIT_SAFE_REJECTION,
             `The selected worktree for "${branch}" changed before removal. Refresh the picker and retry.`,
           ),
-        }
-      : { target };
+        )
+      : pass(target);
   }
   if (matches.length > 1) {
-    return {
-      rejection: fail(
+    return reject(
+      fail(
         EXIT_SAFE_REJECTION,
         `Branch "${branch}" is checked out at ${matches.length} worktrees (${matches.map((wt) => wt.path).join(", ")}). Refusing to guess which one to remove.`,
       ),
-    };
+    );
   }
   const [target] = matches;
-  return target === undefined ? {} : { target };
+  return target === undefined
+    ? reject(fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${branch}".`))
+    : pass(target);
 };
 
 /**
@@ -147,48 +148,29 @@ const targetSafetyRejection = async (
   return null;
 };
 
-type RemovalValidation =
-  | { readonly ok: true; readonly target: Worktree }
-  | { readonly ok: false; readonly rejection: CommandResult<RmData> };
-
-const validateRemoval = async (check: RemovalCheck): Promise<RemovalValidation> => {
+const validateRemoval = async (check: RemovalCheck): Promise<Checked<Worktree, RmData>> => {
   const { context, options } = check;
   const resolved = resolveTarget(context.worktrees, options.branch, options.expectedPath);
-  if (resolved.rejection !== undefined) {
-    return { ok: false, rejection: resolved.rejection };
+  if (!resolved.ok) {
+    return resolved;
   }
-  const { target } = resolved;
-  if (target === undefined) {
-    return {
-      ok: false,
-      rejection: fail(EXIT_GENERAL_ERROR, `No worktree found for branch "${options.branch}".`),
-    };
-  }
+  const target = resolved.value;
   if (target.kind === "root") {
-    return { ok: false, rejection: fail(EXIT_USAGE_ERROR, "Cannot remove the root clone.") };
+    return reject(fail(EXIT_USAGE_ERROR, "Cannot remove the root clone."));
   }
   const rejection = await targetSafetyRejection(check, target);
-  return rejection === null ? { ok: true, target } : { ok: false, rejection };
+  return rejection === null ? resolved : reject(rejection);
 };
-
-/*
- * --ext is a deprecated no-op kept for backward compatibility: it no longer
- * gates anything, but every return path still surfaces the warning when it
- * was passed, so callers can migrate off it.
- */
-const withExtWarning = (ext: boolean, result: CommandResult<RmData>): CommandResult<RmData> =>
-  ext
-    ? {
-        ...result,
-        warnings: [...(result.warnings ?? []), EXT_DEPRECATION_WARNING],
-      }
-    : result;
 
 const removeWorktree = async (
   git: GitPort,
   fs: FsPort,
   options: RmOptions,
 ): Promise<CommandResult<RmData>> => {
+  const refRejection = optionLikeRefRejection<RmData>("branch", options.branch);
+  if (refRejection !== null) {
+    return refRejection;
+  }
   const context = await loadRepoContext(git, fs, options.cwd);
   const validation = await validateRemoval({ git, fs, context, options });
   if (!validation.ok) {
@@ -203,7 +185,7 @@ const removeWorktree = async (
       if (!freshValidation.ok) {
         return freshValidation.rejection;
       }
-      const { target } = freshValidation;
+      const target = freshValidation.value;
 
       await git.removeWorktree(context.rootPath, target.path, options.force);
       return ok({
@@ -216,9 +198,5 @@ const removeWorktree = async (
   });
 };
 
-export const rm = async (
-  git: GitPort,
-  fs: FsPort,
-  options: RmOptions,
-): Promise<CommandResult<RmData>> =>
-  withExtWarning(options.ext, await removeWorktree(git, fs, options));
+export const rm = (git: GitPort, fs: FsPort, options: RmOptions): Promise<CommandResult<RmData>> =>
+  removeWorktree(git, fs, options);

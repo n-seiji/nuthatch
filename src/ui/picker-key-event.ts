@@ -4,7 +4,6 @@ import type { PickerKeyModifiers } from "./picker-keys.ts";
 
 const NO_MODIFIERS: PickerKeyModifiers = {
   ctrl: false,
-  meta: false,
   escape: false,
   return: false,
   tab: false,
@@ -24,9 +23,4 @@ export interface PickerKeyEvent {
 export const event = (input: string, key: Partial<PickerKeyModifiers> = {}): PickerKeyEvent => ({
   input,
   key: { ...NO_MODIFIERS, ...key },
-});
-
-export const withMeta = (keyEvent: PickerKeyEvent): PickerKeyEvent => ({
-  input: keyEvent.input,
-  key: { ...keyEvent.key, meta: true },
 });

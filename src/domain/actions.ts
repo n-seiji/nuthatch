@@ -14,8 +14,7 @@ export type PickerActionKind = (typeof PICKER_ACTIONS)[number];
  *
  * - `cd`: every candidate.
  * - `delete`: any already-created worktree except root (`kind: "managed"` or
- *   `"external"`). External worktrees still offer delete — hop can now
- *   manage worktrees it didn't create — but the picker always gates deleting
+ *   `"external"`). External worktrees still offer delete, but the picker always gates deleting
  *   one behind an explicit y/N confirmation (see requiresDeleteConfirmation
  *   below), since it may be another agent's in-use working copy. Root never
  *   offers delete — it isn't a worktree to remove.

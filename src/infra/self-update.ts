@@ -1,6 +1,5 @@
 import type { SelfUpdatePort } from "../domain/ports.ts";
 import { readInstallFacts } from "./install-facts.ts";
-import { resolveExecutable, runCommand } from "./package-manager.ts";
 import { assertWritableDir, replaceExecutable, sha256Hex } from "./release-binary.ts";
 import { createReleaseHttp } from "./release-http.ts";
 
@@ -11,7 +10,7 @@ export interface SelfUpdatePortOptions {
   readonly version: string;
 }
 
-/** The real `hop --update` port: the network, the binary on disk, package managers. */
+/** The real `hop --update` port: the network and the binary on disk. */
 export const createSelfUpdatePort = ({
   compiled,
   version,
@@ -28,7 +27,4 @@ export const createSelfUpdatePort = ({
   sha256Hex,
   assertWritableDir,
   replaceExecutable,
-  resolveExecutable: (name, preferredDir) =>
-    resolveExecutable(name, process.env.PATH, preferredDir),
-  runCommand,
 });

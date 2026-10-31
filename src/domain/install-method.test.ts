@@ -1,144 +1,37 @@
 import { describe, expect, it } from "bun:test";
-import { installFactsOf } from "../testing/self-update-port.ts";
 import {
   type InstallFacts,
   detectInstallMethod,
-  latestChannel,
-  preferredProgramDir,
-  releaseAssetName,
-  upgradeCommand,
+  suggestedCommand,
+  updateHint,
 } from "./install-method.ts";
-import type { MiseToolFacts } from "./mise-tool.ts";
 
-const INSTALLS = "/home/u/.local/share/mise/installs";
-
-/** A mise tool dir named `name` whose marker records `backend` (null: no readable marker). */
-const miseDir = (name: string, backend: string | null): MiseToolFacts => ({
-  dir: `${INSTALLS}/${name}`,
-  backend,
+const compiledAt = (path: string, overrides: Partial<InstallFacts> = {}): InstallFacts => ({
+  compiled: true,
+  executablePath: path,
+  scriptPath: null,
+  platform: "darwin",
+  arch: "arm64",
+  ...overrides,
 });
 
-/** The reason an install is refused; throws if it is not refused at all. */
-const reasonOf = (value: InstallFacts): string => {
-  const method = detectInstallMethod(value);
-  if (method.kind !== "unsupported") {
-    throw new Error(`expected an unsupported install, got ${method.kind}`);
-  }
-  return method.reason;
-};
+const scriptAt = (path: string | null): InstallFacts => ({
+  compiled: false,
+  executablePath: null,
+  scriptPath: path,
+  platform: "darwin",
+  arch: "arm64",
+});
 
-describe("detectInstallMethod: mise が hop を入れた場合", () => {
-  it("mise の GitHub バックエンド配下の場合、GitHub を最新版の取得元にした mise になる", () => {
-    const method = detectInstallMethod(
-      installFactsOf({
-        compiled: true,
-        executablePath: "/m/hop",
-        mise: miseDir("github-n-seiji-nuthatch", "github:n-seiji/nuthatch"),
-      }),
-    );
-
-    expect(method).toEqual({
-      kind: "mise",
-      tool: "github:n-seiji/nuthatch",
-      channel: "github",
+describe("detectInstallMethod", () => {
+  it("実行ファイルのパスが取れないコンパイル済みバイナリの場合、置き換えずに other を返す", () => {
+    expect(detectInstallMethod(compiledAt("", { executablePath: null }))).toEqual({
+      kind: "other",
     });
   });
 
-  it("mise の npm バックエンド配下の場合、npm を最新版の取得元にした mise になる", () => {
-    const method = detectInstallMethod(
-      installFactsOf({
-        scriptPath: `${INSTALLS}/npm-n-seiji-nuthatch/0.1.5/lib/node_modules/@n-seiji/nuthatch/dist/cli.js`,
-        mise: miseDir("npm-n-seiji-nuthatch", "npm:@n-seiji/nuthatch"),
-      }),
-    );
-
-    expect(method).toEqual({
-      kind: "mise",
-      tool: "npm:@n-seiji/nuthatch",
-      channel: "npm",
-    });
-  });
-
-  it("mise の ubi / aqua バックエンドの場合、GitHub を最新版の取得元にする", () => {
-    for (const tool of ["ubi:n-seiji/nuthatch", "aqua:n-seiji/nuthatch"]) {
-      const method = detectInstallMethod(installFactsOf({ mise: miseDir("hop", tool) }));
-
-      expect(method).toEqual({ kind: "mise", tool, channel: "github" });
-    }
-  });
-
-  it("ディレクトリ名が hop らしくなくても (別名 hop で追加)、マーカーが hop を指していれば mise になる", () => {
-    const method = detectInstallMethod(
-      installFactsOf({ mise: miseDir("hop", "github:n-seiji/nuthatch") }),
-    );
-
-    expect(method.kind).toBe("mise");
-  });
-
-  it("hop を指すが GitHub / npm 以外のバックエンドの場合、mise upgrade を案内する unsupported になる", () => {
-    const reason = reasonOf(
-      installFactsOf({
-        mise: miseDir("asdf-n-seiji-nuthatch", "asdf:n-seiji/nuthatch"),
-      }),
-    );
-
-    expect(reason).toContain("mise upgrade asdf:n-seiji/nuthatch");
-  });
-
-  it("マーカーの backend に [bin=hop] のようなオプションが付いていても、オプションを除いた id で mise になる (mise upgrade にも渡さない)", () => {
-    for (const [backend, tool, channel] of [
-      ["github:n-seiji/nuthatch[bin=hop]", "github:n-seiji/nuthatch", "github"],
-      ["npm:@n-seiji/nuthatch[a=b]", "npm:@n-seiji/nuthatch", "npm"],
-    ] as const) {
-      const method = detectInstallMethod(
-        installFactsOf({
-          compiled: true,
-          executablePath: "/m/hop",
-          mise: miseDir("github-n-seiji-nuthatch", backend),
-        }),
-      );
-
-      expect(method).toEqual({ kind: "mise", tool, channel });
-      if (method.kind === "mise") {
-        expect(upgradeCommand(method)).toEqual(["mise", "upgrade", tool]);
-      }
-    }
-  });
-
-  it("hop を指すが GitHub / npm 以外のバックエンドにオプションが付いている場合も、案内するコマンドにはオプションを含めない", () => {
-    const reason = reasonOf(
-      installFactsOf({
-        mise: miseDir("asdf-n-seiji-nuthatch", "asdf:n-seiji/nuthatch[x=y]"),
-      }),
-    );
-
-    expect(reason).toContain('"mise upgrade asdf:n-seiji/nuthatch"');
-    expect(reason).not.toContain("[x=y]");
-  });
-
-  it("コンパイル済みでも mise 配下なら standalone ではなく mise になる", () => {
-    const method = detectInstallMethod(
-      installFactsOf({
-        compiled: true,
-        executablePath: "/m/hop",
-        mise: miseDir("github-n-seiji-nuthatch", "github:n-seiji/nuthatch"),
-      }),
-    );
-
-    expect(method.kind).toBe("mise");
-  });
-});
-
-describe("detectInstallMethod: standalone", () => {
-  it("コンパイル済みバイナリが対応プラットフォームの場合、置換先と asset 名を持つ standalone になる", () => {
-    const method = detectInstallMethod(
-      installFactsOf({
-        compiled: true,
-        executablePath: "/home/u/.local/bin/hop",
-      }),
-    );
-
-    expect(method).toEqual({
+  it("install.sh が置く場所のコンパイル済みバイナリの場合、standalone とその置き換え先を返す", () => {
+    expect(detectInstallMethod(compiledAt("/home/u/.local/bin/hop"))).toEqual({
       kind: "standalone",
       binaryPath: "/home/u/.local/bin/hop",
       installDir: "/home/u/.local/bin",
@@ -146,137 +39,69 @@ describe("detectInstallMethod: standalone", () => {
     });
   });
 
-  it("コンパイル済みバイナリが事前ビルドの無いプラットフォームの場合、npm を案内する unsupported になる", () => {
-    const reason = reasonOf(
-      installFactsOf({
-        compiled: true,
-        executablePath: "/home/u/.local/bin/hop",
-        platform: "linux",
-        arch: "arm64",
-      }),
-    );
-
-    expect(reason).toMatch(/linux-arm64.*npm/u);
+  it("プラットフォームごとに対応する release asset 名を選ぶ", () => {
+    const linux = detectInstallMethod(compiledAt("/u/hop", { platform: "linux", arch: "x64" }));
+    expect(linux).toMatchObject({
+      kind: "standalone",
+      assetName: "hop-linux-x64",
+    });
   });
 
-  it("コンパイル済みなのにバイナリの場所が分からない場合、unsupported になる", () => {
-    expect(detectInstallMethod(installFactsOf({ compiled: true })).kind).toBe("unsupported");
+  it("ビルド済みバイナリの無いプラットフォームの場合、other になる", () => {
+    const facts = compiledAt("/u/hop", { platform: "linux", arch: "arm64" });
+    expect(detectInstallMethod(facts)).toEqual({ kind: "other" });
   });
 
-  it("パッケージ管理ツールの置き場 (Homebrew / Nix / aqua / proto) 配下のバイナリの場合、standalone にせず、そのツールを案内する unsupported になる", () => {
-    for (const [path, manager] of [
-      ["/opt/homebrew/Cellar/nuthatch/0.1.5/bin/hop", "Homebrew"],
-      ["/opt/homebrew/Caskroom/nuthatch/0.1.5/hop", "Homebrew"],
-      ["/nix/store/abc123-nuthatch-0.1.5/bin/hop", "Nix"],
-      ["/home/u/.local/share/aquaproj-aqua/pkgs/github_release/hop", "aqua"],
-      ["/home/u/.proto/tools/hop/0.1.5/hop", "proto"],
-    ] as const) {
-      const reason = reasonOf(installFactsOf({ compiled: true, executablePath: path }));
+  it("mise の installs 配下の場合、バイナリでもスクリプトでも mise になる", () => {
+    const dir = "/home/u/.local/share/mise/installs/github-n-seiji-nuthatch/0.1.4";
+    expect(detectInstallMethod(compiledAt(`${dir}/hop`)).kind).toBe("mise");
+    expect(detectInstallMethod(scriptAt(`${dir}/node_modules/x/dist/cli.js`)).kind).toBe("mise");
+  });
 
-      expect(reason).toContain(manager);
-      expect(reason).toContain(path);
+  it("node_modules 配下のスクリプト (npm / bun のグローバル、npx) の場合、package-manager になる", () => {
+    for (const path of [
+      "/usr/local/lib/node_modules/@n-seiji/nuthatch/dist/cli.js",
+      "/home/u/.bun/install/global/node_modules/@n-seiji/nuthatch/dist/cli.js",
+      "/home/u/.npm/_npx/ab/node_modules/@n-seiji/nuthatch/dist/cli.js",
+    ]) {
+      expect(detectInstallMethod(scriptAt(path)).kind).toBe("package-manager");
     }
   });
 
-  it("Homebrew の formula が std_npm_args で入れた script (Cellar/<formula>/<version>/libexec の npm prefix) の場合、検証済みの prefix でも npm にせず、brew upgrade を案内する unsupported になる", () => {
-    const prefix = "/opt/homebrew/Cellar/nuthatch/0.1.5/libexec";
-    const reason = reasonOf(
-      installFactsOf({
-        scriptPath: `${prefix}/lib/node_modules/@n-seiji/nuthatch/dist/cli.js`,
-        npmGlobalPrefix: prefix,
-      }),
-    );
-
-    expect(reason).toContain("Homebrew");
-    expect(reason).toContain(prefix);
-    expect(reason).toContain('"brew upgrade"');
+  it("Homebrew / Nix / aqua / proto / その他バージョンマネージャ配下のバイナリの場合、other になる", () => {
+    for (const path of [
+      "/opt/homebrew/Cellar/hop/0.1.4/bin/hop",
+      "/nix/store/abc-hop/bin/hop",
+      "/home/u/.local/share/aquaproj-aqua/pkgs/x/hop",
+      "/home/u/.proto/tools/hop/0.1.4/hop",
+      "/home/u/.asdf/installs/hop/0.1.4/bin/hop",
+    ]) {
+      expect(detectInstallMethod(compiledAt(path))).toEqual({ kind: "other" });
+    }
   });
 
-  it("Nix のストアにある script の場合も、検証済みの npm prefix を npm にせず、Nix を案内する unsupported になる", () => {
-    const prefix = "/nix/store/abc123-nuthatch-0.1.5";
-    const reason = reasonOf(
-      installFactsOf({
-        scriptPath: `${prefix}/lib/node_modules/@n-seiji/nuthatch/dist/cli.js`,
-        npmGlobalPrefix: prefix,
-      }),
-    );
-
-    expect(reason).toContain("Nix");
-    expect(reason).toContain(prefix);
+  it("ソースチェックアウトや実行パスが分からない場合、other になる", () => {
+    expect(detectInstallMethod(scriptAt("/home/u/nuthatch/src/cli.ts"))).toEqual({
+      kind: "other",
+    });
+    expect(detectInstallMethod(scriptAt(null))).toEqual({ kind: "other" });
   });
 });
 
-describe("releaseAssetName", () => {
-  it("リリースに添付されているプラットフォームの場合、hop-<os>-<arch> を返す", () => {
-    expect(releaseAssetName("darwin", "arm64")).toBe("hop-darwin-arm64");
-    expect(releaseAssetName("darwin", "x64")).toBe("hop-darwin-x64");
-    expect(releaseAssetName("linux", "x64")).toBe("hop-linux-x64");
-  });
-
-  it("バイナリの無いプラットフォームの場合、null を返す", () => {
-    expect(releaseAssetName("linux", "arm64")).toBeNull();
-    expect(releaseAssetName("win32", "x64")).toBeNull();
-  });
-});
-
-describe("upgradeCommand", () => {
-  it("mise の場合、mise upgrade <tool> を返す", () => {
-    expect(
-      upgradeCommand({
-        kind: "mise",
-        tool: "github:n-seiji/nuthatch",
-        channel: "github",
-      }),
-    ).toEqual(["mise", "upgrade", "github:n-seiji/nuthatch"]);
-  });
-
-  it("npm の場合、hop が入っている prefix を --prefix で指定した npm install -g を返す", () => {
-    expect(upgradeCommand({ kind: "npm", prefix: "/opt/homebrew" })).toEqual([
+describe("updateHint / suggestedCommand", () => {
+  it("method ごとに 1 行の案内と、案内するコマンドを返す", () => {
+    expect(updateHint("mise")).toBe("Update with mise: mise upgrade");
+    expect(suggestedCommand("mise")).toEqual(["mise", "upgrade"]);
+    expect(updateHint("package-manager")).toBe(
+      "Update with your package manager, e.g. npm i -g @n-seiji/nuthatch@latest",
+    );
+    expect(suggestedCommand("package-manager")).toEqual([
       "npm",
-      "install",
-      "-g",
-      "--prefix",
-      "/opt/homebrew",
-      "@n-seiji/nuthatch@latest",
-    ]);
-  });
-
-  it("bun の場合、bun add -g <package>@latest を返す", () => {
-    expect(upgradeCommand({ kind: "bun" })).toEqual([
-      "bun",
-      "add",
+      "i",
       "-g",
       "@n-seiji/nuthatch@latest",
     ]);
-  });
-});
-
-describe("latestChannel", () => {
-  it("取得元は install 方法ごとに決まる", () => {
-    expect(
-      latestChannel({
-        kind: "standalone",
-        binaryPath: "/b/hop",
-        installDir: "/b",
-        assetName: "a",
-      }),
-    ).toBe("github");
-    expect(latestChannel({ kind: "npm", prefix: "/usr/local" })).toBe("npm");
-    expect(latestChannel({ kind: "bun" })).toBe("npm");
-    expect(latestChannel({ kind: "mise", tool: "npm:x", channel: "npm" })).toBe("npm");
-    expect(latestChannel({ kind: "mise", tool: "github:x/y", channel: "github" })).toBe("github");
-  });
-});
-
-describe("preferredProgramDir", () => {
-  it("npm の場合、hop が入っている prefix の bin を返す (その prefix の npm で更新するため)", () => {
-    expect(preferredProgramDir({ kind: "npm", prefix: "/opt/homebrew" })).toBe("/opt/homebrew/bin");
-  });
-
-  it("mise / bun の場合、null を返す (PATH だけで探す)", () => {
-    expect(
-      preferredProgramDir({ kind: "mise", tool: "github:n-seiji/nuthatch", channel: "github" }),
-    ).toBeNull();
-    expect(preferredProgramDir({ kind: "bun" })).toBeNull();
+    expect(updateHint("other")).toBe("Update hop with the tool you installed it with.");
+    expect(suggestedCommand("other")).toBeNull();
   });
 });

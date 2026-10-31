@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  GITHUB_LATEST_RELEASE_URL,
-  NPM_LATEST_URL,
-  releaseAssetUrl,
-} from "../domain/self-update.ts";
+import { GITHUB_LATEST_RELEASE_URL, releaseAssetUrl } from "../domain/self-update.ts";
 import { createReleaseHttp } from "./release-http.ts";
 
 /**
@@ -69,8 +65,8 @@ describe("JSON メタデータ (最新版の問い合わせ)", () => {
   it("Content-Length が無くても、1 MiB を超えて流れ続ける場合、読み切らずに打ち切る", async () => {
     const { response, state } = endless(64 * KIB, METADATA_LIMIT);
 
-    await expect(httpReturning(response).latestNpmVersion()).rejects.toThrow(
-      tooLarge(NPM_LATEST_URL, METADATA_LIMIT),
+    await expect(httpReturning(response).latestGithubVersion()).rejects.toThrow(
+      tooLarge(GITHUB_LATEST_RELEASE_URL, METADATA_LIMIT),
     );
 
     expect(state.cancelled).toBe(true);

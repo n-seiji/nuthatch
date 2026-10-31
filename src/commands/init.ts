@@ -1,6 +1,14 @@
 const ZSH_TEMPLATE = `# nuthatch shell integration for zsh.
 # Usage: eval "$(hop init zsh)"
 hop() {
+  # stdout is not a terminal (e.g. inside p=$(hop ...)): a cd here would only
+  # affect the capturing subshell and leave the caller with an empty string,
+  # so just print the path.
+  if [[ ! -t 1 ]]; then
+    command hop "$@"
+    return $?
+  fi
+
   if [[ "$1" == "-" ]]; then
     cd - > /dev/null || return $?
     return 0
@@ -50,18 +58,5 @@ hop() {
 }
 `;
 
-export interface InitOptions {
-  readonly shell: "zsh";
-}
-
-/** Returns the shell function template for `hop init <shell>`. Pure and static for now. */
-export const renderInit = (options: InitOptions): string => {
-  switch (options.shell) {
-    case "zsh": {
-      return ZSH_TEMPLATE;
-    }
-    default: {
-      return ZSH_TEMPLATE;
-    }
-  }
-};
+/** Returns the shell function template for `hop init <shell>`. Only zsh exists, so every shell gets it. */
+export const renderInit = (): string => ZSH_TEMPLATE;

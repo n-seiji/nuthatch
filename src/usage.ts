@@ -14,7 +14,7 @@ export const USAGE = `Usage: hop [command] [options]
   hop root -             Switch the root clone back
   hop init zsh           Print the zsh shell integration (eval "$(hop init zsh)")
 
-  hop --update           Update hop to the latest release, the way it was installed
+  hop --update           Replace a standalone binary with the latest release (else: how to update)
   hop --update --check   Only report whether an update is available; change nothing
   hop --version          Print hop's version
 
@@ -24,7 +24,7 @@ Interactive picker keys:
                          (stacks below it instead on narrow terminals)
   Ctrl+X                 Delete the selected worktree (y/N confirmation)
   Ctrl+R                 Switch the root clone to the selected branch (y/N first for an external worktree)
-  ↑/↓, Ctrl+P/N, Ctrl+K/J Move the selection (arrow, emacs, and vim keys all work)
+  ↑/↓, Ctrl+P/N, Ctrl+K Move the selection (arrow, emacs, and vim keys all work)
   Esc                    Cancel (exit 0, no output)
   Ctrl+C                 Cancel like an interrupt (exit 130, same as SIGINT)
   In the action panel: same up/down movement keys, Enter to run the highlighted
@@ -34,8 +34,7 @@ Options:
   --create               Create the worktree when jumping to a branch without one (always required, TTY or not)
   --json                 Output JSON instead of plain text
   --force                Force removal even if the worktree is dirty (hop rm)
-  --ext                  [deprecated, no-op for hop rm] hop rm no longer requires it to
-                         remove external worktrees; still gates hop clean's auto-cleanup scope
+  --ext                  Also include external worktrees in the auto-cleanup scope (hop clean)
   --yes                  Skip confirmation and execute (hop clean)
   --dry-run              Only report candidates as JSON, without deleting (hop clean)
   --with-branch          Also delete the branch when cleaning (hop clean)

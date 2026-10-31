@@ -2,15 +2,13 @@ import { type GenericSchema, type InferOutput, object, safeParse, string } from 
 import { messageOf } from "../domain/fatal-error.ts";
 import {
   GITHUB_LATEST_RELEASE_URL,
-  NPM_LATEST_URL,
   releaseAssetUrl,
-  requireVersion,
   versionFromTag,
 } from "../domain/self-update.ts";
 import { readCapped } from "./capped-body.ts";
 
 /**
- * The only network access hop does: HTTPS GETs against the fixed GitHub / npm
+ * The only network access hop does: HTTPS GETs against the fixed GitHub
  * addresses in domain/self-update.ts, each with a timeout. Every failure is
  * an Error that names the URL, so `hop --update` can say what it could not
  * reach.
@@ -22,8 +20,6 @@ export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
 export interface ReleaseHttp {
   /** Version of the latest GitHub release (its tag without the leading `v`). */
   latestGithubVersion: () => Promise<string>;
-  /** Version npm's `latest` dist-tag points at. */
-  latestNpmVersion: () => Promise<string>;
   /** Bytes of release asset `assetName` of tag `v<version>`. */
   downloadReleaseAsset: (version: string, assetName: string) => Promise<Uint8Array>;
   /** Text of a small release asset of tag `v<version>`, e.g. its `.sha256` file. */
@@ -49,7 +45,6 @@ const HTTP_FORBIDDEN = 403;
 const HTTP_TOO_MANY_REQUESTS = 429;
 
 const GithubLatestSchema = object({ tag_name: string() });
-const NpmLatestSchema = object({ version: string() });
 
 const DECODER = new TextDecoder();
 
@@ -163,15 +158,6 @@ export const createReleaseHttp = (userAgent: string, fetcher: Fetcher = fetch): 
       maxBytes: METADATA_MAX_BYTES,
     });
     return versionFromTag(release.tag_name);
-  },
-
-  async latestNpmVersion() {
-    const latest = await getJson(fetcher, NPM_LATEST_URL, NpmLatestSchema, {
-      headers: { Accept: "application/json", "User-Agent": userAgent },
-      timeoutMs: METADATA_TIMEOUT_MS,
-      maxBytes: METADATA_MAX_BYTES,
-    });
-    return requireVersion(latest.version);
   },
 
   async downloadReleaseAsset(version, assetName) {

@@ -29,7 +29,6 @@ describe("rm — duplicate branch holders", () => {
       cwd: repo.repoPath,
       branch: "feat/duplicate",
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(false);
@@ -53,7 +52,6 @@ describe("rm — duplicate branch holders", () => {
       branch: "feat/picker-duplicate",
       expectedPath: selectedRealPath,
       force: false,
-      ext: false,
     });
 
     expect(result.ok).toBe(true);

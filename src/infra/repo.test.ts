@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import type { Worktree } from "../domain/model.ts";
+import type { Worktree } from "../domain/schema.ts";
 import type { FsPort, GitPort } from "../domain/ports.ts";
-import { nestedWorktreePaths, resolveBranchCheckout, worktreeDirtyState } from "./repo.ts";
+import { nestedWorktrees, resolveBranchCheckout, worktreeDirtyState } from "./repo.ts";
 
 const worktree = (overrides: Partial<Worktree> = {}): Worktree => ({
   path: "/repo/wt",
@@ -49,12 +49,14 @@ const gitWithBranches = (localBranches: readonly string[], remotes: readonly str
 const checkout = (git: GitPort, branch: string, explicitTrack?: string) =>
   resolveBranchCheckout(git, "/repo", branch, explicitTrack);
 
-describe("nestedWorktreePaths", () => {
+describe("nestedWorktrees", () => {
   it("includes a live worktree nested inside the target", () => {
     const target = worktree({ path: "/repo" });
     const nested = worktree({ path: "/repo/.claude/worktrees/x", branch: "x" });
 
-    expect(nestedWorktreePaths([target, nested], "/repo")).toEqual(["/repo/.claude/worktrees/x"]);
+    expect(nestedWorktrees([target, nested], "/repo").map((wt) => wt.path)).toEqual([
+      "/repo/.claude/worktrees/x",
+    ]);
   });
 
   it("excludes a prunable registration nested inside the target", () => {
@@ -62,7 +64,7 @@ describe("nestedWorktreePaths", () => {
     // `Git worktree prune` (e.g. `rm -rf`): git reports it prunable, and a
     // Real untracked file can later reappear at that same path. Treating it
     // As a live nested worktree would hide that file from a dirty check on
-    // The containing worktree — see infra/repo.ts's nestedWorktreePaths doc.
+    // The containing worktree — see infra/repo.ts's nestedWorktrees doc.
     const target = worktree({ path: "/repo" });
     const prunable = worktree({
       path: "/repo/.claude/worktrees/x",
@@ -71,14 +73,14 @@ describe("nestedWorktreePaths", () => {
       prunableReason: "gitdir file points to non-existent location",
     });
 
-    expect(nestedWorktreePaths([target, prunable], "/repo")).toEqual([]);
+    expect(nestedWorktrees([target, prunable], "/repo").map((wt) => wt.path)).toEqual([]);
   });
 
   it("never includes the target's own path or a sibling", () => {
     const target = worktree({ path: "/repo" });
     const sibling = worktree({ path: "/other-repo-wt", branch: "y" });
 
-    expect(nestedWorktreePaths([target, sibling], "/repo")).toEqual([]);
+    expect(nestedWorktrees([target, sibling], "/repo").map((wt) => wt.path)).toEqual([]);
   });
 });
 
@@ -123,7 +125,7 @@ describe("resolveBranchCheckout", () => {
 
     const result = await checkout(git, "feat/a");
 
-    expect(result).toEqual({ ok: true, options: { createBranch: false } });
+    expect(result).toEqual({ ok: true, value: { createBranch: false } });
     expect(remoteLookups).toEqual([]);
   });
 
@@ -134,7 +136,7 @@ describe("resolveBranchCheckout", () => {
 
     expect(result).toEqual({
       ok: true,
-      options: { createBranch: true, track: "upstream/feat/a" },
+      value: { createBranch: true, track: "upstream/feat/a" },
     });
     expect(remoteLookups).toEqual([]);
   });
@@ -146,7 +148,7 @@ describe("resolveBranchCheckout", () => {
 
     expect(result).toEqual({
       ok: true,
-      options: { createBranch: true, track: "origin/feat/a" },
+      value: { createBranch: true, track: "origin/feat/a" },
     });
     expect(remoteLookups).toEqual(["feat/a"]);
   });

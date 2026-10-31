@@ -9,8 +9,8 @@ const execFile = promisify(execFileCb);
 
 /**
  * Spawns git by absolute path, resolved once per process: handing the bare
- * name "git" to the spawn implementation is what produced issue #9's
- * `ENOENT ... posix_spawn 'git'` crash. See git-executable.ts.
+ * name "git" can fail in a compiled Bun binary with
+ * `ENOENT ... posix_spawn 'git'`. See git-executable.ts.
  */
 const gitExecutable = createGitExecutableResolver(process.env);
 
@@ -145,13 +145,13 @@ const createBranchMethods = () => ({
         args.push(options.track);
       }
     } else {
-      args.push(ref);
+      args.push("--end-of-options", ref);
     }
     await run(cwd, args);
   },
 
   async deleteBranch(cwd: string, branch: string) {
-    await run(cwd, ["branch", "-D", branch]);
+    await run(cwd, ["branch", "-D", "--end-of-options", branch]);
   },
 
   async detachHead(cwd: string) {
@@ -186,7 +186,7 @@ const createGarbagePolicyMethods = () => ({
 
   async isAncestor(cwd: string, branch: string, ref: string) {
     try {
-      await run(cwd, ["merge-base", "--is-ancestor", branch, ref]);
+      await run(cwd, ["merge-base", "--is-ancestor", "--end-of-options", branch, ref]);
       return true;
     } catch (error) {
       if (failedWithExitCode(error, GIT_ANCESTOR_EXIT_CODE)) {
@@ -198,7 +198,7 @@ const createGarbagePolicyMethods = () => ({
 
   async hasEquivalentCommits(cwd: string, branch: string, ref: string) {
     try {
-      const out = await run(cwd, ["cherry", ref, branch]);
+      const out = await run(cwd, ["cherry", "--end-of-options", ref, branch]);
       // Each line is "+ <sha>" when no equivalent patch exists on ref, or
       // "- <sha>" when an equivalent patch is already represented there.
       // This can match one-to-one cherry-picks and simple squash merges, but

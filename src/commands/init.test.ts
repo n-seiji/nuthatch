@@ -5,17 +5,37 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderInit } from "./init.ts";
 
-const hasZsh = (): boolean => {
+const commandAvailable = (command: string, args: readonly string[]): boolean => {
   try {
-    execFileSync("zsh", ["--version"], { stdio: "ignore" });
+    execFileSync(command, [...args], { stdio: "ignore" });
     return true;
   } catch {
     return false;
   }
 };
 
-const zshAvailable = hasZsh();
+const zshAvailable = commandAvailable("zsh", ["--version"]);
+const python3Available = commandAvailable("python3", ["-c", "import pty"]);
+// On CI a missing zsh/python3 must fail loudly instead of silently skipping these tests.
+if (process.env.CI !== undefined && process.env.CI !== "" && !(zshAvailable && python3Available)) {
+  throw new Error("CI requires zsh and python3 (with pty) for the hop init zsh tests");
+}
 const describeIfZsh = zshAvailable ? describe : describe.skip;
+// The wrapper only cds when stdout is a terminal, so those cases need a pty.
+const itWithPty = zshAvailable && python3Available ? it : it.skip;
+
+// Runs zsh with a pty as stdout/stdin/stderr (output is the pty's, CR stripped).
+const PTY_RUNNER = [
+  "import os, pty, sys",
+  "status = pty.spawn(['zsh', '-c', sys.argv[1]])",
+  "sys.exit(os.waitstatus_to_exitcode(status))",
+].join("\n");
+
+interface ZshResult {
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly status: number;
+}
 
 describeIfZsh("hop init zsh (real zsh)", () => {
   let workDir: string;
@@ -40,14 +60,13 @@ describeIfZsh("hop init zsh (real zsh)", () => {
     await rm(workDir, { recursive: true, force: true });
   });
 
-  const runInZsh = (script: string): { stdout: string; stderr: string; status: number } => {
-    const init = renderInit({ shell: "zsh" });
+  const run = (command: string, args: readonly string[]): ZshResult => {
     try {
-      const stdout = execFileSync("zsh", ["-c", `${init}\n${script}`], {
+      const stdout = execFileSync(command, [...args], {
         env: { ...process.env, PATH: `${fakeBinDir}:${process.env.PATH}` },
         encoding: "utf8",
       });
-      return { stdout, stderr: "", status: 0 };
+      return { stdout: stdout.replaceAll("\r", ""), stderr: "", status: 0 };
     } catch (error) {
       const err = error as {
         stdout?: string;
@@ -55,23 +74,28 @@ describeIfZsh("hop init zsh (real zsh)", () => {
         status?: number;
       };
       return {
-        stdout: err.stdout ?? "",
+        stdout: (err.stdout ?? "").replaceAll("\r", ""),
         stderr: err.stderr ?? "",
         status: err.status ?? 1,
       };
     }
   };
 
-  it("`status` を local 変数として使わず read-only variable エラーを起こさない", () => {
-    const result = runInZsh("hop feat/demo");
-    expect(result.stderr).not.toContain("read-only variable");
+  const runInZsh = (script: string): ZshResult => run("zsh", ["-c", `${renderInit()}\n${script}`]);
+
+  const runInZshWithPty = (script: string): ZshResult =>
+    run("python3", ["-I", "-c", PTY_RUNNER, `${renderInit()}\n${script}`]);
+
+  itWithPty("`status` を local 変数として使わず read-only variable エラーを起こさない", () => {
+    const result = runInZshWithPty("hop feat/demo");
+    expect(result.stdout).not.toContain("read-only variable");
     expect(result.status).toBe(0);
   });
 
-  it("`hop -- <branch>` は予約語エスケープでも cd される", () => {
-    const result = runInZsh("hop -- ls; pwd");
-    expect(result.stderr).not.toContain("read-only variable");
-    expect(result.stdout.trim()).toBe(targetDir);
+  itWithPty("`hop -- <branch>` は予約語エスケープでも cd される", () => {
+    const result = runInZshWithPty("hop -- ls; pwd");
+    expect(result.stdout).not.toContain("read-only variable");
+    expect(result.stdout.trim().split("\n").at(-1)).toBe(targetDir);
   });
 
   it("`hop ls` (予約語そのもの) は cd されない", () => {
@@ -80,13 +104,20 @@ describeIfZsh("hop init zsh (real zsh)", () => {
     expect(result.stdout.trim()).toBe(before);
   });
 
-  it("非 TTY (fd 2/0 が tty でない) では bare `hop` は cd しない", () => {
-    // ExecFileSync always pipes stdin/stderr, so `[[ -t 2 && -t 0 ]]` is
-    // False here — this exercises the wrapper's non-interactive branch
-    // (Ls fallback territory), not the real interactive picker path, which
-    // Needs a real pty and is verified manually instead (see PR description).
+  itWithPty("stdin が tty でない bare `hop` は cd しない", () => {
     const before = workDir;
-    const result = runInZsh(`cd ${before} && hop > /dev/null; pwd`);
+    const result = runInZshWithPty(`cd ${before} && hop < /dev/null; pwd`);
+    expect(result.stdout.trim().split("\n").at(-1)).toBe(before);
+  });
+
+  it("stdout が tty でない `$(hop ...)` はパスを出力する (cd せず空にならない)", () => {
+    const result = runInZsh('p=$(hop feat/demo --create); print -r -- "p=$p"');
+    expect(result.stdout.trim()).toBe(`p=${targetDir}`);
+  });
+
+  it("stdout が tty でない `hop` はカレントディレクトリを変えない", () => {
+    const before = workDir;
+    const result = runInZsh(`cd ${before} && hop feat/demo > /dev/null; pwd`);
     expect(result.stdout.trim()).toBe(before);
   });
 });

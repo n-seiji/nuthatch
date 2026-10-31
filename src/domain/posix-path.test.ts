@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { absoluteCandidates, baseName, parentDir, splitPathEnv } from "./posix-path.ts";
+import { absoluteCandidates, parentDir, shortenHome, splitPathEnv } from "./posix-path.ts";
 
 describe("parentDir", () => {
   it("深いパスの場合、1 つ上のディレクトリを返す", () => {
@@ -15,18 +15,6 @@ describe("parentDir", () => {
 
   it("末尾のスラッシュは無視する", () => {
     expect(parentDir("/home/u/bin/")).toBe("/home/u");
-  });
-});
-
-describe("baseName", () => {
-  it("最後の要素を返す (末尾のスラッシュは無視する)", () => {
-    expect(baseName("/home/u/installs/node")).toBe("node");
-    expect(baseName("/home/u/installs/node/")).toBe("node");
-    expect(baseName("node")).toBe("node");
-  });
-
-  it("ルートの場合、空文字を返す", () => {
-    expect(baseName("/")).toBe("");
   });
 });
 
@@ -50,5 +38,25 @@ describe("splitPathEnv", () => {
   it("コロンで区切り、未設定なら空のエントリ 1 つを返す", () => {
     expect(splitPathEnv("/a:/b")).toEqual(["/a", "/b"]);
     expect(splitPathEnv()).toEqual([""]);
+  });
+});
+
+describe("shortenHome", () => {
+  it("$HOME 配下のパスは ~ に置換する", () => {
+    expect(shortenHome("/Users/seiji/ghq/repo", "/Users/seiji")).toBe("~/ghq/repo");
+  });
+
+  it("$HOME と完全一致する場合は ~ そのもの", () => {
+    expect(shortenHome("/Users/seiji", "/Users/seiji")).toBe("~");
+  });
+
+  it("$HOME 配下でないパスはそのまま", () => {
+    expect(shortenHome("/tmp/repo", "/Users/seiji")).toBe("/tmp/repo");
+    expect(shortenHome("/Users/seijix/repo", "/Users/seiji")).toBe("/Users/seijix/repo");
+  });
+
+  it("HOME が空または / の場合は何も置換しない", () => {
+    expect(shortenHome("/tmp/repo", "")).toBe("/tmp/repo");
+    expect(shortenHome("/tmp/repo", "/")).toBe("/tmp/repo");
   });
 });

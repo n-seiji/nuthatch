@@ -1,13 +1,12 @@
 import { describe, expect, it, mock } from "bun:test";
-import type { PickCandidate } from "../domain/candidates.ts";
-import type { Worktree } from "../domain/model.ts";
+import type { PickCandidate, Worktree } from "../domain/schema.ts";
+import { PickerKeyParser } from "./picker-key-parser.ts";
 import { createPickerStore, panelErrorTransition } from "./picker-store.ts";
 import type { PickerCallbacks, PickerOutcome } from "./picker-types.ts";
 import type { PickerKeyModifiers } from "./picker-keys.ts";
 
 const NO_MODIFIERS: PickerKeyModifiers = {
   ctrl: false,
-  meta: false,
   escape: false,
   return: false,
   tab: false,
@@ -250,5 +249,40 @@ describe("createPickerStore", () => {
     expect(notifications).toBeGreaterThan(0); // Busy: true notified synchronously
     await flush();
     expect(store.getSnapshot().busy).toBe(false);
+  });
+});
+
+describe("bracketed paste を picker に通す", () => {
+  it.each([
+    ["Tab の後に d (panel を開いて delete)", "\td"],
+    ["Tab の後に r (panel を開いて switchRoot)", "\tr"],
+    ["branch\tdone 形式 (候補に一致する prefix)", "feat\tdone"],
+    ["Ctrl+X の後に y (自前で delete を確定)", "\u0018y"],
+    ["Ctrl+R (switchRoot ショートカット)", "\u0012"],
+    ["CR (候補に一致する prefix の後で選択して抜ける)", "feat\r"],
+  ] as const)("貼り付け内の %s は panel も mutation も起こさない", async (_label, pasted) => {
+    const deleteWorktree = mock<PickerCallbacks["deleteWorktree"]>(() =>
+      Promise.resolve({ ok: true }),
+    );
+    const switchRootHere = mock<PickerCallbacks["switchRootHere"]>(() =>
+      Promise.resolve({ ok: true, path: "/root" }),
+    );
+    const onExit = mock((_outcome: PickerOutcome) => {});
+    const store = createPickerStore(
+      [managedCandidate],
+      noopCallbacks({ deleteWorktree, switchRootHere }),
+      onExit,
+      () => {},
+    );
+    const parser = new PickerKeyParser();
+    const bytes = Buffer.from(`\u001B[200~${pasted}\u001B[201~`, "utf8");
+    for (const keyEvent of parser.feed(bytes)) {
+      store.handleInput(keyEvent.input, keyEvent.key);
+    }
+    await flush();
+    expect(store.getSnapshot().mode.kind).toBe("list");
+    expect(deleteWorktree).not.toHaveBeenCalled();
+    expect(switchRootHere).not.toHaveBeenCalled();
+    expect(onExit).not.toHaveBeenCalled();
   });
 });

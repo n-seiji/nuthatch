@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { PickCandidate } from "../domain/candidates.ts";
+import type { PickCandidate } from "../domain/schema.ts";
 import { creatableCandidate, worktreeCandidate } from "./picker-layout.fixtures.ts";
 import { buildDisplayRows, sortCandidatesForDisplay } from "./picker-layout.ts";
 

@@ -1,5 +1,5 @@
 import { execFile as execFileCb } from "node:child_process";
-import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -118,41 +118,34 @@ describe("コンパイル済みバイナリでの `hop --update` (実際の proc
   };
 
   /**
-   * `hop --update --check` for `installed`, with a proxy that refuses every
+   * `hop --update` for `installed`, with a proxy that refuses every
    * connection: were the refusal to regress, the run would fail fast here
-   * instead of reaching the real GitHub.
+   * instead of reaching the real GitHub (or replacing anything).
    */
-  const updateCheck = (installed: string) =>
-    runProgram(installed, ["--update", "--check"], repo.repoPath, {
+  const update = (installed: string) =>
+    runProgram(installed, ["--update"], repo.repoPath, {
       ...repo.env,
       HTTPS_PROXY: "http://127.0.0.1:9",
       https_proxy: "http://127.0.0.1:9",
     });
 
-  it("マーカーの無い installs/<tool>/<version>/ に置かれている場合、ネットワークに出る前にバージョンマネージャ配下として拒否する", async () => {
-    const installed = await installBinaryAt("installs/hop/0.1.4/hop");
+  it("mise の installs 配下に置かれている場合、ネットワークに出る前に mise upgrade を案内して拒否する", async () => {
+    const installed = await installBinaryAt("mise/installs/github-n-seiji-nuthatch/0.1.4/hop");
 
-    const result = await updateCheck(installed);
+    const result = await update(installed);
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain("installed under a version manager's install dir");
-    expect(result.stderr).toContain(join(binaryDir, "installs", "hop"));
-    expect(result.stderr).not.toContain("Checking for the latest release");
+    expect(result.stderr).toBe("Update with mise: mise upgrade\n");
   });
 
-  it("別ツール (core:bun) のマーカーがある installs/<tool>/ に置かれている場合も、同じく拒否する", async () => {
-    const installed = await installBinaryAt("installs/bun/1.2.0/bin/hop");
-    await writeFile(
-      join(binaryDir, "installs", "bun", ".mise.backend.toml"),
-      'short = "bun"\nfull = "core:bun"\n',
-    );
+  it("バージョンマネージャの installs 配下に置かれている場合も、汎用の案内で拒否する", async () => {
+    const installed = await installBinaryAt("installs/hop/0.1.4/hop");
 
-    const result = await updateCheck(installed);
+    const result = await update(installed);
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain('names "core:bun", not hop');
-    expect(result.stderr).not.toContain("Checking for the latest release");
+    expect(result.stderr).toBe("Update hop with the tool you installed it with.\n");
   });
 });

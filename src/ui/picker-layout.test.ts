@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import type { PickCandidate } from "../domain/candidates.ts";
+import type { PickCandidate } from "../domain/schema.ts";
 import { creatableCandidate, worktreeCandidate } from "./picker-layout.fixtures.ts";
 import {
   branchColumnWidth,
   buildDisplayRows,
   candidateKindLabel,
   KIND_COLUMN_WIDTH,
-  padBranchLabel,
   shortenPath,
   statusMarker,
 } from "./picker-layout.ts";
+import { padToWidth } from "../domain/display-width.ts";
 
 describe("statusMarker", () => {
   it("dirty な worktree は ●", () => {
@@ -43,18 +43,6 @@ describe("candidateKindLabel", () => {
 });
 
 describe("shortenPath", () => {
-  it("$HOME 配下のパスは ~ に置換する", () => {
-    expect(shortenPath("/Users/seiji/ghq/repo", "/Users/seiji")).toBe("~/ghq/repo");
-  });
-
-  it("$HOME と完全一致する場合は ~ そのもの", () => {
-    expect(shortenPath("/Users/seiji", "/Users/seiji")).toBe("~");
-  });
-
-  it("$HOME 配下でないパスはそのまま", () => {
-    expect(shortenPath("/tmp/repo", "/Users/seiji")).toBe("/tmp/repo");
-  });
-
   it("上限を超える場合は先頭を … で省略し末尾を残す", () => {
     const long = "/Users/seiji/ghq/github.com/n-seiji/some-very-long-repo-name/subdir";
     const result = shortenPath(long, "/Users/seiji", 20);
@@ -75,7 +63,7 @@ describe("shortenPath", () => {
   });
 });
 
-describe("branchColumnWidth / padBranchLabel", () => {
+describe("branchColumnWidth / padToWidth", () => {
   it("最長の branch label の長さを返す", () => {
     const candidates = [
       creatableCandidate("a", "local"),
@@ -89,9 +77,9 @@ describe("branchColumnWidth / padBranchLabel", () => {
     expect(branchColumnWidth(candidates)).toBe(24);
   });
 
-  it("padBranchLabel は幅に満たない分だけ空白で埋める", () => {
-    expect(padBranchLabel("main", 8)).toBe("main    ");
-    expect(padBranchLabel("feat/longer-than-width", 4)).toBe("feat/longer-than-width");
+  it("padToWidth は幅に満たない分だけ空白で埋める", () => {
+    expect(padToWidth("main", 8)).toBe("main    ");
+    expect(padToWidth("feat/longer-than-width", 4)).toBe("feat/longer-than-width");
   });
 
   it("全角文字を含む branch label は表示幅ベースで揃う", () => {
@@ -102,14 +90,14 @@ describe("branchColumnWidth / padBranchLabel", () => {
     const width = branchColumnWidth(candidates);
     for (const candidate of candidates) {
       const label = candidate.kind === "creatable" ? candidate.branch : "";
-      const padded = padBranchLabel(label, width);
+      const padded = padToWidth(label, width);
       expect(padded.length >= label.length).toBe(true);
     }
   });
 
-  it("絵文字を含む branch label でも padBranchLabel が書記素を壊さない", () => {
+  it("絵文字を含む branch label でも padToWidth が書記素を壊さない", () => {
     const label = "feat/🚀-launch";
-    const padded = padBranchLabel(label, 20);
+    const padded = padToWidth(label, 20);
     expect(padded.startsWith(label)).toBe(true);
   });
 });

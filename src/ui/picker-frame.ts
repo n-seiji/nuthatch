@@ -1,5 +1,5 @@
 import { displayWidth, graphemes } from "../domain/display-width.ts";
-import { ESC } from "./ansi.ts";
+import { ESC, SGR, SGR_RESET } from "../domain/ansi.ts";
 
 /**
  * Pure frame builder for the self-drawn picker.
@@ -19,7 +19,6 @@ import { ESC } from "./ansi.ts";
 
 const CURSOR_HOME = `${ESC}[H`;
 const CLEAR_TO_END = `${ESC}[J`;
-const SGR_RESET = `${ESC}[0m`;
 
 export type LineStyle =
   | "plain"
@@ -40,24 +39,15 @@ export interface StyledSpan {
 /** One display line, as a sequence of spans (so e.g. "hop: " + cyan query + dim hint can share a row). */
 export type StyledLine = readonly StyledSpan[];
 
-const SGR_CODES: Record<LineStyle, string> = {
-  plain: "",
-  cyan: `${ESC}[36m`,
-  dim: `${ESC}[2m`,
-  "bold-dim": `${ESC}[1m${ESC}[2m`,
-  inverse: `${ESC}[7m`,
-  red: `${ESC}[31m`,
-  green: `${ESC}[32m`,
-  yellow: `${ESC}[33m`,
-  magenta: `${ESC}[35m`,
-};
+const sgrCode = (style: Exclude<LineStyle, "plain">): string =>
+  style === "bold-dim" ? `${SGR.bold}${SGR.dim}` : SGR[style];
 
 const renderSpan = (span: StyledSpan, colorEnabled: boolean): string => {
   const style = span.style ?? "plain";
   if (!colorEnabled || style === "plain") {
     return span.text;
   }
-  return `${SGR_CODES[style]}${span.text}${SGR_RESET}`;
+  return `${sgrCode(style)}${span.text}${SGR_RESET}`;
 };
 
 const lineWidth = (line: StyledLine): number =>
@@ -177,10 +167,8 @@ const wrapLineToWidth = (line: StyledLine, width: number): StyledLine[] => {
  * Wraps `content` in a round-cornered border, `width` display columns wide
  * -- the box around the action/confirm side panel. A content line wider
  * than the inner width wraps onto additional rows (display-width based,
- * grapheme-safe) rather than being clipped -- losing the tail of a branch
- * name or the "?" off a confirm prompt left the user unable to tell what
- * they were about to delete (astra/Fable-reported regression from the
- * previous renderer, which wrapped the same way).
+ * grapheme-safe) rather than being clipped, so the user can always read
+ * the full branch name and the "?" of a confirm prompt.
  */
 export const wrapInBox = (content: readonly StyledLine[], width: number): StyledLine[] => {
   const innerWidth = Math.max(0, width - BOX_BORDER_WIDTH - BOX_PADDING_TOTAL);
@@ -209,9 +197,8 @@ const ELLIPSIS = "…";
  * the known terminal width (picker-side-by-side.ts's
  * constrainRowColumnWidths and footerHintForWidth), but this guarantees no
  * line can ever exceed the terminal's actual width regardless of what
- * produced it (astra/Fable-reported: an overflowing line gets wrapped by
- * the terminal itself, which throws off picker-viewport.ts's rowBudget
- * estimate and can scroll the screen).
+ * produced it (the terminal would wrap it, breaking picker-viewport.ts's
+ * rowBudget count and scrolling the screen).
  */
 export const truncateLineToWidth = (line: StyledLine, width: number): StyledLine => {
   if (lineWidth(line) <= width) {

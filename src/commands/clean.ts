@@ -1,12 +1,15 @@
 import { messageOf } from "../domain/fatal-error.ts";
-import type { Worktree } from "../domain/model.ts";
+import { classifyGarbage } from "../domain/garbage.ts";
+import type { CleanCandidate, CleanData, Worktree } from "../domain/schema.ts";
 import type { FsPort, GitPort, TermPort } from "../domain/ports.ts";
 import { type CommandResult, EXIT_USAGE_ERROR, fail, ok } from "../domain/result.ts";
-import type { CleanCandidate, CleanData } from "../domain/schema.ts";
-import { type UpstreamState, upstreamStateOf } from "../domain/upstream.ts";
 import { withRepoLock } from "../infra/lock.ts";
 import { loadRepoContext, nestedWorktrees, type RepoContext } from "../infra/repo.ts";
-import { buildCleanCandidates } from "./clean-candidates.ts";
+import {
+  type BranchPolicyFacts,
+  branchMergeFacts,
+  buildCleanCandidates,
+} from "./clean-candidates.ts";
 
 export interface CleanOptions {
   readonly cwd: string;
@@ -113,36 +116,27 @@ const removeCandidate = async ({
   }
 };
 
-interface BranchPolicyFacts {
-  readonly defaultRef: string | null;
-  readonly upstreams: ReadonlyMap<string, UpstreamState>;
-}
-
 const canDeletePrunableBranch = async (
   git: GitPort,
   rootPath: string,
   candidate: CleanCandidate,
-  { defaultRef, upstreams }: BranchPolicyFacts,
+  facts: BranchPolicyFacts,
 ): Promise<boolean> => {
   if (candidate.reason !== "prunable") {
     return true;
   }
-  if (candidate.branch.length === 0 || defaultRef === null) {
+  if (candidate.branch.length === 0) {
     return false;
   }
 
   try {
-    const mergedIntoDefault = await git.isAncestor(rootPath, candidate.branch, defaultRef);
-    if (mergedIntoDefault === true) {
-      return true;
-    }
-    if (upstreamStateOf(upstreams, candidate.branch).kind === "gone") {
-      return (await git.hasEquivalentCommits(rootPath, candidate.branch, defaultRef)) === true;
-    }
+    const branchFacts = await branchMergeFacts(git, rootPath, candidate.branch, facts);
+    // Same verdict that makes a live candidate's branch deletable: merged or gone.
+    return classifyGarbage({ ...branchFacts, clean: true }) !== null;
   } catch {
     // An indeterminate safety check must keep the branch.
+    return false;
   }
-  return false;
 };
 
 /**

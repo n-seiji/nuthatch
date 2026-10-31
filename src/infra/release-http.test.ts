@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  GITHUB_LATEST_RELEASE_URL,
-  NPM_LATEST_URL,
-  releaseAssetUrl,
-} from "../domain/self-update.ts";
+import { GITHUB_LATEST_RELEASE_URL, releaseAssetUrl } from "../domain/self-update.ts";
 import { createReleaseHttp } from "./release-http.ts";
 
 /**
@@ -86,24 +82,6 @@ describe("latestGithubVersion", () => {
   });
 });
 
-describe("latestNpmVersion", () => {
-  it("レジストリの latest の version を返し、固定の URL へ GET する", async () => {
-    const { http, requests } = httpWith(() => jsonResponse({ version: "0.1.3" }));
-
-    expect(await http.latestNpmVersion()).toBe("0.1.3");
-    expect(requests[0]?.url).toBe(NPM_LATEST_URL);
-    expect(requests[0]?.init.headers).toMatchObject({
-      "User-Agent": "hop/0.1.5",
-    });
-  });
-
-  it("version が x.y.z でない場合、エラーにする", async () => {
-    await expect(
-      httpWith(() => jsonResponse({ version: "0.2.0-beta.1" })).http.latestNpmVersion(),
-    ).rejects.toThrow(/x\.y\.z/u);
-  });
-});
-
 describe("リクエストの失敗", () => {
   it("2xx 以外の場合、URL とステータスを含むエラーにする", async () => {
     const { http } = httpWith(() => new Response("rate limited", { status: 403 }));
@@ -137,21 +115,11 @@ describe("リクエストの失敗", () => {
     }
   });
 
-  it("GitHub API 以外 (npm レジストリ) の 429 は、同じヘッダーがあってもレート制限の案内を付けない", async () => {
-    const { http } = httpWith(
-      () => new Response("slow down", { status: 429, headers: { "x-ratelimit-remaining": "0" } }),
-    );
-
-    const message = await rejectionMessage(http.latestNpmVersion());
-
-    expect(message).toBe(`GET ${NPM_LATEST_URL} failed: HTTP 429`);
-  });
-
   it("接続に失敗した場合、URL と原因を含むエラーにする", async () => {
     const { http } = httpWith(() => Promise.reject(new TypeError("fetch failed")));
 
-    await expect(http.latestNpmVersion()).rejects.toThrow(
-      `GET ${NPM_LATEST_URL} failed: fetch failed`,
+    await expect(http.latestGithubVersion()).rejects.toThrow(
+      `GET ${GITHUB_LATEST_RELEASE_URL} failed: fetch failed`,
     );
   });
 

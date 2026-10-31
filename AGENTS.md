@@ -12,6 +12,7 @@ before implementing anything.
 
 ```
 src/                 # Implementation (TypeScript, bun). Tests live next to the file under test (*.test.ts)
+src/commands/init.ts # Holds the `hop init zsh` shell template
 src/testing/         # Test-only shared helpers (e.g. building a real tmpdir git repo). Imported only from tests
 docs/design.md       # Design document (source of truth)
 skills/              # Symlink to plugins/hop/skills (the plugin side is the source of truth)
@@ -19,7 +20,6 @@ plugins/hop/         # Published plugin (supports both Claude Code and Codex). s
 .claude/rules/       # Development-only rules (used only while developing this repo, never distributed)
 .claude-plugin/      # Claude Code marketplace index
 .agents/plugins/     # Codex marketplace index
-shell/               # Template for `hop init zsh`
 ```
 
 - **Colocate tests with the implementation file.** For example, the test for

@@ -1,8 +1,8 @@
 /**
  * Pure key-handling logic for the picker, extracted from picker.ts so it can
- * be unit tested without a terminal. Ctrl+N/Ctrl+P and Ctrl+J/Ctrl+K mirror
+ * be unit tested without a terminal. Ctrl+N/Ctrl+P and Ctrl+K mirror
  * the arrow keys (emacs and vim conventions, respectively — both coexist);
- * Ctrl+U clears the search query. Modifier keys (ctrl/meta) never leak into
+ * Ctrl+U clears the search query. Ctrl-modified keys never leak into
  * the search query as literal characters.
  *
  * Three modes, three resolvers: list (resolvePickerKeyAction), the action
@@ -14,24 +14,11 @@
  * to the list rather than doubling as movement — Tab also toggles it, for
  * terminals (e.g. Ghostty) that remap a chord like Cmd+K to Tab.
  *
- * Terminal-protocol caveat (confirmed with a real pty, not just synthetic
- * key objects — see picker-keys.test.ts and the investigation report):
- * Ctrl+J and Ctrl+H are ASCII control bytes 0x0A (LF) and 0x08 (BS), the
- * same bytes a plain Enter-as-newline or Backspace key can send.
- * picker-key-parser.ts special-cases those bytes *before* its generic
- * Ctrl+letter range check, so they never come through as
- * `key.ctrl && input === "j"/"h"` the way Ctrl+K, Ctrl+L, Ctrl+N, Ctrl+F,
- * etc. do (those bytes — 0x0B, 0x0C, 0x0E, 0x06 — aren't special-cased, so
- * the ctrl flag IS set correctly for them; Ctrl+F was re-verified the same
- * way before adding it as an openPanel key). Two different byte-level
- * signals are used instead for J and H:
- *   - Ctrl+J arrives as `input === "\n"` with every flag false (not
- *     `key.return` — that's `\r`/CR only). A literal "\n" can't otherwise
- *     reach a single keypress event, so treating it as "down" is safe.
- *   - Ctrl+H arrives as `key.backspace: true` (ctrl not set) —
- *     picker-key-parser.ts gives 0x08 the exact same shape as the
- *     Backspace key (0x7F). The panel has no text field, so treating
- *     physical Backspace as "close" there too is harmless and covers both.
+ * Terminal-protocol caveat: Ctrl+H is the ASCII control byte 0x08 (BS).
+ * picker-key-parser.ts gives it the exact same shape as the Backspace key
+ * (0x7F): `key.backspace: true`, ctrl not set. The panel has no text field,
+ * so treating physical Backspace as "close" there too is harmless and covers
+ * both.
  */
 
 /** Esc cancels quietly (exit 0, empty stdout); Ctrl+C cancels like a real interrupt (exit 130, same as SIGINT). */
@@ -52,7 +39,6 @@ export type PickerKeyAction =
 
 export interface PickerKeyModifiers {
   readonly ctrl: boolean;
-  readonly meta: boolean;
   readonly escape: boolean;
   readonly return: boolean;
   readonly tab: boolean;
@@ -63,9 +49,6 @@ export interface PickerKeyModifiers {
   readonly backspace: boolean;
   readonly delete: boolean;
 }
-
-/** Raw LF (0x0A) — how a real terminal sends Ctrl+J; see the module comment. */
-const isCtrlJByte = (input: string): boolean => input === "\n";
 
 export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): PickerKeyAction => {
   if (key.escape) {
@@ -89,7 +72,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
   if (key.upArrow || (key.ctrl && (input === "p" || input === "k"))) {
     return { type: "up" };
   }
-  if (key.downArrow || (key.ctrl && (input === "n" || input === "j")) || isCtrlJByte(input)) {
+  if (key.downArrow || (key.ctrl && input === "n")) {
     return { type: "down" };
   }
   if (key.ctrl && input === "u") {
@@ -98,7 +81,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
   if (key.backspace || key.delete) {
     return { type: "backspace" };
   }
-  if (input.length > 0 && !key.ctrl && !key.meta) {
+  if (input.length > 0 && !key.ctrl) {
     return { type: "char", char: input };
   }
   return { type: "ignore" };
@@ -106,7 +89,7 @@ export const resolvePickerKeyAction = (input: string, key: PickerKeyModifiers): 
 
 /** Letters that act as shortcuts inside the action panel: c=cd, d=delete, r=switchRoot. */
 const PANEL_LETTER_SHORTCUTS = ["c", "d", "r"] as const;
-export type PanelLetterShortcut = (typeof PANEL_LETTER_SHORTCUTS)[number];
+type PanelLetterShortcut = (typeof PANEL_LETTER_SHORTCUTS)[number];
 
 export type PanelKeyAction =
   | { readonly type: "close" }
@@ -117,7 +100,7 @@ export type PanelKeyAction =
   | { readonly type: "ignore" };
 
 /**
- * Key handling for the action panel (now a side column, not an overlay).
+ * Key handling for the action panel (a side column beside the list).
  * Enter always runs the currently-highlighted action ("every action can be
  * completed with Enter" in the design); c/d/r are shortcuts that run that action
  * immediately regardless of highlight. Esc, Tab, ←, Ctrl+H, and physical
@@ -136,10 +119,10 @@ export const resolvePanelKeyAction = (input: string, key: PickerKeyModifiers): P
   if (key.upArrow || (key.ctrl && (input === "p" || input === "k"))) {
     return { type: "up" };
   }
-  if (key.downArrow || (key.ctrl && (input === "n" || input === "j")) || isCtrlJByte(input)) {
+  if (key.downArrow || (key.ctrl && input === "n")) {
     return { type: "down" };
   }
-  if (!key.ctrl && !key.meta && isPanelLetterShortcut(input)) {
+  if (!key.ctrl && isPanelLetterShortcut(input)) {
     return { type: "letter", char: input };
   }
   return { type: "ignore" };
@@ -159,7 +142,7 @@ export const resolveConfirmKeyAction = (
   input: string,
   key: PickerKeyModifiers,
 ): ConfirmKeyAction => {
-  if (!key.ctrl && !key.meta && (input === "y" || input === "Y")) {
+  if (!key.ctrl && (input === "y" || input === "Y")) {
     return { type: "yes" };
   }
   return { type: "no" };

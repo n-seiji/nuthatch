@@ -3,8 +3,8 @@ import { REFS_HEADS_PREFIX } from "./porcelain.ts";
 /**
  * Every local branch's relation to its upstream, read from one
  * `git for-each-ref` instead of one `git rev-list` per branch: `hop ls` and
- * `hop clean` look at every worktree's branch, and a spawn per branch was
- * most of their git time on a repo with many worktrees.
+ * `hop clean` look at every worktree's branch, and a spawn per branch
+ * would dominate their git time on a repo with many worktrees.
  */
 
 export type UpstreamState =
