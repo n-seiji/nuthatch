@@ -9,6 +9,7 @@ import { isWithinOrSelf } from "./domain/classify.ts";
 import { shortenHome } from "./domain/posix-path.ts";
 import type { CommandResult } from "./domain/result.ts";
 import type { LsEntry, WorktreeKind } from "./domain/schema.ts";
+import { worktreeState } from "./domain/worktree-state.ts";
 import { colorEnabled } from "./infra/term.ts";
 import { reportResult } from "./render.ts";
 
@@ -38,7 +39,11 @@ const COLUMN_GAP = "  ";
 /** The "@ " current-worktree marker column. */
 const MARKER_WIDTH = 2;
 
-const KIND_ORDER: Record<WorktreeKind, number> = { root: 0, managed: 1, external: 2 };
+const KIND_ORDER: Record<WorktreeKind, number> = {
+  root: 0,
+  managed: 1,
+  external: 2,
+};
 
 const KIND_CELLS: Record<WorktreeKind, Cell> = {
   root: cell("root", "magenta"),
@@ -68,16 +73,8 @@ const branchCell = (entry: LsEntry): Cell => {
 
 /** One state per row, most important first: a row that can't be acted on says why before "dirty" does. */
 const stateCell = (entry: LsEntry): Cell => {
-  if (entry.prunable) {
-    return cell("✗ missing", "red");
-  }
-  if (entry.locked) {
-    return cell("⊘ locked", "red");
-  }
-  if (entry.bare) {
-    return cell("- bare", "dim");
-  }
-  return entry.dirty ? cell("● changes", "yellow") : cell("✓ clean", "green");
+  const state = worktreeState(entry, entry.dirty);
+  return cell(state.text, state.tone);
 };
 
 /** Commits ahead/behind the upstream: "↑2 ↓1", "=" when in sync, "-" without an upstream. */
