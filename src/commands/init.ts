@@ -1,6 +1,14 @@
 const ZSH_TEMPLATE = `# nuthatch shell integration for zsh.
 # Usage: eval "$(hop init zsh)"
 hop() {
+  # stdout is not a terminal (e.g. inside p=$(hop ...)): a cd here would only
+  # affect the capturing subshell and leave the caller with an empty string,
+  # so just print the path.
+  if [[ ! -t 1 ]]; then
+    command hop "$@"
+    return $?
+  fi
+
   if [[ "$1" == "-" ]]; then
     cd - > /dev/null || return $?
     return 0
