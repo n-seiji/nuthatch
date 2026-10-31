@@ -30,7 +30,11 @@ describe("削除できなかった候補の報告", () => {
     await repo.git(["checkout", "-b", branch]);
     await repo.git(["checkout", "main"]);
     await repo.git(["merge", branch]);
-    const created = await jump(git, fs, { cwd: repo.repoPath, target: branch, create: true });
+    const created = await jump(git, fs, {
+      cwd: repo.repoPath,
+      target: branch,
+      create: true,
+    });
     if (created.path === undefined) {
       throw new Error("expected jump to report a path");
     }
@@ -99,7 +103,11 @@ describe("削除できなかった候補の報告", () => {
     await repo.writeFile("r2.txt", "r2");
     await repo.git(["add", "r2.txt"]);
     await repo.git(["commit", "-m", "r2"]);
-    await repo.git(["-c", "sequence.editor=sed -i.bak 1abreak", "rebase", "-i", "HEAD~2"]);
+    // Prepend a `break` line to the todo so the rebase stops mid-way. BSD and
+    // GNU sed disagree on the `a` command's syntax, so this uses echo/cat/mv.
+    // Git appends the todo path, which becomes $0.
+    const prependBreak = `echo break | cat - "$0" > "$0.new" && mv "$0.new" "$0"`;
+    await repo.git(["-c", `sequence.editor=sh -c '${prependBreak}'`, "rebase", "-i", "HEAD~2"]);
     expect(await repo.git(["status"])).toContain("rebase in progress");
 
     const result = await clean(git, fs, term, {
